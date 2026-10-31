@@ -22,7 +22,7 @@ def footer(screen):
     screen.text(22, 0, "SOMMAIRE=ACCUEIL  RETOUR=PRECEDENT")
 
 
-def page_input(screen, ctx):
+def page_input(screen, ctx, *, cursor="visible"):
     screen.text(FIELD_ROW, 0, "PAGE:")
     screen.field(FIELD_ROW, FIELD_COL, FIELD_WIDTH)
-    ctx.set_input(FIELD_ROW, FIELD_COL, FIELD_WIDTH)
+    ctx.set_input(FIELD_ROW, FIELD_COL, FIELD_WIDTH, cursor=cursor)

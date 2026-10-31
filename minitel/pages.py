@@ -14,6 +14,10 @@ class InputField:
     width: int
     mask: str | None = None
     value: str = ""
+    cursor: str = "visible"
+
+
+CURSOR_MODES = ("visible", "hidden", "auto")
 
 
 class PageContext:
@@ -39,8 +43,12 @@ class PageContext:
     def state(self):
         return self.session.state
 
-    def set_input(self, row, col, width, *, mask=None, value=""):
-        self.input = InputField(row, col, width, mask=mask, value=value)
+    def set_input(self, row, col, width, *, mask=None, value="", cursor="visible"):
+        if cursor not in CURSOR_MODES:
+            raise ValueError(f"cursor must be one of {CURSOR_MODES}")
+        self.input = InputField(
+            row, col, width, mask=mask, value=value, cursor=cursor
+        )
 
     def page_for(self, key):
         return self.registry.get(key)
@@ -51,6 +59,7 @@ class Page:
     title = ""
     aliases = ()
     meta = {}
+    tick_interval = None
 
     def render(self, ctx: PageContext) -> Screen:
         raise NotImplementedError
@@ -61,19 +70,24 @@ class Page:
     def on_key(self, ctx: PageContext, key: str):
         return None
 
+    def on_tick(self, ctx: PageContext):
+        return None
+
     def matches(self, key: str) -> bool:
         return key == self.number or key in self.aliases
 
 
 class FunctionPage(Page):
     def __init__(self, number, render, *, title="", aliases=(), on_submit=None,
-                 on_key=None, meta=None):
+                 on_key=None, on_tick=None, tick_interval=None, meta=None):
         self.number = number
         self._render = render
         self.title = title
         self.aliases = tuple(aliases)
         self._on_submit = on_submit
         self._on_key = on_key
+        self._on_tick = on_tick
+        self.tick_interval = tick_interval
         self.meta = dict(meta or {})
 
     def render(self, ctx):
@@ -89,8 +103,14 @@ class FunctionPage(Page):
             return self._on_key(ctx, key)
         return None
 
+    def on_tick(self, ctx):
+        if self._on_tick:
+            return self._on_tick(ctx)
+        return None
 
-def page(number, *, title="", aliases=(), on_submit=None, on_key=None, **meta):
+
+def page(number, *, title="", aliases=(), on_submit=None, on_key=None,
+         on_tick=None, tick_interval=None, **meta):
     def decorator(fn):
         return FunctionPage(
             number,
@@ -99,6 +119,8 @@ def page(number, *, title="", aliases=(), on_submit=None, on_key=None, **meta):
             aliases=aliases,
             on_submit=on_submit,
             on_key=on_key,
+            on_tick=on_tick,
+            tick_interval=tick_interval,
             meta=meta,
         )
     return decorator

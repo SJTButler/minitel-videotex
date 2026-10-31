@@ -1,5 +1,6 @@
 """Application layer: wire a registry, profile, session, and TCP transport."""
 
+import asyncio
 import socket
 import time
 
@@ -40,6 +41,16 @@ class MinitelApp:
         await transport.paced_write(writer, data, self.cps)
         log(f"SENT page ({len(data)} bytes)")
 
+    async def _apply_action(self, writer, action, log):
+        if action.raw:
+            await transport.paced_write(writer, action.raw, self.cps)
+            if len(action.raw) > 4:
+                log(f"RAW {len(action.raw)} bytes")
+        if action.page is not None:
+            log(f"PAGE {action.page.number}")
+        if action.screen is not None:
+            await self.send(writer, action.screen, log)
+
     async def handle(self, reader, writer):
         peer = writer.get_extra_info("peername")
         sock = writer.get_extra_info("socket")
@@ -56,18 +67,20 @@ class MinitelApp:
         try:
             await self.send(writer, session.start(), log)
             while True:
-                data = await reader.read(64)
+                interval = session.next_tick_delay()
+                if interval is None:
+                    data = await reader.read(64)
+                else:
+                    try:
+                        data = await asyncio.wait_for(reader.read(64), timeout=interval)
+                    except asyncio.TimeoutError:
+                        await self._apply_action(writer, session.tick(), log)
+                        continue
                 if not data:
                     break
                 log("RX " + " ".join(f"{b:02X}" for b in data))
                 for action in session.feed(data):
-                    if action.raw:
-                        writer.write(action.raw)
-                        await writer.drain()
-                    if action.page is not None:
-                        log(f"PAGE {action.page.number}")
-                    if action.screen is not None:
-                        await self.send(writer, action.screen, log)
+                    await self._apply_action(writer, action, log)
         except (ConnectionResetError, BrokenPipeError):
             pass
 

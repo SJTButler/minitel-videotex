@@ -57,7 +57,8 @@ Registry().discover("pages")
 The decorator form is the shortest:
 
 ```python
-@page(number, title="", aliases=(), on_submit=None, on_key=None, **meta)
+@page(number, title="", aliases=(), on_submit=None, on_key=None,
+      on_tick=None, tick_interval=None, **meta)
 def render(ctx):
     return Screen()
 ```
@@ -68,6 +69,8 @@ def render(ctx):
 - `on_submit(ctx, line)` handles `ENVOI`/`Enter`.
 - `on_key(ctx, key)` handles keys the session does not consume (`GUIDE`,
   `SUITE`, arrows, etc.).
+- `on_tick(ctx)` and `tick_interval` make the page dynamic; see
+  [Dynamic pages](#dynamic-pages).
 - `meta` is free-form; useful for a custom app.
 
 For stateful or larger pages, subclass `Page`:
@@ -102,11 +105,14 @@ Every `render`, `on_submit`, and `on_key` receives a `PageContext`.
 | `ctx.line` | the current input buffer |
 | `ctx.last_key` | the last submitted line (used by the not-found page) |
 | `ctx.state` | a per-session dict for page state |
-| `ctx.set_input(row, col, width)` | register the input field and cursor |
+| `ctx.set_input(row, col, width, *, cursor="visible")` | register the input field and cursor policy |
 | `ctx.page_for(key)` | look up another page |
 
 `set_input` is required for typing. It tells the session where the cursor
-belongs and what the maximum line length is. `pages.layout.page_input` does
+belongs and what the maximum line length is. The cursor policy is `visible`
+(the default), `hidden` (never show it), or `auto` (hide while idle, show while
+the line is non-empty, and pause ticks while typing). The inverse field remains
+the visual target when the cursor is hidden. `pages.layout.page_input` does
 both the drawing and the registration:
 
 ```python
@@ -204,6 +210,56 @@ duplicate history when the target is the current page.
 
 `on_key` receives `GUIDE`, `SUITE`, `REPETITION`, arrows, and other keys after
 the session's built-in handling. Return a key or `Page` to navigate.
+
+## Dynamic pages
+
+A page can update a region without repainting the whole screen. Set
+`tick_interval` and provide `on_tick`:
+
+```python
+def tick(ctx):
+    return codec.pos(3, 7) + codec.text("UPDATED")
+
+@page("140", title="DYNAMIC", tick_interval=1.0, on_tick=tick)
+def dynamic(ctx):
+    s = Screen()
+    status(s, "PAGE 140")
+    s.text(1, 0, "DYNAMIC", inverse=True, size=codec.DOUBLE_WIDTH)
+    s.text(3, 0, "VALUE: UPDATED")
+    page_input(s, ctx, cursor="auto")
+    footer(s)
+    return s
+```
+
+- `tick_interval` is in seconds. `None` (the default) means static.
+- `MinitelApp` calls `on_tick` while the page is current. Navigating away stops
+  ticks; navigating back paints the full page once and resumes.
+- Return **only the dynamic region** as raw bytes. The session appends
+  `pos(input)` plus the current cursor visibility, so the insertion point
+  returns to the `PAGE:` field.
+- If a tick moves the cursor, use `page_input(s, ctx, cursor="auto")`. While
+  the page is idle the cursor is hidden and ticks run. The first typed
+  character sends `CON`, the cursor appears, and ticks pause while the line is
+  non-empty. Submit, annulation, or correcting to an empty line sends `COF`
+  again and resumes ticks.
+- `cursor="hidden"` is also available if a page should never show a cursor.
+  `cursor="visible"` with a moving tick will blink or jump: `COF`/`CON` resets
+  the terminal’s blink phase, and the tick cannot sync to it.
+- Local echo still lands in the inverse field while the cursor is hidden. If
+  the terminal’s local echo is off, use `--echo`; the server sends the same
+  cursor commands.
+- The initial `render` must draw the same region at the same position, so the
+  first tick overwrites the same cells.
+- A full page is ~240 bytes (~1.8 s at 1200). A small region is ~15 bytes
+  (~0.11 s). Do not full-repaint at 1 Hz on the M1.
+- If `on_tick` returns a `Screen`, the app sends it as a full page. That is
+  useful at 9600 or for infrequent updates, not for a 1 Hz M1 clock.
+- Use a fixed-width value (for example `time.strftime("%H:%M:%S")`) so the
+  region never changes length and never needs clearing.
+
+The timer is transport-level: `Session.next_tick_delay()` says how long to wait,
+and `Session.tick()` asks the current page for a frame. Input and ticks share
+one writer, so a page paint is never interleaved with a tick.
 
 ## Aliases and the menu
 

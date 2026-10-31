@@ -90,13 +90,107 @@ class SessionTests(unittest.TestCase):
         )
         session.start()
         actions = session.feed(b"1")
-        self.assertEqual(actions[0].raw, b"1")
+        self.assertEqual(actions[0].raw, codec.cursor(True) + b"1")
 
     def test_guide(self):
         self.feed(bytes([0x13, 0x44]))
         self.assertEqual(self.session.current.number, "130")
         self.feed(RETOUR)
         self.assertEqual(self.session.current.number, "100")
+
+    def test_tick_hook_restores_cursor(self):
+        registry = Registry()
+
+        def tick(ctx):
+            return b"CLOCK"
+
+        @page("400", tick_interval=0.5, on_tick=tick)
+        def clock(ctx):
+            s = Screen()
+            ctx.set_input(20, 6, 10)
+            return s
+
+        @page("410")
+        def static(ctx):
+            s = Screen()
+            ctx.set_input(0, 0, 5)
+            return s
+
+        registry.add(clock)
+        registry.add(static)
+        session = Session(registry, profiles.M1, initial="400", fallback=clock)
+        session.start()
+        self.assertEqual(session.next_tick_delay(), 0.5)
+        action = session.tick()
+        expected = b"CLOCK" + codec.pos(20, 6) + codec.cursor(True)
+        self.assertEqual(action.raw, expected)
+
+        session.navigate("410")
+        self.assertIsNone(session.next_tick_delay())
+        self.assertEqual(session.tick().raw, b"")
+
+    def test_tick_keeps_hidden_cursor_off(self):
+        registry = Registry()
+
+        @page("430", tick_interval=1.0, on_tick=lambda ctx: b"X")
+        def hidden(ctx):
+            s = Screen()
+            ctx.set_input(20, 6, 10, cursor="hidden")
+            return s
+
+        registry.add(hidden)
+        session = Session(registry, profiles.M1, initial="430", fallback=hidden)
+        screen = session.start()
+        self.assertFalse(screen.cursor_visible)
+        action = session.tick()
+        expected = b"X" + codec.pos(20, 6) + codec.cursor(False)
+        self.assertEqual(action.raw, expected)
+
+    def test_auto_cursor_shows_while_typing(self):
+        registry = Registry()
+
+        @page("440", tick_interval=1.0, on_tick=lambda ctx: b"T")
+        def auto(ctx):
+            s = Screen()
+            ctx.set_input(20, 6, 10, cursor="auto")
+            return s
+
+        registry.add(auto)
+        session = Session(registry, profiles.M1, initial="440", fallback=auto)
+        screen = session.start()
+        self.assertFalse(screen.cursor_visible)
+        self.assertEqual(session.next_tick_delay(), 1.0)
+
+        actions = session.feed(b"1")
+        self.assertEqual(actions[0].raw, codec.cursor(True))
+        self.assertIsNone(session.next_tick_delay())
+        self.assertEqual(session.tick().raw, b"")
+
+        actions = session.feed(CORRECTION)
+        self.assertTrue(actions[0].raw.endswith(codec.cursor(False)))
+        self.assertEqual(session.line, "")
+        self.assertEqual(session.next_tick_delay(), 1.0)
+
+    def test_tick_can_return_screen(self):
+        registry = Registry()
+
+        def tick(ctx):
+            s = Screen()
+            s.text(0, 0, "TICK")
+            return s
+
+        @page("420", tick_interval=1.0, on_tick=tick)
+        def dynamic(ctx):
+            s = Screen()
+            ctx.set_input(1, 0, 5)
+            return s
+
+        registry.add(dynamic)
+        session = Session(registry, profiles.M1, initial="420", fallback=dynamic)
+        session.start()
+        action = session.tick()
+        self.assertIsNotNone(action.screen)
+        self.assertEqual(action.screen.rows[0][0].ch, "T")
 
     def test_on_submit_hook_and_state(self):
         registry = Registry()

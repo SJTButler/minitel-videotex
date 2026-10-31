@@ -31,6 +31,13 @@ class Session:
         self.current = registry.resolve(initial)
         self.input = None
 
+    def _cursor_visible(self):
+        if self.input is None:
+            return False
+        if self.input.cursor == "auto":
+            return bool(self.line)
+        return self.input.cursor == "visible"
+
     def start(self):
         return self.render()
 
@@ -43,7 +50,9 @@ class Session:
             )
         self.input = ctx.input
         if self.input is not None:
-            screen.set_cursor(self.input.row, self.input.col, True)
+            screen.set_cursor(
+                self.input.row, self.input.col, self._cursor_visible()
+            )
         else:
             screen.set_cursor(24, 0, False)
         return screen
@@ -90,14 +99,46 @@ class Session:
         self.current = self.registry.resolve(self.initial)
         return Action(screen=self.render(), page=self.current)
 
+    def next_tick_delay(self):
+        if self.input is not None and self.input.cursor == "auto" and self.line:
+            return None
+        interval = getattr(self.current, "tick_interval", None)
+        if interval is None or interval <= 0:
+            return None
+        return interval
+
+    def tick(self):
+        if self.next_tick_delay() is None:
+            return Action()
+        ctx = PageContext(self, self.current, self.registry)
+        frame = self.current.on_tick(ctx)
+        if frame is None:
+            return Action()
+        if isinstance(frame, (bytes, bytearray)):
+            frame = bytes(frame)
+            if frame and self.input is not None:
+                frame += codec.pos(self.input.row, self.input.col)
+                frame += codec.cursor(self._cursor_visible())
+            return Action(raw=frame)
+        if isinstance(frame, Screen):
+            return Action(screen=frame)
+        raise TypeError(
+            f"page {self.current.number!r} tick returned {type(frame)!r}; "
+            "expected bytes, Screen, or None"
+        )
+
     def handle(self, event):
         if isinstance(event, codec.Text):
             if self.input is None:
                 return Action(raw=bytes([codec.BEL]))
             if len(self.line) >= self.input.width:
                 return Action(raw=bytes([codec.BEL]))
+            prefix = b""
+            if self.input.cursor == "auto" and not self.line:
+                prefix = codec.cursor(True)
             self.line += event.char
-            return Action(raw=codec.text(event.char) if self.echo else b"")
+            echo = codec.text(event.char) if self.echo else b""
+            return Action(raw=prefix + echo)
         if isinstance(event, codec.Enter):
             return self.submit()
         if isinstance(event, codec.Function):
@@ -116,7 +157,11 @@ class Session:
         if name == "CORRECTION":
             if self.line:
                 self.line = self.line[:-1]
-                return Action(raw=bytes([codec.BS, 0x20, codec.BS]))
+                raw = bytes([codec.BS, 0x20, codec.BS])
+                if self.input is not None and self.input.cursor == "auto":
+                    if not self.line:
+                        raw += codec.cursor(False)
+                return Action(raw=raw)
             return Action()
         if name == "ANNULATION":
             self.line = ""

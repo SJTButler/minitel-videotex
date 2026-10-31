@@ -37,6 +37,7 @@ class PageTests(unittest.TestCase):
         self.assertTrue(text[0].startswith("3615 KILO"))
         self.assertEqual(text[1].strip(), "3615 KILO")
         self.assertEqual((screen.cursor_row, screen.cursor_col), (20, 6))
+        self.assertFalse(screen.cursor_visible)
         self.assertTrue(all(screen.rows[20][c].inverse for c in range(6, 16)))
         self.assertTrue(text[22].startswith("SOMMAIRE=ACCUEIL"))
 
@@ -59,8 +60,20 @@ class PageTests(unittest.TestCase):
         s = Screen()
         ctx = Mock()
         page_input(s, ctx)
-        ctx.set_input.assert_called_once_with(20, 6, 10)
+        ctx.set_input.assert_called_once_with(20, 6, 10, cursor="visible")
         self.assertTrue(all(s.rows[20][c].inverse for c in range(6, 16)))
+
+    def test_page_input_can_hide_the_cursor(self):
+        s = Screen()
+        ctx = Mock()
+        page_input(s, ctx, cursor="hidden")
+        ctx.set_input.assert_called_once_with(20, 6, 10, cursor="hidden")
+
+    def test_page_input_auto_cursor(self):
+        s = Screen()
+        ctx = Mock()
+        page_input(s, ctx, cursor="auto")
+        ctx.set_input.assert_called_once_with(20, 6, 10, cursor="auto")
 
 
 if __name__ == "__main__":
