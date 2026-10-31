@@ -18,6 +18,7 @@ from .profiles import (
 from .screen import Cell, Screen
 from .render import render, render_diff
 from .pages import FunctionPage, InputField, Page, PageContext, Registry, page
+from .screensaver import Screensaver
 from .session import Action, Session
 from .app import MinitelApp
 
@@ -38,6 +39,7 @@ __all__ = [
     "Registry",
     "ResourceCache",
     "Screen",
+    "Screensaver",
     "Session",
     "Snapshot",
     "TerminalProfile",

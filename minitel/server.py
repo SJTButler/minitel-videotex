@@ -4,6 +4,7 @@ import argparse
 import asyncio
 
 import pages
+from pages.manifest import DEFAULT_SCREENSAVER, SCREENSAVER_MODES
 
 from .app import MinitelApp
 from .profiles import M1
@@ -24,9 +25,32 @@ def main():
         action="store_true",
         help="echo typed characters from the server (local echo off)",
     )
+    ap.add_argument(
+        "--screensaver",
+        choices=(*SCREENSAVER_MODES, "off"),
+        default=DEFAULT_SCREENSAVER,
+        help=f"default screensaver sequence (default: {DEFAULT_SCREENSAVER})",
+    )
+    ap.add_argument(
+        "--screensaver-after",
+        type=float,
+        default=120.0,
+        help="idle seconds before the screensaver; 0 disables auto (default: 120)",
+    )
+    ap.add_argument(
+        "--screensaver-hold",
+        type=float,
+        default=20.0,
+        help="seconds to hold each screensaver page (default: 20)",
+    )
     args = ap.parse_args()
 
     registry = pages.build_registry()
+    screensaver = (
+        None
+        if args.screensaver == "off"
+        else SCREENSAVER_MODES[args.screensaver]
+    )
     app = MinitelApp(
         registry,
         profile=M1,
@@ -36,6 +60,9 @@ def main():
         cps=args.cps,
         echo=args.echo,
         services=pages.build_services(),
+        screensaver=screensaver,
+        screensaver_after=args.screensaver_after,
+        screensaver_hold=args.screensaver_hold,
     )
     asyncio.run(app.serve(args.host, args.port))
 

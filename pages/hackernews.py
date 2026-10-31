@@ -239,7 +239,7 @@ def detail_screen(ctx):
         s.text(3, 0, "NO STORY SELECTED.", fg=WARNING)
         s.text(4, 0, "OPEN NEWS, PICK 1-4.", fg=SECONDARY)
         page_input(s, ctx, cursor="auto")
-        key_footer(s, ("RETOUR=PRECEDENT", "SOMMAIRE=HOME"))
+        key_footer(s, ("RETOUR=BACK", "SOMMAIRE=HOME"))
         return s
 
     for index, line in enumerate(
@@ -281,13 +281,14 @@ def detail_screen(ctx):
         )
 
     page_input(s, ctx, cursor="auto")
-    key_footer(s, ("RETOUR=PRECEDENT", "SOMMAIRE=HOME"))
+    key_footer(s, ("RETOUR=BACK", "SOMMAIRE=HOME"))
     return s
 
 
 @page(
     STORY_PAGE,
     title="STORY",
+    back_page=NEWS_PAGE,
     tick_interval=1.0,
     on_tick=detail_screen,
 )

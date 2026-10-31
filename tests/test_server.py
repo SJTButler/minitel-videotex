@@ -29,6 +29,7 @@ class PageTests(unittest.TestCase):
         self.assertIs(self.registry.get("1"), self.registry.get("110"))
         self.assertIs(self.registry.get("2"), self.registry.get("120"))
         self.assertIs(self.registry.get("3"), self.registry.get("130"))
+        self.assertIs(self.registry.get("7"), self.registry.get("190"))
         self.assertIsNone(self.registry.get("999"))
 
     def test_home_layout(self):
@@ -39,7 +40,7 @@ class PageTests(unittest.TestCase):
         self.assertEqual((screen.cursor_row, screen.cursor_col), (20, 6))
         self.assertFalse(screen.cursor_visible)
         self.assertTrue(all(screen.rows[20][c].inverse for c in range(6, 16)))
-        self.assertTrue(text[22].startswith("SOMMAIRE=ACCUEIL"))
+        self.assertTrue(text[22].startswith("SOMMAIRE=HOME"))
 
     def test_status_paints_full_row_and_ends_at_fc_boundary(self):
         s = Screen()
@@ -53,8 +54,8 @@ class PageTests(unittest.TestCase):
         s = Screen()
         footer(s)
         text = "".join(cell.ch for cell in s.rows[22])
-        self.assertTrue(text.startswith("SOMMAIRE=ACCUEIL"))
-        self.assertIn("RETOUR=PRECEDENT", text)
+        self.assertTrue(text.startswith("SOMMAIRE=HOME"))
+        self.assertIn("RETOUR=BACK", text)
 
     def test_page_input_registers_the_field(self):
         s = Screen()

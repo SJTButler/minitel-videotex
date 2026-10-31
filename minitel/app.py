@@ -8,12 +8,15 @@ import time
 from . import transport
 from .profiles import M1
 from .render import render
+from .screensaver import Screensaver
 from .session import Session
 
 
 class MinitelApp:
     def __init__(self, registry, *, profile=M1, initial="100", fallback=None,
-                 guide=None, cps=None, echo=False, log=None, services=None):
+                 guide=None, cps=None, echo=False, log=None, services=None,
+                 screensaver=None, screensaver_after=120.0,
+                 screensaver_hold=20.0, clock=None):
         self.registry = registry
         self.profile = profile
         self.initial = initial
@@ -23,6 +26,17 @@ class MinitelApp:
         self.echo = echo
         self.log = log or self._default_log
         self.services = dict(services or {})
+        self.clock = clock or time.monotonic
+        self.screensaver = (
+            Screensaver.from_spec(
+                registry,
+                screensaver,
+                after=screensaver_after,
+                hold=screensaver_hold,
+            )
+            if screensaver is not None
+            else None
+        )
 
     def _default_log(self, peer, message):
         stamp = time.strftime("%H:%M:%S")
@@ -37,6 +51,8 @@ class MinitelApp:
             guide=self.guide,
             echo=self.echo,
             services=self.services,
+            screensaver=self.screensaver,
+            clock=self.clock,
         )
 
     async def send(self, writer, screen, log):
@@ -70,14 +86,14 @@ class MinitelApp:
         try:
             await self.send(writer, session.start(), log)
             while True:
-                interval = session.next_tick_delay()
+                interval = session.next_timeout()
                 if interval is None:
                     data = await reader.read(64)
                 else:
                     try:
                         data = await asyncio.wait_for(reader.read(64), timeout=interval)
                     except asyncio.TimeoutError:
-                        await self._apply_action(writer, session.tick(), log)
+                        await self._apply_action(writer, session.on_timeout(), log)
                         continue
                 if not data:
                     break

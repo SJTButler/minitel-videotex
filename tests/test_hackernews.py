@@ -306,6 +306,16 @@ class DetailTests(unittest.TestCase):
         self.assertIn("NO COMMENTS YET.", session.screen.to_text())
         self.assertEqual(service.comment_calls, 0)
 
+    def test_manual_detail_retour_goes_to_list_then_history(self):
+        service = FakeService(front=loaded(stories(6)))
+        session = make_session(service, initial="112")
+        self.assertEqual(session.current.number, "112")
+
+        session.feed(RETOUR)
+        self.assertEqual(session.current.number, "111")
+        session.feed(RETOUR)
+        self.assertEqual(session.current.number, "100")
+
     def test_direct_detail_has_no_story(self):
         session = make_session(FakeService(front=loaded([])), initial="112")
         text = session.screen.to_text()

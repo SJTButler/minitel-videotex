@@ -4,8 +4,8 @@ The server is split into two layers:
 
 ```
 minitel/     reusable library: codec, screen, render, profiles, page API,
-             session, app, transport, text, paging, cache, http
-pages/       the example service: layout helpers, pages, and data sources
+             session, app, transport, text, paging, cache, http, screensaver
+pages/       the example service: manifest, layout helpers, pages, data sources
 tests/       library and page tests
 tools/       first-light server, virtual Minitel decoder
 ```
@@ -59,7 +59,7 @@ The decorator form is the shortest:
 ```python
 @page(number, title="", aliases=(), on_submit=None, on_key=None,
       on_tick=None, tick_interval=None, form=False, on_form=None,
-      transient=False, **meta)
+      transient=False, back_page=None, **meta)
 def render(ctx):
     return Screen()
 ```
@@ -76,6 +76,9 @@ def render(ctx):
   [Dynamic pages](#dynamic-pages).
 - `transient=True` keeps the page out of history; see
   [History and transient pages](#history-and-transient-pages).
+- `back_page="111"` is the logical `RETOUR` target for direct entry. If history
+  does not already point there, `RETOUR` navigates there without pushing the
+  current page; the next `RETOUR` follows the saved history.
 - `meta` is free-form; useful for a custom app.
 
 For stateful or larger pages, subclass `Page`:
@@ -122,6 +125,11 @@ Every `render`, `on_submit`, `on_form`, and `on_key` receives a
 | `ctx.pager` | the `Pager` registered for this render |
 | `ctx.focus(name)` | request focus when the page rerenders |
 | `ctx.page_for(key)` | look up another page |
+| `ctx.screensaver` | the session's `Screensaver`, or `None` |
+| `ctx.idle_elapsed` | seconds since the last input or navigation |
+| `ctx.set_screensaver(pages, *, after=120, hold=20)` | select the session screensaver |
+| `ctx.disable_screensaver()` | remove the session screensaver |
+| `ctx.start_screensaver(index=0)` | request an immediate takeover from a handler |
 
 `set_input` is the one-field shorthand; multi-field pages use `add_field`.
 Both tell the session where the cursor belongs and what the maximum length is.
@@ -201,7 +209,7 @@ The session handles the common keys:
 | `ANNULATION` | clear the active field, rerender |
 | `SOMMAIRE` | go to `INITIAL`, clear history |
 | `SUITE` | form: next field; pager: next page; otherwise page `on_key` |
-| `RETOUR` | form: previous field; pager: previous page, then history back from page 1; otherwise history back |
+| `RETOUR` | form: previous field; pager: previous page; otherwise/at the boundary: `back_page` if history isn't already there, then history back |
 | `GUIDE` | page's `on_key`, then the app's guide page |
 
 `on_submit` can return:
@@ -398,9 +406,96 @@ def dynamic(ctx):
 - Use a fixed-width value (for example `time.strftime("%H:%M:%S")`) so the
   region never changes length and never needs clearing.
 
-The timer is transport-level: `Session.next_tick_delay()` says how long to wait,
-and `Session.tick()` asks the current page for a frame. Input and ticks share
-one writer, so a page paint is never interleaved with a tick.
+The timer is transport-level: `Session.next_timeout()` says how long to wait,
+and `Session.on_timeout()` asks the active page for a tick, activates the
+screensaver, or rotates it. `Session.tick()` remains the page-tick entry point.
+Input and ticks share one writer, so a page paint is never interleaved with a
+tick.
+
+## Screensavers
+
+A screensaver is a session-owned display takeover. It is **not navigation**: the
+current page, history, field values, focus, and pager offset are preserved, and
+any input wakes back to the page the user was on. The first input chunk is
+discarded so a stray `ENVOI` cannot navigate or type into the restored page.
+
+`MinitelApp` configures the default for every new session:
+
+```python
+app = MinitelApp(
+    registry,
+    screensaver=("900",),
+    screensaver_after=120.0,
+    screensaver_hold=20.0,
+)
+```
+
+- `screensaver` is a page, a page key, or a sequence of keys/pages. A sequence
+  rotates at `screensaver_hold` seconds per page.
+- `screensaver_after` is the idle delay in seconds. `None` or `0` disables
+  automatic activation; manual activation still works.
+- `screensaver_hold` is the time each page is held before rotating. `0` keeps
+  the first page.
+- The CLI exposes the same settings: `--screensaver`,
+  `--screensaver-after`, and `--screensaver-hold`.
+
+Idle means **no input and no navigation**. Page ticks and screensaver repaints
+do not count as activity. While a screensaver is active, the underlying page's
+ticks stop; only the screensaver page's ticks and rotation run. Activation,
+rotation, and wake are full paints, which also avoids stale double-size glyphs
+on wake. Screensaver ticks still use the normal diff.
+
+The example service declares its available screensavers in
+`pages/manifest.py`:
+
+```python
+SELECTABLE_SCREENSAVERS = ("clock", "mire", "carousel", "ball")
+SCREENSAVER_MODES = {
+    "clock": ("900",),
+    "mire": ("901",),
+    "carousel": ("910", "911", "912"),
+    "ball": ("903",),
+}
+SCREENSAVER_MODES["all"] = tuple(
+    key for name in SELECTABLE_SCREENSAVERS for key in SCREENSAVER_MODES[name]
+)
+SCREENSAVER_LABELS = {"clock": "CLOCK", ...}
+DEFAULT_SCREENSAVER = "clock"
+```
+
+`minitel/server.py` and the selector page read that declaration. `minitel/`
+contains no screensaver page numbers; it only receives a configured
+`Screensaver`.
+
+A page can select or start a screensaver for its own session:
+
+```python
+ctx.set_screensaver(("900", "901"), after=300, hold=20)
+ctx.start_screensaver()          # from on_submit/on_key: immediate takeover
+ctx.disable_screensaver()
+```
+
+`ctx.start_screensaver()` is a request, not a return value: the session applies
+it after the handler finishes, so return a page key normally. The selector page
+`190` (`7` on the home menu) is the reference implementation. It lets the user
+choose `900` CLOCK, `901` TEST CARD, `910`-`912` CAROUSEL, or `903` BOUNCING
+BALL, cycle the auto delay, and activate the current choice with `0`.
+
+Rules for screensaver pages:
+
+- They are ordinary `@page` pages; write one file per page and draw the whole
+  25x40 screen.
+- Do not register input fields; the cursor is hidden. Input wakes instead.
+- Use `back_page="190"` so direct entry returns to the selector first.
+- Reserve `9xx` for screensaver pages and the promo frames.
+- Declare new modes in `pages/manifest.py`; keep page keys out of `minitel/`.
+- Keep motion sparse and hold full-screen frames for several seconds; the M1
+  budget is 133 cps.
+- A page that is itself in the screensaver set does not auto-activate.
+- `ctx.idle_elapsed` is available if a page wants to change after a long idle.
+
+Mechanism tests use a fake clock and call `next_timeout()`/`on_timeout()`
+directly; page tests assert layout and the ball's bounds. No sleeps are needed.
 
 ## Partial updates
 
@@ -469,8 +564,9 @@ The news example is split along the same lines:
   `1`-`4` + `ENVOI` selects) and `112` (metadata first, comment on a later
   tick). `111` registers its window with `ctx.set_pager`, so the session handles
   `SUITE`/`RETOUR`; `RETOUR` walks back through pages and only leaves from page
-  1. A selected `Story` is kept in `ctx.state["news_story"]`; direct access to
-  `112` shows `NO STORY SELECTED`.
+  1. `112` declares `back_page="111"`, so typing `112` directly returns to the
+  list first, then follows the existing history. A selected `Story` is kept in
+  `ctx.state["news_story"]`; direct access to `112` shows `NO STORY SELECTED`.
 - `pages/news_source.py` owns the Hacker News URLs and field names, parses
   `Story`/`Comment` objects, and wraps one `ResourceCache` for the front page
   and one for comments. The cache does not block a page paint; the first paint
@@ -496,6 +592,13 @@ remains for multi-page flows.
 Field focus (`SUITE`/`RETOUR` inside a form) never modifies history. Only an
 actual page navigation pushes or pops the history stack.
 
+A page may declare a logical parent with `back_page="111"`. This is used when
+the page was reached directly (for example by typing `112`) and history does
+not already point at `111`: `RETOUR` navigates to `111` without pushing `112`,
+and the next `RETOUR` follows the history that was already there. If history
+already points at the parent, `RETOUR` pops it normally. The rule applies to
+plain pages, the first field of a form, and page 1 of a pager.
+
 Normal pages are pushed as usual.
 
 ## Aliases and the menu
@@ -514,6 +617,11 @@ Keep page numbers stable and descriptive. The example scheme is:
 | `120` | weather |
 | `130` | about / guide |
 | `140` | guestbook |
+| `190` | screensaver selector (`7` on the home menu) |
+| `900` | CLOCK screensaver |
+| `901` | TEST CARD screensaver |
+| `903` | BOUNCING BALL screensaver |
+| `910`-`912` | CAROUSEL promo frames |
 | `__not_found__` | fallback |
 
 ## Testing a page
@@ -611,10 +719,14 @@ The library boundaries are deliberate:
 - Use `ACCENT` for numbers/actions, `SECONDARY` for metadata/hints, and
   `WARNING` for errors; on mono these are grey levels.
 - Keep the `PAGE:` field at row 20 and the footer at row 22.
+- Page copy is English. Only the Minitel key names (`ENVOI`, `RETOUR`,
+  `SUITE`, `SOMMAIRE`, `GUIDE`, `CORRECTION`, `ANNULATION`) stay French.
 - Design uppercase-first; accents cost three bytes each.
 - Sanitize remote text with `minitel.text.sanitize` and wrap it with
   `minitel.text.wrap` before drawing.
 - Prefer `REP`-friendly runs (the renderer already compresses runs of 3+).
 - Test on the M1 and with the virtual Minitel.
+- Screensaver pages draw the full screen, hide the cursor, and keep motion
+  sparse; do not give them a `PAGE:` field.
 - Keep `minitel/` free of application content; keep `pages/` free of protocol
   byte wrangling.

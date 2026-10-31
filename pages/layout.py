@@ -32,7 +32,7 @@ def key_footer(screen, hints, row=22):
 
 
 def footer(screen):
-    key_footer(screen, ("SOMMAIRE=ACCUEIL", "RETOUR=PRECEDENT"))
+    key_footer(screen, ("SOMMAIRE=HOME", "RETOUR=BACK"))
 
 
 def form_footer(screen, ctx, fields):
@@ -44,7 +44,7 @@ def form_footer(screen, ctx, fields):
     screen.text(
         22, 0, f"SUITE: {next_label}  RETOUR: {prev_label}"[:40]
     )
-    screen.text(23, 0, "ENVOI: VALIDER  SOMMAIRE: ACCUEIL")
+    screen.text(23, 0, "ENVOI: SUBMIT  SOMMAIRE: HOME")
 
 
 def line_field(screen, ctx, name, row, col, width, *, label=None,

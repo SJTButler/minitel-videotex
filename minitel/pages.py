@@ -90,6 +90,23 @@ class PageContext:
         self.pager = Pager(total, page_size, offset).clamp()
         return self.pager
 
+    @property
+    def screensaver(self):
+        return self.session.screensaver
+
+    @property
+    def idle_elapsed(self):
+        return self.session.idle_elapsed
+
+    def set_screensaver(self, pages, *, after=120.0, hold=20.0):
+        return self.session.set_screensaver(pages, after=after, hold=hold)
+
+    def disable_screensaver(self):
+        return self.session.disable_screensaver()
+
+    def start_screensaver(self, index=0):
+        return self.session.request_screensaver(index)
+
     def field(self, name):
         for field in self.fields:
             if field.name == name:
@@ -110,6 +127,7 @@ class Page:
     meta = {}
     form = False
     transient = False
+    back_page = None
     tick_interval = None
     on_form = None
 
@@ -132,11 +150,12 @@ class Page:
 class FunctionPage(Page):
     def __init__(self, number, render, *, title="", aliases=(), on_submit=None,
                  on_key=None, on_tick=None, tick_interval=None, form=False,
-                 on_form=None, transient=False, meta=None):
+                 on_form=None, transient=False, back_page=None, meta=None):
         self.number = number
         self._render = render
         self.title = title
         self.aliases = tuple(aliases)
+        self.back_page = back_page
         self._on_submit = on_submit
         self._on_key = on_key
         self._on_tick = on_tick
@@ -167,7 +186,7 @@ class FunctionPage(Page):
 
 def page(number, *, title="", aliases=(), on_submit=None, on_key=None,
          on_tick=None, tick_interval=None, form=False, on_form=None,
-         transient=False, **meta):
+         transient=False, back_page=None, **meta):
     def decorator(fn):
         return FunctionPage(
             number,
@@ -181,6 +200,7 @@ def page(number, *, title="", aliases=(), on_submit=None, on_key=None,
             form=form,
             on_form=on_form,
             transient=transient,
+            back_page=back_page,
             meta=meta,
         )
     return decorator

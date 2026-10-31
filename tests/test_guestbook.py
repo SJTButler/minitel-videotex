@@ -40,7 +40,7 @@ class GuestbookFlowTests(unittest.TestCase):
         text = screen.to_text().splitlines()
         self.assertTrue(text[22].startswith("SUITE: MESSAGE"))
         self.assertIn("RETOUR: SORTIR", text[22])
-        self.assertTrue(text[23].startswith("ENVOI: VALIDER"))
+        self.assertTrue(text[23].startswith("ENVOI: SUBMIT"))
 
     def test_dynamic_footer_follows_focus(self):
         actions = self.session.feed(SUITE)

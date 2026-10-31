@@ -16,7 +16,8 @@ minitel/       reusable, content-free library
   screen.py    25x40 screen model
   render.py    screen -> Videotex bytes
   pages.py     Page, PageContext, Registry, @page
-  session.py   input, navigation, history
+  session.py   input, navigation, history, idle takeover
+  screensaver.py screensaver pages, idle delay, rotation
   app.py       registry + profile + session + transport + services
   transport.py TCP and paced writes
   text.py      remote text sanitising, fit/wrap, domain, age
@@ -27,6 +28,12 @@ pages/         example service, one file per page, auto-discovered
   news.py      page 110, the news service directory
   news_source.py Hacker News parsing, source, and cached service
   hackernews.py  pages 111/112, headlines and story detail
+  manifest.py    content declarations: screensaver modes and labels
+  screensaver.py  page 190, the screensaver selector
+  screensaver_clock.py  page 900, clock
+  screensaver_mire.py   page 901, test card
+  screensaver_ball.py   page 903, bouncing ball
+  screensaver_promo.py  pages 910-912, carousel frames
 tests/         library and page tests
 tools/         first-light server and virtual Minitel decoder
 docs/          authoring guide
@@ -157,10 +164,41 @@ The news service is the worked example:
   advances and wraps; `RETOUR` walks back one page and only leaves the list from
   page 1, the same boundary pattern as multi-field form focus. The cursor is
   remembered per page, so returning to the list resumes the same page.
+- `112` declares `back_page="111"`, so typing `112` directly returns to the list
+  first, then follows the existing history.
 
 `on_tick` may return a complete `Screen`; the session diffs it against the
 shadow screen and restores the input cursor. Raw bytes remain the cheaper choice
 for a single changing region.
+
+## Screensavers
+
+An idle session can take over the display without navigating away from the
+current page. The screensaver preserves history, field values, focus, and pager
+offset; any input wakes back to the same page. Idle means no input and no
+navigation, so ticking pages still fall asleep.
+
+```sh
+uv run python -m minitel.server --screensaver clock
+uv run python -m minitel.server --screensaver ball --screensaver-after 60
+uv run python -m minitel.server --screensaver off
+```
+
+`--screensaver` accepts `clock`, `mire`, `carousel`, `ball`, `all`, or `off`.
+The modes and their page keys are declared in `pages/manifest.py`; `minitel/`
+only carries a configured `Screensaver`, not a page list. `--screensaver-after`
+is the idle delay in seconds; `0` disables automatic activation but leaves
+manual activation available. `--screensaver-hold` sets the seconds per page for
+a multi-page screensaver.
+
+Page `190` (`7` on the home menu) is the selector. Type `1`-`4` to choose CLOCK,
+TEST CARD, CAROUSEL, or BOUNCING BALL, `6` to cycle the auto delay, and `0` to
+activate immediately. The screensaver pages are `900` CLOCK, `901` TEST CARD,
+`903` BOUNCING BALL, and the `910`-`912` CAROUSEL frames.
+
+`MinitelApp(screensaver=..., screensaver_after=..., screensaver_hold=...)`
+provides the same configuration for another service. Pages may call
+`ctx.set_screensaver(...)` or `ctx.start_screensaver()`.
 
 ## Adding pages
 

@@ -43,6 +43,22 @@ class AppTests(unittest.IsolatedAsyncioTestCase):
         app = MinitelApp(self.registry)
         self.assertEqual(app.new_session().services, {})
 
+    def test_screensaver_config_propagates_to_sessions(self):
+        app = MinitelApp(
+            self.registry,
+            screensaver=("900",),
+            screensaver_after=5.0,
+            screensaver_hold=3.0,
+        )
+        session = app.new_session()
+        self.assertEqual([page.number for page in session.screensaver.pages], ["900"])
+        self.assertEqual(session.screensaver.after, 5.0)
+        self.assertEqual(session.screensaver.hold, 3.0)
+
+    def test_screensaver_is_optional(self):
+        app = MinitelApp(self.registry)
+        self.assertIsNone(app.new_session().screensaver)
+
     async def test_async_start_and_stop_order(self):
         events = []
         app = MinitelApp(

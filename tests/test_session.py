@@ -89,6 +89,47 @@ class SessionTests(unittest.TestCase):
         session.feed(RETOUR)
         self.assertEqual(session.current.number, "470")
 
+    def test_back_page_is_used_when_history_lacks_it(self):
+        registry = Registry()
+
+        @page("460", back_page="470")
+        def child(ctx):
+            s = Screen()
+            s.text(0, 0, "CHILD")
+            return s
+
+        @page("470")
+        def parent(ctx):
+            s = Screen()
+            s.text(0, 0, "PARENT")
+            return s
+
+        @page("480")
+        def other(ctx):
+            s = Screen()
+            s.text(0, 0, "OTHER")
+            return s
+
+        registry.add(child)
+        registry.add(parent)
+        registry.add(other)
+        session = Session(registry, profiles.M1, initial="480", fallback=other)
+        session.start()
+
+        session.navigate("460")
+        self.assertEqual(session.current.number, "460")
+        session.feed(RETOUR)
+        self.assertEqual(session.current.number, "470")
+        self.assertEqual([page.number for page in session.history], ["480"])
+        session.feed(RETOUR)
+        self.assertEqual(session.current.number, "480")
+
+        session.navigate("470")
+        session.navigate("460")
+        session.feed(RETOUR)
+        self.assertEqual(session.current.number, "470")
+        self.assertEqual([page.number for page in session.history], ["480"])
+
     def test_sommaire_clears_history(self):
         self.feed(b"1" + ENVOI)
         self.feed(SOMMAIRE)

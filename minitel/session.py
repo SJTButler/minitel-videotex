@@ -1,11 +1,13 @@
 """Transport-neutral session: input, navigation, history, and page rendering."""
 
+import time
 from dataclasses import dataclass, replace
 
 from . import codec
 from .pages import Page, PageContext
 from .render import render_diff
 from .screen import Screen
+from .screensaver import Screensaver
 
 
 @dataclass
@@ -17,7 +19,8 @@ class Action:
 
 class Session:
     def __init__(self, registry, profile, *, initial="100", fallback=None,
-                 guide=None, echo=False, services=None):
+                 guide=None, echo=False, services=None, screensaver=None,
+                 clock=time.monotonic):
         self.registry = registry
         self.profile = profile
         self.initial = initial
@@ -38,6 +41,20 @@ class Session:
         self.pager = None
         self.pagers = {}
         self.screen = None
+        self.clock = clock
+        self.screensaver = (
+            screensaver
+            if isinstance(screensaver, Screensaver)
+            else Screensaver.from_spec(registry, screensaver)
+            if screensaver is not None
+            else None
+        )
+        self.screensaver_active = False
+        self.last_activity = self.clock()
+        self._screensaver_since = 0.0
+        self._screensaver_next = 0.0
+        self._screensaver_index = 0
+        self._screensaver_request = None
 
     @property
     def active_field(self):
@@ -60,6 +77,9 @@ class Session:
         field = self.active_field
         if field is not None:
             self.values[field.name] = value
+
+    def _touch(self):
+        self.last_activity = self.clock()
 
     def _reset_page(self):
         self.fields = []
@@ -114,6 +134,8 @@ class Session:
         self.screen.set_cursor(field.row, col, self._cursor_visible())
 
     def start(self):
+        self.screensaver_active = False
+        self._touch()
         return self.render()
 
     def refresh(self):
@@ -168,6 +190,8 @@ class Session:
         return None
 
     def navigate(self, value, *, push=True):
+        self.screensaver_active = False
+        self._touch()
         page = self.resolve_page(value)
         if page is None:
             page = self.fallback
@@ -191,6 +215,9 @@ class Session:
             result = self.current.on_form(ctx, values)
         else:
             result = self.current.on_submit(ctx, line)
+        requested = self._take_screensaver_request()
+        if requested is not None:
+            return requested
         page = self.resolve_page(result)
         if page is None and not self.current.form:
             page = self.registry.get(line)
@@ -198,7 +225,19 @@ class Session:
             page = self.fallback
         return self.navigate(page)
 
+    def _back_or_parent(self):
+        target = self.resolve_page(self.current.back_page)
+        if (
+            target is not None
+            and target.number != self.current.number
+            and (not self.history or self.history[-1].number != target.number)
+        ):
+            return self.navigate(target, push=False)
+        return self.back()
+
     def back(self):
+        self.screensaver_active = False
+        self._touch()
         if self.history:
             self.current = self.history.pop()
         else:
@@ -207,43 +246,204 @@ class Session:
         return Action(screen=self.render(), page=self.current)
 
     def home(self):
+        self.screensaver_active = False
+        self._touch()
         self.history.clear()
         self.current = self.registry.resolve(self.initial)
         self._reset_page()
         return Action(screen=self.render(), page=self.current)
 
-    def next_tick_delay(self):
-        field = self.active_field
-        if field and field.cursor == "auto" and self.values.get(field.name, ""):
+    @property
+    def idle_elapsed(self):
+        return max(0.0, self.clock() - self.last_activity)
+
+    @property
+    def display_page(self):
+        if self.screensaver_active and self.screensaver and self.screensaver.pages:
+            pages = self.screensaver.pages
+            return pages[self._screensaver_index % len(pages)]
+        return self.current
+
+    def set_screensaver(self, pages, *, after=120.0, hold=20.0):
+        self.screensaver = Screensaver.from_spec(
+            self.registry, pages, after=after, hold=hold
+        )
+        self.screensaver_active = False
+        self._screensaver_next = 0.0
+        self._screensaver_request = None
+        return self.screensaver
+
+    def disable_screensaver(self):
+        self.screensaver = None
+        self.screensaver_active = False
+        self._screensaver_next = 0.0
+        self._screensaver_request = None
+
+    def request_screensaver(self, index=0):
+        self._screensaver_request = index
+
+    def _take_screensaver_request(self):
+        if self._screensaver_request is None:
             return None
-        interval = getattr(self.current, "tick_interval", None)
+        index = self._screensaver_request
+        self._screensaver_request = None
+        return self.activate_screensaver(index)
+
+    def activate_screensaver(self, index=0):
+        if not self.screensaver or not self.screensaver.pages:
+            return None
+        pages = self.screensaver.pages
+        self._screensaver_index = index % len(pages)
+        now = self.clock()
+        hold = self.screensaver.hold
+        if hold is not None and hold > 0:
+            self._screensaver_since = now - self._screensaver_index * hold
+            self._screensaver_next = self._screensaver_since + (
+                self._screensaver_index + 1
+            ) * hold
+        else:
+            self._screensaver_since = now
+            self._screensaver_next = float("inf")
+        self.screensaver_active = True
+        return self._render_screensaver()
+
+    def _render_screensaver(self):
+        page = self.display_page
+        ctx = PageContext(self, page, self.registry)
+        screen = page.render(ctx)
+        if not isinstance(screen, Screen):
+            raise TypeError(
+                f"screensaver page {page.number!r} returned {type(screen)!r}, "
+                "expected Screen"
+            )
+        screen.set_cursor(codec.ROWS - 1, 0, False)
+        self.screen = screen
+        return Action(screen=screen)
+
+    def wake(self):
+        if not self.screensaver_active:
+            return Action()
+        self.screensaver_active = False
+        self._touch()
+        return Action(screen=self.render())
+
+    def _wake_from_input(self):
+        self.parser = codec.InputParser()
+        return self.wake()
+
+    def _screensaver_after(self):
+        if not self.screensaver or not self.screensaver.pages:
+            return None
+        after = self.screensaver.after
+        if after is None or after <= 0:
+            return None
+        return after
+
+    def _idle_delay(self, now):
+        after = self._screensaver_after()
+        if after is None or self.current in self.screensaver.pages:
+            return None
+        return max(0.0, after - (now - self.last_activity))
+
+    def _rotation_delay(self, now):
+        if not self.screensaver_active:
+            return None
+        if not self.screensaver or len(self.screensaver.pages) < 2:
+            return None
+        hold = self.screensaver.hold
+        if hold is None or hold <= 0:
+            return None
+        return max(0.0, self._screensaver_next - now)
+
+    def _advance_screensaver(self, now):
+        pages = self.screensaver.pages
+        hold = self.screensaver.hold
+        if hold is None or hold <= 0 or len(pages) < 2:
+            return
+        elapsed = now - self._screensaver_since
+        steps = max(1, int(elapsed // hold))
+        self._screensaver_index = steps % len(pages)
+        self._screensaver_next = self._screensaver_since + (steps + 1) * hold
+
+    def next_timeout(self):
+        now = self.clock()
+        deadlines = []
+        if self.screensaver_active:
+            rotation = self._rotation_delay(now)
+            if rotation is not None:
+                deadlines.append(rotation)
+            tick = self._page_tick_interval(
+                self.display_page, pause_on_input=False
+            )
+            if tick is not None:
+                deadlines.append(tick)
+        else:
+            idle = self._idle_delay(now)
+            if idle is not None:
+                deadlines.append(idle)
+            tick = self.next_tick_delay()
+            if tick is not None:
+                deadlines.append(tick)
+        return min(deadlines) if deadlines else None
+
+    def on_timeout(self):
+        now = self.clock()
+        if self.screensaver_active:
+            rotation = self._rotation_delay(now)
+            if rotation is not None and rotation <= 0:
+                self._advance_screensaver(now)
+                return self._render_screensaver()
+            return self.tick()
+        idle = self._idle_delay(now)
+        if idle is not None and idle <= 0:
+            action = self.activate_screensaver()
+            if action is not None:
+                return action
+        return self.tick()
+
+    def _page_tick_interval(self, page, *, pause_on_input=True):
+        if pause_on_input:
+            field = self.active_field
+            if field and field.cursor == "auto" and self.values.get(field.name, ""):
+                return None
+        interval = getattr(page, "tick_interval", None)
         if interval is None or interval <= 0:
             return None
         return interval
 
+    def next_tick_delay(self):
+        return self._page_tick_interval(self.current)
+
     def tick(self):
-        if self.next_tick_delay() is None:
+        page = self.display_page
+        if self.screensaver_active:
+            if self._page_tick_interval(page, pause_on_input=False) is None:
+                return Action()
+        elif self.next_tick_delay() is None:
             return Action()
-        ctx = PageContext(self, self.current, self.registry)
-        frame = self.current.on_tick(ctx)
-        if ctx.pager is not None:
+        ctx = PageContext(self, page, self.registry)
+        frame = page.on_tick(ctx)
+        if not self.screensaver_active and ctx.pager is not None:
             self.pager = ctx.pager
             self.pagers[self.current.number] = ctx.pager
         if frame is None:
             return Action()
         if isinstance(frame, (bytes, bytearray)):
             frame = bytes(frame)
-            if frame and self.active_field is not None:
+            if not self.screensaver_active and frame and self.active_field is not None:
                 frame += self._focus_frame()
             return Action(raw=frame)
         if isinstance(frame, Screen):
-            field = self.active_field
-            if field is not None:
-                value = self.values.get(field.name, "")
-                col = field.col + min(len(value), field.width)
-                frame.set_cursor(field.row, col, self._cursor_visible())
+            if self.screensaver_active:
+                frame.set_cursor(codec.ROWS - 1, 0, False)
             else:
-                frame.set_cursor(24, 0, False)
+                field = self.active_field
+                if field is not None:
+                    value = self.values.get(field.name, "")
+                    col = field.col + min(len(value), field.width)
+                    frame.set_cursor(field.row, col, self._cursor_visible())
+                else:
+                    frame.set_cursor(codec.ROWS - 1, 0, False)
             old = self.screen
             if old is None:
                 self.screen = frame
@@ -252,11 +452,14 @@ class Session:
             self.screen = frame
             return Action(raw=diff)
         raise TypeError(
-            f"page {self.current.number!r} tick returned {type(frame)!r}; "
+            f"page {page.number!r} tick returned {type(frame)!r}; "
             "expected bytes, Screen, or None"
         )
 
     def handle(self, event):
+        if self.screensaver_active:
+            return self._wake_from_input()
+        self._touch()
         if isinstance(event, codec.Text):
             field = self.active_field
             if field is None:
@@ -283,7 +486,11 @@ class Session:
             return self.function(event.name)
         if isinstance(event, codec.Key):
             ctx = PageContext(self, self.current, self.registry)
-            page = self.resolve_page(self.current.on_key(ctx, event.name))
+            result = self.current.on_key(ctx, event.name)
+            requested = self._take_screensaver_request()
+            if requested is not None:
+                return requested
+            page = self.resolve_page(result)
             if page is not None:
                 return self.navigate(page)
             return Action()
@@ -328,7 +535,7 @@ class Session:
                     self.active -= 1
                     self.active_name = self.fields[self.active].name
                     return self.refresh()
-                return self.back()
+                return self._back_or_parent()
 
         if self.pager is not None:
             if name == "SUITE":
@@ -344,13 +551,17 @@ class Session:
                     self.pagers[self.current.number] = self.pager
                     self._clear_active_field()
                     return self.refresh()
-                return self.back()
+                return self._back_or_parent()
 
         if name == "RETOUR":
-            return self.back()
+            return self._back_or_parent()
 
         ctx = PageContext(self, self.current, self.registry)
-        page = self.resolve_page(self.current.on_key(ctx, name))
+        result = self.current.on_key(ctx, name)
+        requested = self._take_screensaver_request()
+        if requested is not None:
+            return requested
+        page = self.resolve_page(result)
         if page is not None:
             return self.navigate(page)
         if name == "GUIDE" and self.guide:
@@ -358,4 +569,10 @@ class Session:
         return Action()
 
     def feed(self, data):
-        return [self.handle(event) for event in self.parser.feed(data)]
+        if not data:
+            return []
+        if self.screensaver_active:
+            return [self._wake_from_input()]
+        events = self.parser.feed(data)
+        self._touch()
+        return [self.handle(event) for event in events]
