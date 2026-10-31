@@ -95,5 +95,9 @@ def render(screen):
                 out += codec.size(codec.NORMAL)
 
     out += codec.pos(screen.cursor_row, screen.cursor_col)
+    cell = screen.rows[screen.cursor_row][screen.cursor_col]
+    out += attr_bytes(state, cell)
+    if cell.size != codec.NORMAL:
+        out += codec.size(cell.size)
     out += codec.cursor(screen.cursor_visible)
     return bytes(out)

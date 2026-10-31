@@ -9,6 +9,7 @@ from .screen import Screen
 
 @dataclass
 class InputField:
+    name: str
     row: int
     col: int
     width: int
@@ -25,7 +26,9 @@ class PageContext:
         self.session = session
         self.page = page
         self.registry = registry
-        self.input = None
+        self.fields = []
+        self.values = session.values
+        self.focus_name = None
 
     @property
     def line(self):
@@ -43,12 +46,34 @@ class PageContext:
     def state(self):
         return self.session.state
 
-    def set_input(self, row, col, width, *, mask=None, value="", cursor="visible"):
+    def add_field(self, name, row, col, width, *, mask=None, value="",
+                  cursor="visible"):
         if cursor not in CURSOR_MODES:
             raise ValueError(f"cursor must be one of {CURSOR_MODES}")
-        self.input = InputField(
-            row, col, width, mask=mask, value=value, cursor=cursor
+        if any(field.name == name for field in self.fields):
+            raise ValueError(f"duplicate field name {name!r}")
+        field = InputField(
+            name, row, col, width, mask=mask, value=value, cursor=cursor
         )
+        self.fields.append(field)
+        self.values.setdefault(name, value)
+        return field
+
+    def set_input(self, row, col, width, *, mask=None, value="",
+                  cursor="visible"):
+        return self.add_field(
+            "input", row, col, width,
+            mask=mask, value=value, cursor=cursor,
+        )
+
+    def field(self, name):
+        for field in self.fields:
+            if field.name == name:
+                return field
+        return None
+
+    def focus(self, name):
+        self.session.requested_focus = name
 
     def page_for(self, key):
         return self.registry.get(key)
@@ -59,8 +84,10 @@ class Page:
     title = ""
     aliases = ()
     meta = {}
+    form = False
     transient = False
     tick_interval = None
+    on_form = None
 
     def render(self, ctx: PageContext) -> Screen:
         raise NotImplementedError
@@ -80,8 +107,8 @@ class Page:
 
 class FunctionPage(Page):
     def __init__(self, number, render, *, title="", aliases=(), on_submit=None,
-                 on_key=None, on_tick=None, tick_interval=None, transient=False,
-                 meta=None):
+                 on_key=None, on_tick=None, tick_interval=None, form=False,
+                 on_form=None, transient=False, meta=None):
         self.number = number
         self._render = render
         self.title = title
@@ -90,6 +117,8 @@ class FunctionPage(Page):
         self._on_key = on_key
         self._on_tick = on_tick
         self.tick_interval = tick_interval
+        self.form = form
+        self.on_form = on_form
         self.transient = transient
         self.meta = dict(meta or {})
 
@@ -113,7 +142,8 @@ class FunctionPage(Page):
 
 
 def page(number, *, title="", aliases=(), on_submit=None, on_key=None,
-         on_tick=None, tick_interval=None, transient=False, **meta):
+         on_tick=None, tick_interval=None, form=False, on_form=None,
+         transient=False, **meta):
     def decorator(fn):
         return FunctionPage(
             number,
@@ -124,6 +154,8 @@ def page(number, *, title="", aliases=(), on_submit=None, on_key=None,
             on_key=on_key,
             on_tick=on_tick,
             tick_interval=tick_interval,
+            form=form,
+            on_form=on_form,
             transient=transient,
             meta=meta,
         )

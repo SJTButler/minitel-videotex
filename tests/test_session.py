@@ -122,7 +122,9 @@ class SessionTests(unittest.TestCase):
         session.start()
         self.assertEqual(session.next_tick_delay(), 0.5)
         action = session.tick()
-        expected = b"CLOCK" + codec.pos(20, 6) + codec.cursor(True)
+        expected = (
+            b"CLOCK" + codec.pos(20, 6) + codec.inverse(False) + codec.cursor(True)
+        )
         self.assertEqual(action.raw, expected)
 
         session.navigate("410")
@@ -143,7 +145,9 @@ class SessionTests(unittest.TestCase):
         screen = session.start()
         self.assertFalse(screen.cursor_visible)
         action = session.tick()
-        expected = b"X" + codec.pos(20, 6) + codec.cursor(False)
+        expected = (
+            b"X" + codec.pos(20, 6) + codec.inverse(False) + codec.cursor(False)
+        )
         self.assertEqual(action.raw, expected)
 
     def test_auto_cursor_shows_while_typing(self):

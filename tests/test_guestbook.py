@@ -8,6 +8,7 @@ from pages.guestbook_store import GuestbookStore
 
 ENVOI = bytes([0x13, 0x41])
 RETOUR = bytes([0x13, 0x42])
+SUITE = bytes([0x13, 0x48])
 
 
 class GuestbookFlowTests(unittest.TestCase):
@@ -30,12 +31,25 @@ class GuestbookFlowTests(unittest.TestCase):
     def test_alias(self):
         self.assertIs(self.registry.get("4"), self.registry.get("140"))
 
-    def test_sign_flow(self):
-        self.session.feed(b"ALICE" + ENVOI)
-        self.assertEqual(self.session.current.number, "141")
-        self.assertEqual(self.session.state["guestbook_handle"], "ALICE")
+    def test_form_layout(self):
+        screen = self.session.render()
+        self.assertEqual(self.session.active_field.name, "handle")
+        self.assertEqual((screen.cursor_row, screen.cursor_col), (14, 9))
+        self.assertEqual([field.col for field in self.session.fields], [9, 9])
+        self.assertTrue(screen.cursor_visible)
+        text = screen.to_text().splitlines()
+        self.assertTrue(text[22].startswith("SUITE: CHAMP"))
+        self.assertTrue(text[23].startswith("ENVOI: VALIDER"))
 
-        actions = self.session.feed(b"HELLO" + ENVOI)
+    def test_sign_flow(self):
+        self.session.feed(b"ALICE")
+        self.assertEqual(self.session.line, "ALICE")
+
+        self.session.feed(SUITE)
+        self.assertEqual(self.session.active_field.name, "message")
+        self.session.feed(b"HELLO")
+
+        actions = self.session.feed(ENVOI)
         self.assertEqual(self.session.current.number, "140")
         entries = self.store.recent(1)
         self.assertEqual(len(entries), 1)
@@ -45,32 +59,45 @@ class GuestbookFlowTests(unittest.TestCase):
         screen = actions[-1].screen
         self.assertIn("ALICE", screen.to_text())
         self.assertIn("HELLO", screen.to_text())
+        self.assertEqual(self.session.active_field.name, "handle")
+        self.assertEqual(self.session.line, "")
 
+    def test_focus_moves_between_fields(self):
+        self.session.feed(b"ALICE")
+        self.session.feed(SUITE)
+        self.assertEqual(self.session.active_field.name, "message")
+        self.session.feed(RETOUR)
+        self.assertEqual(self.session.active_field.name, "handle")
+        self.assertEqual(self.session.line, "ALICE")
+
+    def test_retour_from_first_field_goes_back(self):
         self.session.feed(RETOUR)
         self.assertEqual(self.session.current.number, "100")
 
-    def test_retour_from_message_step(self):
-        self.session.feed(b"ALICE" + ENVOI)
-        self.assertEqual(self.session.current.number, "141")
+    def test_retour_from_message_does_not_leave_the_form(self):
+        self.session.feed(SUITE)
+        self.assertEqual(self.session.active_field.name, "message")
         self.session.feed(RETOUR)
         self.assertEqual(self.session.current.number, "140")
-        self.session.feed(RETOUR)
-        self.assertEqual(self.session.current.number, "100")
+        self.assertEqual(self.session.active_field.name, "handle")
 
     def test_empty_handle(self):
+        self.session.feed(SUITE)
+        self.session.feed(b"MSG")
         actions = self.session.feed(ENVOI)
         self.assertEqual(self.session.current.number, "140")
         self.assertIn("HANDLE REQUIRED", actions[-1].screen.to_text())
+        self.assertEqual(self.session.active_field.name, "handle")
+        self.assertEqual(self.store.recent(1), [])
 
     def test_empty_message(self):
-        self.session.feed(b"ALICE" + ENVOI)
+        self.session.feed(b"ALICE")
+        self.session.feed(SUITE)
         actions = self.session.feed(ENVOI)
-        self.assertEqual(self.session.current.number, "141")
-        self.assertIn("MESSAGE REQUIRED", actions[-1].screen.to_text())
-        self.session.feed(RETOUR)
         self.assertEqual(self.session.current.number, "140")
-        self.session.feed(RETOUR)
-        self.assertEqual(self.session.current.number, "100")
+        self.assertIn("MESSAGE REQUIRED", actions[-1].screen.to_text())
+        self.assertEqual(self.session.active_field.name, "message")
+        self.assertEqual(self.store.recent(1), [])
 
     def test_existing_entries_render(self):
         self.store.add("BOB", "FIRST")

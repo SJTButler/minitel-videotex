@@ -58,7 +58,8 @@ The decorator form is the shortest:
 
 ```python
 @page(number, title="", aliases=(), on_submit=None, on_key=None,
-      on_tick=None, tick_interval=None, transient=False, **meta)
+      on_tick=None, tick_interval=None, form=False, on_form=None,
+      transient=False, **meta)
 def render(ctx):
     return Screen()
 ```
@@ -66,9 +67,11 @@ def render(ctx):
 - `number` is the primary key (`"200"`).
 - `aliases` are extra keys (`("4",)` or `("", "0")` for the home page).
 - `title` is metadata; it is not drawn automatically.
-- `on_submit(ctx, line)` handles `ENVOI`/`Enter`.
+- `on_submit(ctx, line)` handles `ENVOI`/`Enter` for single-field pages.
+- `form=True` and `on_form(ctx, values)` handle multi-field forms; see
+  [Multi-field forms](#multi-field-forms).
 - `on_key(ctx, key)` handles keys the session does not consume (`GUIDE`,
-  `SUITE`, arrows, etc.).
+  arrows, etc.).
 - `on_tick(ctx)` and `tick_interval` make the page dynamic; see
   [Dynamic pages](#dynamic-pages).
 - `transient=True` keeps the page out of history; see
@@ -97,25 +100,30 @@ class Clock(Page):
 
 ## PageContext
 
-Every `render`, `on_submit`, and `on_key` receives a `PageContext`.
+Every `render`, `on_submit`, `on_form`, and `on_key` receives a
+`PageContext`.
 
 | Member | Meaning |
 |---|---|
 | `ctx.session` | the live `Session` |
 | `ctx.profile` | the terminal profile (`M1`, `M2_MONO`, ...) |
 | `ctx.registry` | the `Registry` |
-| `ctx.line` | the current input buffer |
+| `ctx.line` | the active field's value |
 | `ctx.last_key` | the last submitted line (used by the not-found page) |
 | `ctx.state` | a per-session dict for page state |
-| `ctx.set_input(row, col, width, *, cursor="visible")` | register the input field and cursor policy |
+| `ctx.values` | all field values for the current page |
+| `ctx.fields` | the registered fields |
+| `ctx.add_field(name, row, col, width, *, cursor="visible")` | register a named field |
+| `ctx.set_input(row, col, width, *, cursor="visible")` | one-field shorthand |
+| `ctx.focus(name)` | request focus when the page rerenders |
 | `ctx.page_for(key)` | look up another page |
 
-`set_input` is required for typing. It tells the session where the cursor
-belongs and what the maximum line length is. The cursor policy is `visible`
-(the default), `hidden` (never show it), or `auto` (hide while idle, show while
-the line is non-empty, and pause ticks while typing). The inverse field remains
-the visual target when the cursor is hidden. `pages.layout.page_input` does
-both the drawing and the registration:
+`set_input` is the one-field shorthand; multi-field pages use `add_field`.
+Both tell the session where the cursor belongs and what the maximum length is.
+The cursor policy is `visible` (the default), `hidden` (never show it), or
+`auto` (hide while idle, show while the field is non-empty, and pause ticks
+while typing). The inverse field remains the visual target when the cursor is
+hidden. `pages.layout.page_input` does both the drawing and the registration:
 
 ```python
 page_input(s, ctx)
@@ -166,6 +174,7 @@ and the input parser. Most pages should not need it beyond constants.
 - `status(s, "PAGE 200")` paints the full inverse top row and keeps the page
   number clear of the terminal's `F/C` indicator.
 - `footer(s)` writes the key hints at row 22.
+- `form_footer(s)` writes the form key hints at rows 22-23.
 - `page_input(s, ctx)` draws `PAGE:` at row 20 and registers the field.
 
 Use these for consistency. A different service can copy the file or provide its
@@ -177,11 +186,12 @@ The session handles the common keys:
 
 | Key | Behaviour |
 |---|---|
-| `ENVOI` / `Enter` | call `on_submit`, then route the line |
-| `CORRECTION` | remove one character, send `BS`, space, `BS` |
-| `ANNULATION` | clear the line, rerender the current page |
+| `ENVOI` / `Enter` | form: `on_form`; single field: `on_submit` |
+| `CORRECTION` | remove one character from the active field |
+| `ANNULATION` | clear the active field, rerender |
 | `SOMMAIRE` | go to `INITIAL`, clear history |
-| `RETOUR` | pop history, or go to `INITIAL` |
+| `SUITE` | form: next field; otherwise page `on_key` |
+| `RETOUR` | form: previous field; at the first/only field: history back |
 | `GUIDE` | page's `on_key`, then the app's guide page |
 
 `on_submit` can return:
@@ -190,7 +200,7 @@ The session handles the common keys:
 - a `Page` object,
 - `None`, in which case the session looks up the submitted line in the registry.
 
-Example stateful page:
+Example single-field stateful page:
 
 ```python
 def echo_submit(ctx, line):
@@ -210,8 +220,65 @@ def echo(ctx):
 Returning `"220"` rerenders the same page. `Session.navigate` does not push
 duplicate history when the target is the current page.
 
-`on_key` receives `GUIDE`, `SUITE`, `REPETITION`, arrows, and other keys after
-the session's built-in handling. Return a key or `Page` to navigate.
+`on_key` receives `GUIDE`, `REPETITION`, arrows, and other keys after the
+session's built-in handling. Return a key or `Page` to navigate.
+
+## Multi-field forms
+
+A form page declares `form=True`, registers fields with `ctx.add_field`, and
+implements `on_form(ctx, values)`:
+
+```python
+def submit_form(ctx, values):
+    name = values.get("name", "").strip()
+    if not name:
+        ctx.state["error"] = "NAME REQUIRED"
+        ctx.focus("name")
+        return "230"
+    ctx.values.clear()
+    ctx.focus("name")
+    return "230"
+
+@page("230", title="FORM", form=True, on_form=submit_form)
+def form(ctx):
+    s = Screen()
+    status(s, "PAGE 230")
+    line_field(s, ctx, "name", 3, 6, 20, label="NAME:")
+    line_field(s, ctx, "city", 5, 6, 20, label="CITY:")
+
+    error = ctx.state.get("error", "")
+    if error:
+        s.text(7, 0, error)
+    form_footer(s)
+    return s
+```
+
+with:
+
+```python
+from pages.layout import form_footer, line_field, status
+```
+
+- `line_field` draws the label, inverse bar, and current value, then registers
+  the field. It keeps the draw and registration coordinates in one call.
+- For custom drawing, use `ctx.add_field(...)` plus `s.field`/`s.text`
+  yourself. Use identical row/column values in both places; a mismatch is the
+  usual one-column cursor bug.
+- Draw the field bar and its value with the same attributes. The renderer
+  leaves the terminal pen set to the cursor cell at the end of a paint, and
+  focus moves do the same, so typed text matches the field style. An inverse
+  field echoes inverse text; a normal field echoes normal text.
+- Separate named fields are better than one combined “handle message” line:
+  they keep validation, labels, focus, and `SUITE`/`RETOUR` navigation clear.
+- `SUITE`/`RETOUR` move focus without repainting the page. The form footer is
+  static; a dynamic footer needs a partial diff renderer.
+- `RETOUR` at the first field goes back; `SUITE` at the last field stops.
+- `ENVOI` calls `on_form(ctx, values)`. `values` is a snapshot dict;
+  `ctx.values` is the live dict.
+- On validation failure, set an error, call `ctx.focus(field)`, and return the
+  same page. The session rerenders with values and focus preserved.
+- On success, clear `ctx.values`, focus the first field, and return the page.
+- `on_submit` remains the single-field hook; a one-field form can use it.
 
 ## Echo mode
 
@@ -229,7 +296,7 @@ Two models:
 To switch:
 
 1. disable local echo in the terminal/dongle settings;
-2. start with `python3 -m minitel.server --port 3615 --echo`;
+2. start with `uv run python -m minitel.server --port 3615 --echo`;
 3. type. Double characters mean local echo is still on. If keys stop reaching
    the server, that setting controlled the key path rather than local echo;
    revert it and keep local echo.
@@ -294,14 +361,14 @@ is **not pushed** when you leave it. If you return to the page that launched
 it, that history entry is popped as well, so a form step does not leave a loop
 in history.
 
-Use transient pages for form steps, confirmations, and one-shot screens. The
-guestbook's message page is transient:
+Use transient pages for multi-step form flows, confirmations, login steps, and
+one-shot screens. A transient step is not pushed when you leave it; if you
+return to the page that launched it, that entry is popped. The guestbook is now
+a single form page, so it no longer needs a transient step; the capability
+remains for multi-page flows.
 
-- guestbook → message → submitted guestbook leaves only the guestbook below
-  the form in history;
-- `RETOUR` from the guestbook then goes to the previous normal page, not back
-  into the message form;
-- `RETOUR` from the message page itself still returns to the guestbook.
+Field focus (`SUITE`/`RETOUR` inside a form) never modifies history. Only an
+actual page navigation pushes or pops the history stack.
 
 Normal pages are pushed as usual.
 
@@ -369,11 +436,12 @@ Add a Minitel page in pages/ using the existing library.
 - Use @page from minitel and Screen.
 - Use pages.layout.status, footer, and page_input.
 - Keep to 40 columns and rows 0-24; row 0 is status, row 20 is PAGE, row 22 is footer.
-- Call page_input(s, ctx) so typing is captured.
-- Use ctx.state for per-session data and on_submit for forms.
+- Call page_input(s, ctx) for a single field, or ctx.add_field(...) and
+  form=True/on_form(ctx, values) for a multi-field form.
+- Use ctx.state for per-session data.
 - Add a menu line in pages/home.py.
-- Run: python3 -m unittest discover -s tests -v
-- Inspect: python3 tools/virtual_minitel.py --connect 127.0.0.1:43620 --plain
+- Run: uv run python -m unittest discover -s tests -v
+- Inspect: uv run python tools/virtual_minitel.py --connect 127.0.0.1:43620 --plain
 ```
 
 Review generated pages for:
@@ -400,8 +468,8 @@ The library boundaries are deliberate:
 - **Background services**: the current app is request-driven. A clock, chat, or
   live feed needs a scheduler/hub above `Session`; the `Action` and `Session`
   boundaries are the place to add it.
-- **Forms**: `InputField` and `on_submit` are the start. Multiple fields,
-  validation, and masks are natural extensions of `Session`.
+- **Forms**: multi-field focus and `on_form` are implemented. Field masks,
+  validators, and cursor/insert editing are natural extensions of `Session`.
 - **Themes**: copy `pages/layout.py` or create another layout package. The core
   renderer does not contain the `3615 KILO` status bar.
 

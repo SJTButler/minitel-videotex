@@ -92,6 +92,11 @@ A page returns a `Screen`; `ctx.set_input(row, col, width)` tells the session
 where the cursor and input line belong. `PageContext` also provides
 `ctx.line`, `ctx.last_key`, `ctx.state`, `ctx.profile`, and `ctx.registry`.
 
+For a multi-field form, register fields with `ctx.add_field(...)`, set
+`form=True`, and implement `on_form(ctx, values)`. `SUITE`/`RETOUR` move focus;
+`RETOUR` at the first field goes back. The guestbook page is the reference
+example.
+
 The example service's layout helpers are in `pages/layout.py`. The application
 is wired in `minitel/server.py` with `MinitelApp`, so a different service can
 pass its own registry and page package without touching the library.

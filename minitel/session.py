@@ -24,19 +24,66 @@ class Session:
         self.guide = guide
         self.echo = echo
         self.parser = codec.InputParser()
-        self.line = ""
         self.last_key = ""
         self.state = {}
         self.history = []
         self.current = registry.resolve(initial)
-        self.input = None
+        self.fields = []
+        self.values = {}
+        self.active = 0
+        self.active_name = None
+        self.requested_focus = None
+        self.screen = None
+
+    @property
+    def active_field(self):
+        if not self.fields:
+            return None
+        index = max(0, min(self.active, len(self.fields) - 1))
+        return self.fields[index]
+
+    @property
+    def input(self):
+        return self.active_field
+
+    @property
+    def line(self):
+        field = self.active_field
+        return self.values.get(field.name, "") if field else ""
+
+    @line.setter
+    def line(self, value):
+        field = self.active_field
+        if field is not None:
+            self.values[field.name] = value
+
+    def _reset_form(self):
+        self.fields = []
+        self.values = {}
+        self.active = 0
+        self.active_name = None
+        self.requested_focus = None
 
     def _cursor_visible(self):
-        if self.input is None:
+        field = self.active_field
+        if field is None:
             return False
-        if self.input.cursor == "auto":
-            return bool(self.line)
-        return self.input.cursor == "visible"
+        if field.cursor == "auto":
+            return bool(self.values.get(field.name, ""))
+        return field.cursor == "visible"
+
+    def _focus_frame(self):
+        field = self.active_field
+        if field is None:
+            return b""
+        value = self.values.get(field.name, "")
+        col = field.col + min(len(value), field.width)
+        raw = bytearray(codec.pos(field.row, col))
+        if self.screen is not None:
+            cell = self.screen.rows[field.row][field.col]
+            raw += codec.inverse(cell.inverse)
+        raw += codec.cursor(self._cursor_visible())
+        return bytes(raw)
 
     def start(self):
         return self.render()
@@ -48,13 +95,29 @@ class Session:
             raise TypeError(
                 f"page {self.current.number!r} returned {type(screen)!r}, expected Screen"
             )
-        self.input = ctx.input
-        if self.input is not None:
-            screen.set_cursor(
-                self.input.row, self.input.col, self._cursor_visible()
-            )
+        self.fields = ctx.fields
+        names = [field.name for field in self.fields]
+        self.values = {name: self.values.get(name, "") for name in names}
+
+        focus = self.requested_focus
+        self.requested_focus = None
+        if focus and focus in names:
+            self.active = names.index(focus)
+            self.active_name = focus
+        elif self.active_name and self.active_name in names:
+            self.active = names.index(self.active_name)
+        else:
+            self.active = 0
+            self.active_name = names[0] if names else None
+
+        field = self.active_field
+        if field is not None:
+            value = self.values.get(field.name, "")
+            col = field.col + min(len(value), field.width)
+            screen.set_cursor(field.row, col, self._cursor_visible())
         else:
             screen.set_cursor(24, 0, False)
+        self.screen = screen
         return screen
 
     def resolve_page(self, value):
@@ -68,43 +131,50 @@ class Session:
         page = self.resolve_page(value)
         if page is None:
             page = self.fallback
-        if push and page is not self.current:
-            if self.current.transient:
-                if self.history and self.history[-1] is page:
-                    self.history.pop()
-            else:
-                self.history.append(self.current)
+        if page is not self.current:
+            if push:
+                if self.current.transient:
+                    if self.history and self.history[-1] is page:
+                        self.history.pop()
+                else:
+                    self.history.append(self.current)
+            self._reset_form()
         self.current = page
-        self.line = ""
         return Action(screen=self.render(), page=page)
 
     def submit(self):
         line = self.line.strip()
         self.last_key = line
         ctx = PageContext(self, self.current, self.registry)
-        page = self.resolve_page(self.current.on_submit(ctx, line))
-        if page is None:
+        values = dict(self.values)
+        if callable(self.current.on_form):
+            result = self.current.on_form(ctx, values)
+        else:
+            result = self.current.on_submit(ctx, line)
+        page = self.resolve_page(result)
+        if page is None and not self.current.form:
             page = self.registry.get(line)
         if page is None:
             page = self.fallback
         return self.navigate(page)
 
     def back(self):
-        self.line = ""
         if self.history:
             self.current = self.history.pop()
         else:
             self.current = self.registry.resolve(self.initial)
+        self._reset_form()
         return Action(screen=self.render(), page=self.current)
 
     def home(self):
-        self.line = ""
         self.history.clear()
         self.current = self.registry.resolve(self.initial)
+        self._reset_form()
         return Action(screen=self.render(), page=self.current)
 
     def next_tick_delay(self):
-        if self.input is not None and self.input.cursor == "auto" and self.line:
+        field = self.active_field
+        if field and field.cursor == "auto" and self.values.get(field.name, ""):
             return None
         interval = getattr(self.current, "tick_interval", None)
         if interval is None or interval <= 0:
@@ -120,9 +190,8 @@ class Session:
             return Action()
         if isinstance(frame, (bytes, bytearray)):
             frame = bytes(frame)
-            if frame and self.input is not None:
-                frame += codec.pos(self.input.row, self.input.col)
-                frame += codec.cursor(self._cursor_visible())
+            if frame and self.active_field is not None:
+                frame += self._focus_frame()
             return Action(raw=frame)
         if isinstance(frame, Screen):
             return Action(screen=frame)
@@ -133,14 +202,16 @@ class Session:
 
     def handle(self, event):
         if isinstance(event, codec.Text):
-            if self.input is None:
+            field = self.active_field
+            if field is None:
                 return Action(raw=bytes([codec.BEL]))
-            if len(self.line) >= self.input.width:
+            value = self.values.get(field.name, "")
+            if len(value) >= field.width:
                 return Action(raw=bytes([codec.BEL]))
             prefix = b""
-            if self.input.cursor == "auto" and not self.line:
+            if field.cursor == "auto" and not value:
                 prefix = codec.cursor(True)
-            self.line += event.char
+            self.values[field.name] = value + event.char
             echo = codec.text(event.char) if self.echo else b""
             return Action(raw=prefix + echo)
         if isinstance(event, codec.Enter):
@@ -158,22 +229,45 @@ class Session:
     def function(self, name):
         if name == "ENVOI":
             return self.submit()
+
         if name == "CORRECTION":
-            if self.line:
-                self.line = self.line[:-1]
+            field = self.active_field
+            value = self.values.get(field.name, "") if field else ""
+            if field and value:
+                value = value[:-1]
+                self.values[field.name] = value
                 raw = bytes([codec.BS, 0x20, codec.BS])
-                if self.input is not None and self.input.cursor == "auto":
-                    if not self.line:
-                        raw += codec.cursor(False)
+                if field.cursor == "auto" and not value:
+                    raw += codec.cursor(False)
                 return Action(raw=raw)
             return Action()
+
         if name == "ANNULATION":
-            self.line = ""
+            field = self.active_field
+            if field:
+                self.values[field.name] = ""
             return Action(screen=self.render())
+
         if name == "SOMMAIRE":
             return self.home()
+
+        if self.current.form and self.fields:
+            if name == "SUITE":
+                if self.active < len(self.fields) - 1:
+                    self.active += 1
+                    self.active_name = self.fields[self.active].name
+                    return Action(raw=self._focus_frame())
+                return Action()
+            if name == "RETOUR":
+                if self.active > 0:
+                    self.active -= 1
+                    self.active_name = self.fields[self.active].name
+                    return Action(raw=self._focus_frame())
+                return self.back()
+
         if name == "RETOUR":
             return self.back()
+
         ctx = PageContext(self, self.current, self.registry)
         page = self.resolve_page(self.current.on_key(ctx, name))
         if page is not None:

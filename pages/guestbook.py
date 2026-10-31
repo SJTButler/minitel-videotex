@@ -3,10 +3,9 @@ from minitel.pages import page
 from minitel.screen import Screen
 
 from . import guestbook_store
-from .layout import footer, status
+from .layout import form_footer, line_field, status
 
 GUESTBOOK_PAGE = "140"
-MESSAGE_PAGE = "141"
 ENTRY_LIMIT = 3
 
 
@@ -18,35 +17,39 @@ def _store(ctx):
     return store
 
 
-def _error(ctx):
-    return ctx.state.get("guestbook_error", "")
+def submit_form(ctx, values):
+    handle = values.get("handle", "").strip()
+    message = values.get("message", "").strip()
 
-
-def submit_handle(ctx, line):
-    handle = line.strip()
     if not handle:
         ctx.state["guestbook_error"] = "HANDLE REQUIRED"
+        ctx.focus("handle")
         return GUESTBOOK_PAGE
-    ctx.state["guestbook_handle"] = handle[:16]
-    ctx.state.pop("guestbook_error", None)
-    return MESSAGE_PAGE
-
-
-def submit_message(ctx, line):
-    message = line.strip()
     if not message:
         ctx.state["guestbook_error"] = "MESSAGE REQUIRED"
-        return MESSAGE_PAGE
+        ctx.focus("message")
+        return GUESTBOOK_PAGE
+
     try:
-        _store(ctx).add(ctx.state.get("guestbook_handle", "ANON"), message)
+        _store(ctx).add(handle, message)
     except ValueError:
         ctx.state["guestbook_error"] = "MESSAGE REQUIRED"
-        return MESSAGE_PAGE
+        ctx.focus("message")
+        return GUESTBOOK_PAGE
+
     ctx.state.pop("guestbook_error", None)
+    ctx.values.clear()
+    ctx.focus("handle")
     return GUESTBOOK_PAGE
 
 
-@page(GUESTBOOK_PAGE, title="GUESTBOOK", aliases=("4",), on_submit=submit_handle)
+@page(
+    GUESTBOOK_PAGE,
+    title="GUESTBOOK",
+    aliases=("4",),
+    form=True,
+    on_form=submit_form,
+)
 def guestbook(ctx):
     s = Screen()
     status(s, "PAGE 140")
@@ -61,28 +64,12 @@ def guestbook(ctx):
         s.text(row + 1, 0, entry.message[:40])
 
     s.text(12, 0, "SIGN THE GUESTBOOK")
-    s.text(14, 0, "HANDLE:")
-    s.field(14, 8, 16)
-    ctx.set_input(14, 8, 16)
-    error = _error(ctx)
-    if error:
-        s.text(16, 0, error)
-    footer(s)
-    return s
+    line_field(s, ctx, "handle", 14, 9, 16, label="HANDLE:")
+    line_field(s, ctx, "message", 16, 9, 30, label="MESSAGE:")
 
-
-@page(MESSAGE_PAGE, title="MESSAGE", on_submit=submit_message, transient=True)
-def message(ctx):
-    s = Screen()
-    status(s, "PAGE 141")
-    s.text(1, 0, "MESSAGE", inverse=True, size=codec.DOUBLE_WIDTH)
-    handle = ctx.state.get("guestbook_handle", "ANON")
-    s.text(3, 0, f"FROM: {handle}"[:40])
-    s.text(5, 0, "TYPE YOUR MESSAGE, THEN ENVOI:")
-    s.field(7, 0, 38)
-    ctx.set_input(7, 0, 38)
-    error = _error(ctx)
+    error = ctx.state.get("guestbook_error", "")
     if error:
-        s.text(9, 0, error)
-    footer(s)
+        s.text(18, 0, error)
+
+    form_footer(s)
     return s
