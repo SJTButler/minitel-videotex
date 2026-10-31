@@ -26,6 +26,7 @@ def welcome(ctx):
     s.text(5, 0, "1  NEWS")
     s.text(6, 0, "2  WEATHER")
     s.text(7, 0, "3  ABOUT")
+    s.text(8, 0, "4  GUESTBOOK")
     s.text(9, 0, "TYPE A NUMBER, THEN ENVOI:")
     s.text(16, 0, "M1 PROFILE / 1200 BAUD")
     page_input(s, ctx, cursor="auto")

@@ -59,6 +59,7 @@ class Page:
     title = ""
     aliases = ()
     meta = {}
+    transient = False
     tick_interval = None
 
     def render(self, ctx: PageContext) -> Screen:
@@ -79,7 +80,8 @@ class Page:
 
 class FunctionPage(Page):
     def __init__(self, number, render, *, title="", aliases=(), on_submit=None,
-                 on_key=None, on_tick=None, tick_interval=None, meta=None):
+                 on_key=None, on_tick=None, tick_interval=None, transient=False,
+                 meta=None):
         self.number = number
         self._render = render
         self.title = title
@@ -88,6 +90,7 @@ class FunctionPage(Page):
         self._on_key = on_key
         self._on_tick = on_tick
         self.tick_interval = tick_interval
+        self.transient = transient
         self.meta = dict(meta or {})
 
     def render(self, ctx):
@@ -110,7 +113,7 @@ class FunctionPage(Page):
 
 
 def page(number, *, title="", aliases=(), on_submit=None, on_key=None,
-         on_tick=None, tick_interval=None, **meta):
+         on_tick=None, tick_interval=None, transient=False, **meta):
     def decorator(fn):
         return FunctionPage(
             number,
@@ -121,6 +124,7 @@ def page(number, *, title="", aliases=(), on_submit=None, on_key=None,
             on_key=on_key,
             on_tick=on_tick,
             tick_interval=tick_interval,
+            transient=transient,
             meta=meta,
         )
     return decorator

@@ -58,7 +58,7 @@ The decorator form is the shortest:
 
 ```python
 @page(number, title="", aliases=(), on_submit=None, on_key=None,
-      on_tick=None, tick_interval=None, **meta)
+      on_tick=None, tick_interval=None, transient=False, **meta)
 def render(ctx):
     return Screen()
 ```
@@ -71,6 +71,8 @@ def render(ctx):
   `SUITE`, arrows, etc.).
 - `on_tick(ctx)` and `tick_interval` make the page dynamic; see
   [Dynamic pages](#dynamic-pages).
+- `transient=True` keeps the page out of history; see
+  [History and transient pages](#history-and-transient-pages).
 - `meta` is free-form; useful for a custom app.
 
 For stateful or larger pages, subclass `Page`:
@@ -284,6 +286,24 @@ def dynamic(ctx):
 The timer is transport-level: `Session.next_tick_delay()` says how long to wait,
 and `Session.tick()` asks the current page for a frame. Input and ticks share
 one writer, so a page paint is never interleaved with a tick.
+
+## History and transient pages
+
+`SOMMAIRE` clears history; `RETOUR` pops it. A page declared `transient=True`
+is **not pushed** when you leave it. If you return to the page that launched
+it, that history entry is popped as well, so a form step does not leave a loop
+in history.
+
+Use transient pages for form steps, confirmations, and one-shot screens. The
+guestbook's message page is transient:
+
+- guestbook → message → submitted guestbook leaves only the guestbook below
+  the form in history;
+- `RETOUR` from the guestbook then goes to the previous normal page, not back
+  into the message form;
+- `RETOUR` from the message page itself still returns to the guestbook.
+
+Normal pages are pushed as usual.
 
 ## Aliases and the menu
 

@@ -69,7 +69,11 @@ class Session:
         if page is None:
             page = self.fallback
         if push and page is not self.current:
-            self.history.append(self.current)
+            if self.current.transient:
+                if self.history and self.history[-1] is page:
+                    self.history.pop()
+            else:
+                self.history.append(self.current)
         self.current = page
         self.line = ""
         return Action(screen=self.render(), page=page)

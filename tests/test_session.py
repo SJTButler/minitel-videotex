@@ -192,6 +192,43 @@ class SessionTests(unittest.TestCase):
         self.assertIsNotNone(action.screen)
         self.assertEqual(action.screen.rows[0][0].ch, "T")
 
+    def test_transient_page_is_not_pushed(self):
+        registry = Registry()
+
+        @page("500")
+        def start(ctx):
+            s = Screen()
+            ctx.set_input(0, 0, 5)
+            return s
+
+        @page("501", transient=True)
+        def form(ctx):
+            s = Screen()
+            ctx.set_input(0, 0, 5)
+            return s
+
+        @page("502")
+        def done(ctx):
+            s = Screen()
+            ctx.set_input(0, 0, 5)
+            return s
+
+        registry.add(start)
+        registry.add(form)
+        registry.add(done)
+        session = Session(registry, profiles.M1, initial="500", fallback=start)
+        session.start()
+        session.navigate("501")
+        session.navigate("502")
+        self.assertEqual([p.number for p in session.history], ["500"])
+
+        session.feed(RETOUR)
+        self.assertEqual(session.current.number, "500")
+
+        session.navigate("501")
+        session.navigate("500")
+        self.assertEqual(session.history, [])
+
     def test_on_submit_hook_and_state(self):
         registry = Registry()
 
