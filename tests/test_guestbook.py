@@ -38,8 +38,25 @@ class GuestbookFlowTests(unittest.TestCase):
         self.assertEqual([field.col for field in self.session.fields], [9, 9])
         self.assertTrue(screen.cursor_visible)
         text = screen.to_text().splitlines()
-        self.assertTrue(text[22].startswith("SUITE: CHAMP"))
+        self.assertTrue(text[22].startswith("SUITE: MESSAGE"))
+        self.assertIn("RETOUR: SORTIR", text[22])
         self.assertTrue(text[23].startswith("ENVOI: VALIDER"))
+
+    def test_dynamic_footer_follows_focus(self):
+        actions = self.session.feed(SUITE)
+        self.assertIn(b"(FIN)", actions[0].raw)
+        self.assertIn(b"HANDLE", actions[0].raw)
+        self.assertLess(len(actions[0].raw), 200)
+        self.assertEqual(self.session.active_field.name, "message")
+        text = self.session.screen.to_text().splitlines()
+        self.assertIn("SUITE: (FIN)", text[22])
+        self.assertIn("RETOUR: HANDLE", text[22])
+
+        self.session.feed(RETOUR)
+        self.assertEqual(self.session.active_field.name, "handle")
+        text = self.session.screen.to_text().splitlines()
+        self.assertIn("SUITE: MESSAGE", text[22])
+        self.assertIn("RETOUR: SORTIR", text[22])
 
     def test_sign_flow(self):
         self.session.feed(b"ALICE")

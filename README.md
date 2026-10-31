@@ -100,7 +100,8 @@ example.
 Partial updates use `render.render_diff` and `Session.refresh()`. Field echo,
 corrections, and focus keep the shadow screen in sync; a `Screen` returned by
 `on_tick` is diffed against that shadow. Raw tick frames remain available for
-tiny regions.
+tiny regions. Form focus re-renders and diffs, so `form_footer(s, ctx, fields)`
+can change its hints per field using `ctx.active_name`.
 
 The example service's layout helpers are in `pages/layout.py`. The application
 is wired in `minitel/server.py` with `MinitelApp`, so a different service can

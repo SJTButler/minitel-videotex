@@ -295,15 +295,13 @@ class Session:
                 if self.active < len(self.fields) - 1:
                     self.active += 1
                     self.active_name = self.fields[self.active].name
-                    self._sync_shadow_cursor()
-                    return Action(raw=self._focus_frame())
+                    return self.refresh()
                 return Action()
             if name == "RETOUR":
                 if self.active > 0:
                     self.active -= 1
                     self.active_name = self.fields[self.active].name
-                    self._sync_shadow_cursor()
-                    return Action(raw=self._focus_frame())
+                    return self.refresh()
                 return self.back()
 
         if name == "RETOUR":

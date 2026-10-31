@@ -111,6 +111,7 @@ Every `render`, `on_submit`, `on_form`, and `on_key` receives a
 | `ctx.line` | the active field's value |
 | `ctx.last_key` | the last submitted line (used by the not-found page) |
 | `ctx.state` | a per-session dict for page state |
+| `ctx.active_name` | the active field name, including a pending focus |
 | `ctx.values` | all field values for the current page |
 | `ctx.fields` | the registered fields |
 | `ctx.add_field(name, row, col, width, *, cursor="visible")` | register a named field |
@@ -174,7 +175,7 @@ and the input parser. Most pages should not need it beyond constants.
 - `status(s, "PAGE 200")` paints the full inverse top row and keeps the page
   number clear of the terminal's `F/C` indicator.
 - `footer(s)` writes the key hints at row 22.
-- `form_footer(s)` writes the form key hints at rows 22-23.
+- `form_footer(s, ctx, fields)` writes dynamic form key hints at rows 22-23.
 - `page_input(s, ctx)` draws `PAGE:` at row 20 and registers the field.
 
 Use these for consistency. A different service can copy the file or provide its
@@ -249,7 +250,7 @@ def form(ctx):
     error = ctx.state.get("error", "")
     if error:
         s.text(7, 0, error)
-    form_footer(s)
+    form_footer(s, ctx, [("name", "NAME"), ("city", "CITY")])
     return s
 ```
 
@@ -270,8 +271,9 @@ from pages.layout import form_footer, line_field, status
   field echoes inverse text; a normal field echoes normal text.
 - Separate named fields are better than one combined “handle message” line:
   they keep validation, labels, focus, and `SUITE`/`RETOUR` navigation clear.
-- `SUITE`/`RETOUR` move focus without repainting the page. The form footer is
-  static; a dynamic footer needs a partial diff renderer.
+- `SUITE`/`RETOUR` re-render the page and send only the changed rows through
+  the diff. `form_footer(s, ctx, fields)` uses `ctx.active_name` to show the
+  next/previous field, so focus updates the footer without a full repaint.
 - `RETOUR` at the first field goes back; `SUITE` at the last field stops.
 - `ENVOI` calls `on_form(ctx, values)`. `values` is a snapshot dict;
   `ctx.values` is the live dict.
@@ -370,8 +372,9 @@ Raw tick frames bypass the shadow screen. A later `refresh()` may repaint rows
 that changed through raw frames; that is correct but less efficient. Use one
 mode per page when it matters.
 
-A dynamic footer can use `refresh()`; form focus currently sends a cursor-only
-frame, so changing the footer on focus needs a focus hook or a session change.
+Form focus uses `refresh()` and the diff, so a footer built from
+`ctx.active_name` updates automatically. Only the footer rows and cursor are
+sent.
 
 ## History and transient pages
 

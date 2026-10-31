@@ -71,5 +71,5 @@ def guestbook(ctx):
     if error:
         s.text(18, 0, error)
 
-    form_footer(s)
+    form_footer(s, ctx, [("handle", "HANDLE"), ("message", "MESSAGE")])
     return s

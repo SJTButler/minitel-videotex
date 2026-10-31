@@ -46,6 +46,10 @@ class PageContext:
     def state(self):
         return self.session.state
 
+    @property
+    def active_name(self):
+        return self.session.requested_focus or self.session.active_name
+
     def add_field(self, name, row, col, width, *, mask=None, value="",
                   cursor="visible"):
         if cursor not in CURSOR_MODES:
