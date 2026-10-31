@@ -13,6 +13,7 @@ from .profiles import (
     cps,
 )
 from .screen import Cell, Screen
+from .render import render, render_diff
 from .pages import FunctionPage, InputField, Page, PageContext, Registry, page
 from .session import Action, Session
 from .app import MinitelApp
@@ -37,4 +38,6 @@ __all__ = [
     "codec",
     "cps",
     "page",
+    "render",
+    "render_diff",
 ]

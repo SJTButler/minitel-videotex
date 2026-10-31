@@ -1,8 +1,10 @@
 """Render a Screen to a Videotex byte stream."""
 
 from . import codec
+from .screen import Cell
 
 DEFAULT_ATTRS = (codec.WHITE, codec.BLACK, False, False, False, codec.NORMAL)
+DEFAULT_CELL = Cell()
 
 
 def attrs(cell):
@@ -95,9 +97,70 @@ def render(screen):
                 out += codec.size(codec.NORMAL)
 
     out += codec.pos(screen.cursor_row, screen.cursor_col)
+    out += codec.cursor(screen.cursor_visible)
     cell = screen.rows[screen.cursor_row][screen.cursor_col]
     out += attr_bytes(state, cell)
     if cell.size != codec.NORMAL:
         out += codec.size(cell.size)
-    out += codec.cursor(screen.cursor_visible)
+    return bytes(out)
+
+
+def render_diff(old, new):
+    changed = [
+        row for row in range(codec.ROWS)
+        if old.rows[row] != new.rows[row]
+    ]
+    cursor_changed = (
+        old.cursor_row != new.cursor_row
+        or old.cursor_col != new.cursor_col
+        or old.cursor_visible != new.cursor_visible
+    )
+    if not changed and not cursor_changed:
+        return b""
+
+    out = bytearray()
+    if changed:
+        out += codec.cursor(False)
+
+    state = {
+        "fg": codec.WHITE,
+        "bg": codec.BLACK,
+        "inverse": False,
+        "flash": False,
+        "underline": False,
+    }
+
+    for row_index in changed:
+        row = new.rows[row_index]
+        out += codec.pos(row_index, 0)
+        out += attr_bytes(state, DEFAULT_CELL)
+        out += bytes([codec.CAN])
+
+        col = 0
+        while col < codec.COLS:
+            cell = row[col]
+            if cell.ch == " " and attrs(cell) == DEFAULT_ATTRS:
+                col += 1
+                continue
+
+            start = col
+            run_attrs = attrs(cell)
+            while col < codec.COLS and attrs(row[col]) == run_attrs:
+                col += 1
+
+            run = row[start:col]
+            out += codec.pos(row_index, start)
+            out += attr_bytes(state, run[0])
+            if run[0].size != codec.NORMAL:
+                out += codec.size(run[0].size)
+            out += encode_run(run)
+            if run[0].size != codec.NORMAL:
+                out += codec.size(codec.NORMAL)
+
+    out += codec.pos(new.cursor_row, new.cursor_col)
+    out += codec.cursor(new.cursor_visible)
+    cursor_cell = new.rows[new.cursor_row][new.cursor_col]
+    out += attr_bytes(state, cursor_cell)
+    if cursor_cell.size != codec.NORMAL:
+        out += codec.size(cursor_cell.size)
     return bytes(out)

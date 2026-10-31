@@ -1,9 +1,10 @@
 """Transport-neutral session: input, navigation, history, and page rendering."""
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
 from . import codec
 from .pages import Page, PageContext
+from .render import render_diff
 from .screen import Screen
 
 
@@ -79,14 +80,39 @@ class Session:
         value = self.values.get(field.name, "")
         col = field.col + min(len(value), field.width)
         raw = bytearray(codec.pos(field.row, col))
+        raw += codec.cursor(self._cursor_visible())
         if self.screen is not None:
             cell = self.screen.rows[field.row][field.col]
             raw += codec.inverse(cell.inverse)
-        raw += codec.cursor(self._cursor_visible())
         return bytes(raw)
+
+    def _shadow_put(self, field, index, char):
+        if self.screen is None:
+            return
+        row = field.row
+        col = field.col + index
+        if not (0 <= row < codec.ROWS and 0 <= col < codec.COLS):
+            return
+        base = self.screen.rows[row][field.col]
+        self.screen.rows[row][col] = replace(base, ch=char)
+
+    def _sync_shadow_cursor(self):
+        field = self.active_field
+        if field is None or self.screen is None:
+            return
+        value = self.values.get(field.name, "")
+        col = field.col + min(len(value), field.width)
+        self.screen.set_cursor(field.row, col, self._cursor_visible())
 
     def start(self):
         return self.render()
+
+    def refresh(self):
+        old = self.screen
+        new = self.render()
+        if old is None:
+            return Action(screen=new)
+        return Action(raw=render_diff(old, new))
 
     def render(self):
         ctx = PageContext(self, self.current, self.registry)
@@ -194,7 +220,11 @@ class Session:
                 frame += self._focus_frame()
             return Action(raw=frame)
         if isinstance(frame, Screen):
-            return Action(screen=frame)
+            old = self.screen
+            self.screen = frame
+            if old is None:
+                return Action(screen=frame)
+            return Action(raw=render_diff(old, frame))
         raise TypeError(
             f"page {self.current.number!r} tick returned {type(frame)!r}; "
             "expected bytes, Screen, or None"
@@ -211,8 +241,15 @@ class Session:
             prefix = b""
             if field.cursor == "auto" and not value:
                 prefix = codec.cursor(True)
+            echo = b""
+            if self.echo:
+                if self.screen is not None:
+                    base = self.screen.rows[field.row][field.col]
+                    prefix += codec.inverse(base.inverse)
+                echo = codec.text(event.char)
+            self._shadow_put(field, len(value), event.char)
             self.values[field.name] = value + event.char
-            echo = codec.text(event.char) if self.echo else b""
+            self._sync_shadow_cursor()
             return Action(raw=prefix + echo)
         if isinstance(event, codec.Enter):
             return self.submit()
@@ -236,6 +273,8 @@ class Session:
             if field and value:
                 value = value[:-1]
                 self.values[field.name] = value
+                self._shadow_put(field, len(value), " ")
+                self._sync_shadow_cursor()
                 raw = bytes([codec.BS, 0x20, codec.BS])
                 if field.cursor == "auto" and not value:
                     raw += codec.cursor(False)
@@ -246,7 +285,7 @@ class Session:
             field = self.active_field
             if field:
                 self.values[field.name] = ""
-            return Action(screen=self.render())
+            return self.refresh()
 
         if name == "SOMMAIRE":
             return self.home()
@@ -256,12 +295,14 @@ class Session:
                 if self.active < len(self.fields) - 1:
                     self.active += 1
                     self.active_name = self.fields[self.active].name
+                    self._sync_shadow_cursor()
                     return Action(raw=self._focus_frame())
                 return Action()
             if name == "RETOUR":
                 if self.active > 0:
                     self.active -= 1
                     self.active_name = self.fields[self.active].name
+                    self._sync_shadow_cursor()
                     return Action(raw=self._focus_frame())
                 return self.back()
 

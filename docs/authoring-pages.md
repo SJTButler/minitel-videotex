@@ -345,14 +345,33 @@ def dynamic(ctx):
   first tick overwrites the same cells.
 - A full page is ~240 bytes (~1.8 s at 1200). A small region is ~15 bytes
   (~0.11 s). Do not full-repaint at 1 Hz on the M1.
-- If `on_tick` returns a `Screen`, the app sends it as a full page. That is
-  useful at 9600 or for infrequent updates, not for a 1 Hz M1 clock.
+- If `on_tick` returns a `Screen`, it must be the **complete desired page**;
+  the session diffs it against its shadow screen. For a single region, return
+  raw bytes instead.
 - Use a fixed-width value (for example `time.strftime("%H:%M:%S")`) so the
   region never changes length and never needs clearing.
 
 The timer is transport-level: `Session.next_tick_delay()` says how long to wait,
 and `Session.tick()` asks the current page for a frame. Input and ticks share
 one writer, so a page paint is never interleaved with a tick.
+
+## Partial updates
+
+The session keeps a shadow `Screen`. `Session.refresh()` re-renders the current
+page and returns `Action(raw=render_diff(old, new))`. `ANNULATION` uses it, and
+a `Screen` returned by `on_tick` is diffed. `render_diff` repaints **whole
+changed rows**, not individual cells:
+
+- a footer row is ~40 bytes;
+- a clock row is ~15 bytes;
+- an unchanged page produces no bytes.
+
+Raw tick frames bypass the shadow screen. A later `refresh()` may repaint rows
+that changed through raw frames; that is correct but less efficient. Use one
+mode per page when it matters.
+
+A dynamic footer can use `refresh()`; form focus currently sends a cursor-only
+frame, so changing the footer on focus needs a focus hook or a session change.
 
 ## History and transient pages
 

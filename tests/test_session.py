@@ -71,7 +71,8 @@ class SessionTests(unittest.TestCase):
         self.feed(b"12")
         actions = self.feed(ANNULATION)
         self.assertEqual(self.session.line, "")
-        self.assertIsNotNone(actions[0].screen)
+        self.assertTrue(actions[0].raw)
+        self.assertIsNone(actions[0].screen)
 
     def test_input_overflow(self):
         for ch in b"1234567890":
@@ -90,7 +91,10 @@ class SessionTests(unittest.TestCase):
         )
         session.start()
         actions = session.feed(b"1")
-        self.assertEqual(actions[0].raw, codec.cursor(True) + b"1")
+        self.assertEqual(
+            actions[0].raw,
+            codec.cursor(True) + codec.inverse(True) + b"1",
+        )
 
     def test_guide(self):
         self.feed(bytes([0x13, 0x44]))
@@ -123,7 +127,7 @@ class SessionTests(unittest.TestCase):
         self.assertEqual(session.next_tick_delay(), 0.5)
         action = session.tick()
         expected = (
-            b"CLOCK" + codec.pos(20, 6) + codec.inverse(False) + codec.cursor(True)
+            b"CLOCK" + codec.pos(20, 6) + codec.cursor(True) + codec.inverse(False)
         )
         self.assertEqual(action.raw, expected)
 
@@ -146,7 +150,7 @@ class SessionTests(unittest.TestCase):
         self.assertFalse(screen.cursor_visible)
         action = session.tick()
         expected = (
-            b"X" + codec.pos(20, 6) + codec.inverse(False) + codec.cursor(False)
+            b"X" + codec.pos(20, 6) + codec.cursor(False) + codec.inverse(False)
         )
         self.assertEqual(action.raw, expected)
 
@@ -193,8 +197,8 @@ class SessionTests(unittest.TestCase):
         session = Session(registry, profiles.M1, initial="420", fallback=dynamic)
         session.start()
         action = session.tick()
-        self.assertIsNotNone(action.screen)
-        self.assertEqual(action.screen.rows[0][0].ch, "T")
+        self.assertIsNone(action.screen)
+        self.assertIn(b"TICK", action.raw)
 
     def test_transient_page_is_not_pushed(self):
         registry = Registry()

@@ -97,6 +97,11 @@ For a multi-field form, register fields with `ctx.add_field(...)`, set
 `RETOUR` at the first field goes back. The guestbook page is the reference
 example.
 
+Partial updates use `render.render_diff` and `Session.refresh()`. Field echo,
+corrections, and focus keep the shadow screen in sync; a `Screen` returned by
+`on_tick` is diffed against that shadow. Raw tick frames remain available for
+tiny regions.
+
 The example service's layout helpers are in `pages/layout.py`. The application
 is wired in `minitel/server.py` with `MinitelApp`, so a different service can
 pass its own registry and page package without touching the library.

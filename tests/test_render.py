@@ -3,7 +3,7 @@ import unittest
 from pathlib import Path
 
 from minitel import codec
-from minitel.render import render
+from minitel.render import render, render_diff
 from minitel.screen import Screen
 
 
@@ -22,6 +22,10 @@ def decode(data):
     decoder = VM.Decoder()
     decoder.feed(data)
     return decoder.screen
+
+
+def apply_diff(old_screen, diff):
+    return decode(render(old_screen) + diff)
 
 
 class RenderTests(unittest.TestCase):
@@ -87,6 +91,73 @@ class RenderTests(unittest.TestCase):
         s.rule(5, 0, 40, "=")
         data = render(s)
         self.assertIn(b"\x12\x67", data)
+
+
+class DiffTests(unittest.TestCase):
+    def test_identical_screens(self):
+        s = Screen()
+        s.text(3, 0, "HELLO")
+        self.assertEqual(render_diff(s, s), b"")
+
+    def test_changed_cell(self):
+        old = Screen()
+        old.text(3, 0, "HELLO")
+        new = Screen()
+        new.text(3, 0, "HELLX")
+
+        diff = render_diff(old, new)
+        self.assertTrue(diff)
+        decoded = apply_diff(old, diff)
+        self.assertEqual(decoded.text(), new.to_text())
+
+    def test_changed_attributes(self):
+        old = Screen()
+        old.text(3, 0, "HELLO")
+        new = Screen()
+        new.text(3, 0, "HELLO", inverse=True)
+
+        decoded = apply_diff(old, render_diff(old, new))
+        self.assertTrue(all(decoded.rows[3][c].inverse for c in range(5)))
+
+    def test_clears_removed_content(self):
+        old = Screen()
+        old.text(3, 0, "HELLO")
+        new = Screen()
+
+        decoded = apply_diff(old, render_diff(old, new))
+        self.assertEqual(decoded.text(), new.to_text())
+
+    def test_cursor_only_change(self):
+        old = Screen()
+        new = Screen()
+        new.set_cursor(10, 5, True)
+
+        diff = render_diff(old, new)
+        self.assertTrue(diff)
+        decoded = apply_diff(old, diff)
+        self.assertEqual((decoded.row, decoded.col), (10, 5))
+
+    def test_diff_is_smaller_than_full_page(self):
+        old = Screen()
+        old.fill(22, 0, 40, " ", inverse=True)
+        old.text(22, 0, "OLD FOOTER", inverse=True)
+        new = Screen()
+        new.fill(22, 0, 40, " ", inverse=True)
+        new.text(22, 0, "NEW FOOTER", inverse=True)
+
+        diff = render_diff(old, new)
+        self.assertLess(len(diff), len(render(new)))
+
+    def test_status_row_diff(self):
+        old = Screen()
+        old.fill(0, 0, 40, " ", inverse=True)
+        old.text(0, 0, "PAGE 100", inverse=True)
+        new = Screen()
+        new.fill(0, 0, 40, " ", inverse=True)
+        new.text(0, 0, "PAGE 110", inverse=True)
+
+        decoded = apply_diff(old, render_diff(old, new))
+        self.assertTrue(decoded.text().splitlines()[0].startswith("PAGE 110"))
 
 
 if __name__ == "__main__":
