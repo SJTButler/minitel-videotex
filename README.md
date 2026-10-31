@@ -25,12 +25,27 @@ tools/         first-light server and virtual Minitel decoder
 docs/          authoring guide
 ```
 
-## Quick start
+## Development environment
 
-Requires Python 3.10+ and no third-party packages.
+The project is configured for uv. `.python-version` pins Python 3.12,
+`uv.lock` locks the environment, and `.venv/` is local and ignored. There are
+no runtime dependencies.
 
 ```sh
-python3 -m minitel.server --port 3615
+uv sync
+```
+
+`pyproject.toml` uses `[tool.uv] package = false` while the example service
+lives in the repository. Building and publishing the library as a package is a
+separate step.
+
+## Quick start
+
+Requires Python 3.10+.
+
+```sh
+uv sync
+uv run python -m minitel.server --port 3615
 ```
 
 The server listens on `0.0.0.0:3615`, sends the welcome page, and paces output
@@ -40,7 +55,7 @@ server's LAN address and port.
 If the terminal's local echo is off:
 
 ```sh
-python3 -m minitel.server --port 3615 --echo
+uv run python -m minitel.server --port 3615 --echo
 ```
 
 Server echo is recommended for dynamic/tick pages: it serialises key echo with
@@ -52,7 +67,7 @@ clock updates. Disable local echo first, otherwise characters are doubled. See
 ## Tests
 
 ```sh
-python3 -m unittest discover -s tests -v
+uv run python -m unittest discover -s tests -v
 ```
 
 The renderer tests decode the emitted bytes with `tools/virtual_minitel.py`, so
@@ -95,8 +110,8 @@ discovered automatically.
 - `tools/virtual_minitel.py` - decode a Videotex stream into a 25x40 grid.
 
 ```sh
-python3 tools/virtual_minitel.py --demo --plain
-python3 tools/virtual_minitel.py --connect 127.0.0.1:3615 --plain
+uv run python tools/virtual_minitel.py --demo --plain
+uv run python tools/virtual_minitel.py --connect 127.0.0.1:3615 --plain
 ```
 
 ## Scope
