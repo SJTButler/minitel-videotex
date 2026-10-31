@@ -35,6 +35,7 @@ def main():
         guide=pages.GUIDE,
         cps=args.cps,
         echo=args.echo,
+        services=pages.build_services(),
     )
     asyncio.run(app.serve(args.host, args.port))
 

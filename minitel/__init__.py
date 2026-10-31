@@ -2,7 +2,10 @@
 
 __version__ = "0.2.0"
 
-from . import codec
+from . import cache, codec, http, paging, text
+from .cache import ResourceCache, Snapshot
+from .http import HttpError, get_json
+from .paging import Pager
 from .profiles import (
     M1,
     M1C,
@@ -26,18 +29,27 @@ __all__ = [
     "Action",
     "Cell",
     "FunctionPage",
+    "HttpError",
     "InputField",
     "MinitelApp",
     "Page",
     "PageContext",
+    "Pager",
     "Registry",
+    "ResourceCache",
     "Screen",
     "Session",
+    "Snapshot",
     "TerminalProfile",
     "by_type",
+    "cache",
     "codec",
     "cps",
+    "get_json",
+    "http",
     "page",
+    "paging",
     "render",
     "render_diff",
+    "text",
 ]

@@ -17,13 +17,14 @@ class Action:
 
 class Session:
     def __init__(self, registry, profile, *, initial="100", fallback=None,
-                 guide=None, echo=False):
+                 guide=None, echo=False, services=None):
         self.registry = registry
         self.profile = profile
         self.initial = initial
         self.fallback = fallback or registry.get(initial)
         self.guide = guide
         self.echo = echo
+        self.services = dict(services or {})
         self.parser = codec.InputParser()
         self.last_key = ""
         self.state = {}
@@ -34,6 +35,8 @@ class Session:
         self.active = 0
         self.active_name = None
         self.requested_focus = None
+        self.pager = None
+        self.pagers = {}
         self.screen = None
 
     @property
@@ -58,12 +61,18 @@ class Session:
         if field is not None:
             self.values[field.name] = value
 
-    def _reset_form(self):
+    def _reset_page(self):
         self.fields = []
         self.values = {}
         self.active = 0
         self.active_name = None
         self.requested_focus = None
+        self.pager = None
+
+    def _clear_active_field(self):
+        field = self.active_field
+        if field is not None:
+            self.values[field.name] = ""
 
     def _cursor_visible(self):
         field = self.active_field
@@ -121,6 +130,11 @@ class Session:
             raise TypeError(
                 f"page {self.current.number!r} returned {type(screen)!r}, expected Screen"
             )
+        self.pager = ctx.pager
+        if ctx.pager is not None:
+            self.pagers[self.current.number] = ctx.pager
+        else:
+            self.pagers.pop(self.current.number, None)
         self.fields = ctx.fields
         names = [field.name for field in self.fields]
         self.values = {name: self.values.get(name, "") for name in names}
@@ -164,7 +178,7 @@ class Session:
                         self.history.pop()
                 else:
                     self.history.append(self.current)
-            self._reset_form()
+            self._reset_page()
         self.current = page
         return Action(screen=self.render(), page=page)
 
@@ -189,13 +203,13 @@ class Session:
             self.current = self.history.pop()
         else:
             self.current = self.registry.resolve(self.initial)
-        self._reset_form()
+        self._reset_page()
         return Action(screen=self.render(), page=self.current)
 
     def home(self):
         self.history.clear()
         self.current = self.registry.resolve(self.initial)
-        self._reset_form()
+        self._reset_page()
         return Action(screen=self.render(), page=self.current)
 
     def next_tick_delay(self):
@@ -212,6 +226,9 @@ class Session:
             return Action()
         ctx = PageContext(self, self.current, self.registry)
         frame = self.current.on_tick(ctx)
+        if ctx.pager is not None:
+            self.pager = ctx.pager
+            self.pagers[self.current.number] = ctx.pager
         if frame is None:
             return Action()
         if isinstance(frame, (bytes, bytearray)):
@@ -220,11 +237,20 @@ class Session:
                 frame += self._focus_frame()
             return Action(raw=frame)
         if isinstance(frame, Screen):
+            field = self.active_field
+            if field is not None:
+                value = self.values.get(field.name, "")
+                col = field.col + min(len(value), field.width)
+                frame.set_cursor(field.row, col, self._cursor_visible())
+            else:
+                frame.set_cursor(24, 0, False)
             old = self.screen
-            self.screen = frame
             if old is None:
+                self.screen = frame
                 return Action(screen=frame)
-            return Action(raw=render_diff(old, frame))
+            diff = render_diff(old, frame)
+            self.screen = frame
+            return Action(raw=diff)
         raise TypeError(
             f"page {self.current.number!r} tick returned {type(frame)!r}; "
             "expected bytes, Screen, or None"
@@ -301,6 +327,22 @@ class Session:
                 if self.active > 0:
                     self.active -= 1
                     self.active_name = self.fields[self.active].name
+                    return self.refresh()
+                return self.back()
+
+        if self.pager is not None:
+            if name == "SUITE":
+                if self.pager.page_count:
+                    self.pager = self.pager.next(wrap=True)
+                    self.pagers[self.current.number] = self.pager
+                    self._clear_active_field()
+                    return self.refresh()
+                return Action()
+            if name == "RETOUR":
+                if self.pager.page_index > 0:
+                    self.pager = self.pager.prev()
+                    self.pagers[self.current.number] = self.pager
+                    self._clear_active_field()
                     return self.refresh()
                 return self.back()
 

@@ -1,6 +1,7 @@
 """Application layer: wire a registry, profile, session, and TCP transport."""
 
 import asyncio
+import inspect
 import socket
 import time
 
@@ -12,7 +13,7 @@ from .session import Session
 
 class MinitelApp:
     def __init__(self, registry, *, profile=M1, initial="100", fallback=None,
-                 guide=None, cps=None, echo=False, log=None):
+                 guide=None, cps=None, echo=False, log=None, services=None):
         self.registry = registry
         self.profile = profile
         self.initial = initial
@@ -21,6 +22,7 @@ class MinitelApp:
         self.cps = cps if cps is not None else profile.max_speed / 9
         self.echo = echo
         self.log = log or self._default_log
+        self.services = dict(services or {})
 
     def _default_log(self, peer, message):
         stamp = time.strftime("%H:%M:%S")
@@ -34,6 +36,7 @@ class MinitelApp:
             fallback=self.fallback,
             guide=self.guide,
             echo=self.echo,
+            services=self.services,
         )
 
     async def send(self, writer, screen, log):
@@ -88,12 +91,34 @@ class MinitelApp:
         writer.close()
         await writer.wait_closed()
 
+    async def _start_services(self):
+        for service in self.services.values():
+            hook = getattr(service, "start", None)
+            if hook is None:
+                continue
+            result = hook()
+            if inspect.isawaitable(result):
+                await result
+
+    async def _stop_services(self):
+        for service in self.services.values():
+            hook = getattr(service, "stop", None)
+            if hook is None:
+                continue
+            result = hook()
+            if inspect.isawaitable(result):
+                await result
+
     async def serve(self, host="0.0.0.0", port=3615):
-        server = await transport.serve(self.handle, host, port)
-        print(f"listening on {host}:{port}", flush=True)
-        print(
-            f"cps={self.cps} echo={self.echo} profile={self.profile.name}",
-            flush=True,
-        )
-        async with server:
-            await server.serve_forever()
+        try:
+            await self._start_services()
+            server = await transport.serve(self.handle, host, port)
+            print(f"listening on {host}:{port}", flush=True)
+            print(
+                f"cps={self.cps} echo={self.echo} profile={self.profile.name}",
+                flush=True,
+            )
+            async with server:
+                await server.serve_forever()
+        finally:
+            await self._stop_services()

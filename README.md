@@ -17,9 +17,16 @@ minitel/       reusable, content-free library
   render.py    screen -> Videotex bytes
   pages.py     Page, PageContext, Registry, @page
   session.py   input, navigation, history
-  app.py       registry + profile + session + transport
+  app.py       registry + profile + session + transport + services
   transport.py TCP and paced writes
+  text.py      remote text sanitising, fit/wrap, domain, age
+  paging.py    fixed-size paging arithmetic
+  cache.py     non-blocking cache with stale-on-error snapshots
+  http.py      small synchronous JSON client
 pages/         example service, one file per page, auto-discovered
+  news.py      page 110, the news service directory
+  news_source.py Hacker News parsing, source, and cached service
+  hackernews.py  pages 111/112, headlines and story detail
 tests/         library and page tests
 tools/         first-light server and virtual Minitel decoder
 docs/          authoring guide
@@ -90,7 +97,8 @@ def hello(ctx):
 
 A page returns a `Screen`; `ctx.set_input(row, col, width)` tells the session
 where the cursor and input line belong. `PageContext` also provides
-`ctx.line`, `ctx.last_key`, `ctx.state`, `ctx.profile`, and `ctx.registry`.
+`ctx.line`, `ctx.last_key`, `ctx.state`, `ctx.profile`, `ctx.registry`,
+`ctx.services`, `ctx.service(name)`, and `ctx.set_pager(total, page_size)`.
 
 For a multi-field form, register fields with `ctx.add_field(...)`, set
 `form=True`, and implement `on_form(ctx, values)`. `SUITE`/`RETOUR` move focus;
@@ -106,6 +114,53 @@ can change its hints per field using `ctx.active_name`.
 The example service's layout helpers are in `pages/layout.py`. The application
 is wired in `minitel/server.py` with `MinitelApp`, so a different service can
 pass its own registry and page package without touching the library.
+
+## Live data and the news service
+
+Long-running services are injected into the app and copied into each session:
+
+```python
+app = MinitelApp(registry, services=pages.build_services())
+```
+
+A service may define `start()` and `stop()`; either may be a normal function or
+a coroutine. `MinitelApp.serve()` starts services before listening and stops
+them in a `finally` block. Pages reach them through `ctx.services` or
+`ctx.service("hackernews")`.
+
+The news service is the worked example:
+
+```
+1 NEWS (home)
+  -> 110 NEWS service directory
+       -> 111 HACKER NEWS front-page list
+            -> 112 STORY detail with one comment
+```
+
+- `pages/news_source.py` owns the Hacker News URLs, field names, parsing, and
+  the cached service. The pages only see `Story` and `Comment` objects.
+- `minitel/cache.py` starts at most one loader thread per key and never blocks
+  the render path. A stale value is kept when a refresh fails, so the terminal
+  keeps showing the last good headlines with an `OFFLINE` notice.
+- Front-page data is cached for 300 seconds, comments for 1,800 seconds, and a
+  failed load is retried after 60 seconds. There are no new dependencies: the
+  new modules use only the standard library.
+- `minitel/text.py` strips HTML, unescapes entities, transliterates typographic
+  punctuation and accents, drops emoji, and wraps to the 40-column screen. Every
+  remote title, author, domain, and comment goes through it before `Screen.text`.
+- `minitel/paging.py` provides the `Pager` used by the four-story list.
+- `minitel/http.py` provides `get_json()` and `HttpError` for cache threads.
+- `pages/layout.py` exposes `BODY`, `ACCENT`, `SECONDARY`, and `WARNING`. The
+  news pages use yellow story badges, cyan metadata, and magenta warnings; on
+  the monochrome M1 these are grey levels.
+- On `111`, `ctx.set_pager(...)` registers a session-owned cursor. `SUITE`
+  advances and wraps; `RETOUR` walks back one page and only leaves the list from
+  page 1, the same boundary pattern as multi-field form focus. The cursor is
+  remembered per page, so returning to the list resumes the same page.
+
+`on_tick` may return a complete `Screen`; the session diffs it against the
+shadow screen and restores the input cursor. Raw bytes remain the cheaper choice
+for a single changing region.
 
 ## Adding pages
 

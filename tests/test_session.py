@@ -8,6 +8,7 @@ from minitel.session import Session
 ENVOI = bytes([0x13, 0x41])
 RETOUR = bytes([0x13, 0x42])
 SOMMAIRE = bytes([0x13, 0x46])
+SUITE = bytes([0x13, 0x48])
 CORRECTION = bytes([0x13, 0x47])
 ANNULATION = bytes([0x13, 0x45])
 
@@ -48,6 +49,45 @@ class SessionTests(unittest.TestCase):
         self.assertEqual(self.session.current.number, "110")
         self.feed(RETOUR)
         self.assertEqual(self.session.current.number, "100")
+
+    def test_session_pager_handles_suite_and_retour(self):
+        registry = Registry()
+
+        @page("460")
+        def paged(ctx):
+            s = Screen()
+            pager = ctx.set_pager(6, 4)
+            s.text(0, 0, pager.label)
+            ctx.set_input(1, 0, 5)
+            return s
+
+        @page("470")
+        def other(ctx):
+            s = Screen()
+            s.text(0, 0, "OTHER")
+            return s
+
+        registry.add(paged)
+        registry.add(other)
+        session = Session(registry, profiles.M1, initial="460", fallback=paged)
+        session.start()
+        self.assertEqual(session.pager.label, "1/2")
+
+        session.feed(b"1")
+        self.assertEqual(session.line, "1")
+        session.feed(SUITE)
+        self.assertEqual(session.current.number, "460")
+        self.assertEqual(session.pager.label, "2/2")
+        self.assertEqual(session.line, "")
+
+        session.feed(RETOUR)
+        self.assertEqual(session.pager.label, "1/2")
+
+        session.navigate("470")
+        session.navigate("460")
+        self.assertEqual(session.pager.label, "1/2")
+        session.feed(RETOUR)
+        self.assertEqual(session.current.number, "470")
 
     def test_sommaire_clears_history(self):
         self.feed(b"1" + ENVOI)
@@ -199,6 +239,31 @@ class SessionTests(unittest.TestCase):
         action = session.tick()
         self.assertIsNone(action.screen)
         self.assertIn(b"TICK", action.raw)
+
+    def test_screen_tick_syncs_input_cursor(self):
+        registry = Registry()
+
+        def tick(ctx):
+            s = Screen()
+            s.text(0, 0, "TICK")
+            return s
+
+        @page("450", tick_interval=1.0, on_tick=tick)
+        def dynamic(ctx):
+            s = Screen()
+            ctx.set_input(20, 6, 10)
+            return s
+
+        registry.add(dynamic)
+        session = Session(registry, profiles.M1, initial="450", fallback=dynamic)
+        session.start()
+        action = session.tick()
+        self.assertIn(codec.pos(20, 6), action.raw)
+        self.assertIn(codec.cursor(True), action.raw)
+        self.assertEqual(
+            (session.screen.cursor_row, session.screen.cursor_col), (20, 6)
+        )
+        self.assertTrue(session.screen.cursor_visible)
 
     def test_transient_page_is_not_pushed(self):
         registry = Registry()

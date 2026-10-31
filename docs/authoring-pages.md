@@ -4,8 +4,8 @@ The server is split into two layers:
 
 ```
 minitel/     reusable library: codec, screen, render, profiles, page API,
-             session, app, transport
-pages/       the example service: layout helpers and one file per page
+             session, app, transport, text, paging, cache, http
+pages/       the example service: layout helpers, pages, and data sources
 tests/       library and page tests
 tools/       first-light server, virtual Minitel decoder
 ```
@@ -111,11 +111,15 @@ Every `render`, `on_submit`, `on_form`, and `on_key` receives a
 | `ctx.line` | the active field's value |
 | `ctx.last_key` | the last submitted line (used by the not-found page) |
 | `ctx.state` | a per-session dict for page state |
+| `ctx.services` | the process-wide injected services |
+| `ctx.service(name, default=None)` | look up one service |
 | `ctx.active_name` | the active field name, including a pending focus |
 | `ctx.values` | all field values for the current page |
 | `ctx.fields` | the registered fields |
 | `ctx.add_field(name, row, col, width, *, cursor="visible")` | register a named field |
 | `ctx.set_input(row, col, width, *, cursor="visible")` | one-field shorthand |
+| `ctx.set_pager(total, page_size, *, offset=None)` | register a session-owned pager |
+| `ctx.pager` | the `Pager` registered for this render |
 | `ctx.focus(name)` | request focus when the page rerenders |
 | `ctx.page_for(key)` | look up another page |
 
@@ -174,9 +178,14 @@ and the input parser. Most pages should not need it beyond constants.
 
 - `status(s, "PAGE 200")` paints the full inverse top row and keeps the page
   number clear of the terminal's `F/C` indicator.
-- `footer(s)` writes the key hints at row 22.
+- `footer(s)` writes the default key hints at row 22.
+- `key_footer(s, hints, row=22)` joins custom hints with two spaces; pass a
+  string or an iterable such as `("SUITE=NEXT", "RETOUR=BACK")`.
 - `form_footer(s, ctx, fields)` writes dynamic form key hints at rows 22-23.
 - `page_input(s, ctx)` draws `PAGE:` at row 20 and registers the field.
+- `BODY`, `ACCENT`, `SECONDARY`, and `WARNING` are semantic colour constants:
+  white body, yellow accent, cyan secondary, magenta warning. On the M1 these
+  render as grey levels. `ACCENT` is used for the inverse story-number badge.
 
 Use these for consistency. A different service can copy the file or provide its
 own layout package and pass its registry to `MinitelApp`.
@@ -191,8 +200,8 @@ The session handles the common keys:
 | `CORRECTION` | remove one character from the active field |
 | `ANNULATION` | clear the active field, rerender |
 | `SOMMAIRE` | go to `INITIAL`, clear history |
-| `SUITE` | form: next field; otherwise page `on_key` |
-| `RETOUR` | form: previous field; at the first/only field: history back |
+| `SUITE` | form: next field; pager: next page; otherwise page `on_key` |
+| `RETOUR` | form: previous field; pager: previous page, then history back from page 1; otherwise history back |
 | `GUIDE` | page's `on_key`, then the app's guide page |
 
 `on_submit` can return:
@@ -306,6 +315,41 @@ To switch:
 The example defaults to local echo because it requires no terminal setting
 change.
 
+## Pagination
+
+Pagination is a session-owned cursor, like form focus. The page declares the
+window; the session owns the offset and handles `SUITE`/`RETOUR`:
+
+```python
+PAGE_SIZE = 4
+
+@page("111", on_submit=select, on_tick=render_list)
+def render_list(ctx):
+    items = ...
+    pager = ctx.set_pager(len(items), PAGE_SIZE)
+    for index, item in enumerate(pager.window(items)):
+        ...
+    return screen
+```
+
+- `ctx.set_pager(total, page_size)` returns a clamped `Pager` using the
+  session's current offset. Call it on every render and `on_tick`; pass
+  `offset=0` to force the first page after a filter change.
+- The session stores the pager. `SUITE` moves to the next page (wrapping from
+  the last page to the first); `RETOUR` moves to the previous page and calls
+  `back()` only from page 1. Moving pages clears the active input field.
+- Do not handle `SUITE`/`RETOUR` in `on_key` on a paginated page; the session
+  handles them before `on_key`, just as it handles form focus.
+- The offset is remembered per page for the session. Returning from a detail
+  page resumes the same list page; each paginated page has its own cursor.
+- Page-specific error text is the page's responsibility. If it should disappear
+  when the page changes, store the offset with the error and clear it when the
+  pager offset differs, as `pages/hackernews.py` does.
+- Use one cursor style per page: multi-field form focus or a pager, not both.
+
+This is the same shape as multi-field forms: a bounded list, a session-owned
+cursor, and a boundary that falls through to history.
+
 ## Dynamic pages
 
 A page can update a region without repainting the whole screen. Set
@@ -315,10 +359,10 @@ A page can update a region without repainting the whole screen. Set
 def tick(ctx):
     return codec.pos(3, 7) + codec.text("UPDATED")
 
-@page("140", title="DYNAMIC", tick_interval=1.0, on_tick=tick)
+@page("150", title="DYNAMIC", tick_interval=1.0, on_tick=tick)
 def dynamic(ctx):
     s = Screen()
-    status(s, "PAGE 140")
+    status(s, "PAGE 150")
     s.text(1, 0, "DYNAMIC", inverse=True, size=codec.DOUBLE_WIDTH)
     s.text(3, 0, "VALUE: UPDATED")
     page_input(s, ctx, cursor="auto")
@@ -348,8 +392,9 @@ def dynamic(ctx):
 - A full page is ~240 bytes (~1.8 s at 1200). A small region is ~15 bytes
   (~0.11 s). Do not full-repaint at 1 Hz on the M1.
 - If `on_tick` returns a `Screen`, it must be the **complete desired page**;
-  the session diffs it against its shadow screen. For a single region, return
-  raw bytes instead.
+  the session diffs it against its shadow screen and places the cursor at the
+  active input field before diffing. For a single region, return raw bytes
+  instead.
 - Use a fixed-width value (for example `time.strftime("%H:%M:%S")`) so the
   region never changes length and never needs clearing.
 
@@ -375,6 +420,65 @@ mode per page when it matters.
 Form focus uses `refresh()` and the diff, so a footer built from
 `ctx.active_name` updates automatically. Only the footer rows and cursor are
 sent.
+
+## Live data and services
+
+Keep network calls out of `render`, `on_submit`, `on_key`, and `on_tick`. Fetch
+in a background thread, cache the result, and render from the cache. The app
+injects services once and each session gets a copy:
+
+```python
+app = MinitelApp(
+    registry,
+    initial="100",
+    fallback=registry.get("__not_found__"),
+    services=pages.build_services(),
+)
+```
+
+A service is any object. If it has `start()` or `stop()`, `MinitelApp.serve()`
+calls them before listening and in a `finally` block. A hook may be a normal
+function or a coroutine. Pages read services with `ctx.services` or
+`ctx.service("hackernews")`.
+
+The library pieces:
+
+- `minitel/cache.py` - `ResourceCache.get(key, loader)` returns a `Snapshot`
+  immediately and starts at most one daemon loader per key. A `Snapshot` has
+  `value`, `loaded_at`, `error`, `loading`, `has_value`, and `age()`. On a failed
+  refresh the old value is kept and `error` is set. `load_now()` is synchronous
+  and exists for tests and prewarming; `retry()` clears a failed-load backoff
+  and triggers a fresh load. Inject `clock` and `thread_factory` for
+  deterministic tests.
+- `minitel/http.py` - `get_json(url, headers=None, timeout=10.0)` raises
+  `HttpError` with `status`, `body`, and `retry_after`.
+- `minitel/text.py` - `plain`, `sanitize`, `fit`, `wrap`, `domain`, and `age`.
+  Remote text is not guaranteed to be encodable: HTML tags, entities, curly
+  quotes, emoji, and non-Latin scripts will crash the renderer if passed
+  straight to `Screen.text`. Run every fetched title, author, domain, and
+  comment through `sanitize` first.
+- `minitel/paging.py` - a frozen `Pager(total, page_size, offset)` with
+  `clamp()`, `window()`, `next(wrap=True)`, `prev(wrap=True)`, and `label`.
+
+The news example is split along the same lines:
+
+- `pages/news.py` renders `110`, a data-driven directory. `NEWS_SERVICES` is the
+  extension point; a matching number opens its page, and other numbers fall
+  through to normal registry routing.
+- `pages/hackernews.py` renders `111` (four stories with a blank separator row,
+  `1`-`4` + `ENVOI` selects) and `112` (metadata first, comment on a later
+  tick). `111` registers its window with `ctx.set_pager`, so the session handles
+  `SUITE`/`RETOUR`; `RETOUR` walks back through pages and only leaves from page
+  1. A selected `Story` is kept in `ctx.state["news_story"]`; direct access to
+  `112` shows `NO STORY SELECTED`.
+- `pages/news_source.py` owns the Hacker News URLs and field names, parses
+  `Story`/`Comment` objects, and wraps one `ResourceCache` for the front page
+  and one for comments. The cache does not block a page paint; the first paint
+  shows `LOADING` and a later tick shows the data.
+
+A page that returns a complete `Screen` from `on_tick` gets the same cursor
+restoration as a normal render. That is what makes a list or detail page usable
+with the `PAGE:` field still active.
 
 ## History and transient pages
 
@@ -404,9 +508,12 @@ Keep page numbers stable and descriptive. The example scheme is:
 | Number | Page |
 |---|---|
 | `100` | home / index |
-| `110` | news |
+| `110` | news service directory |
+| `111` | Hacker News headline list |
+| `112` | story detail |
 | `120` | weather |
 | `130` | about / guide |
+| `140` | guestbook |
 | `__not_found__` | fallback |
 
 ## Testing a page
@@ -487,9 +594,10 @@ The library boundaries are deliberate:
   `minitel/transport.py`; `Session` does not know about sockets.
 - **Different application**: build a `Registry`, pass a fallback and guide page
   to `MinitelApp`, and choose a page package (not necessarily `pages/`).
-- **Background services**: the current app is request-driven. A clock, chat, or
-  live feed needs a scheduler/hub above `Session`; the `Action` and `Session`
-  boundaries are the place to add it.
+- **Background services**: injection, `ctx.services`, and `start()`/`stop()`
+  hooks are implemented. The news source is the reference for a cached live
+  feed. A shared scheduler, a multi-user hub, and push updates are still future
+  work above `Session`.
 - **Forms**: multi-field focus and `on_form` are implemented. Field masks,
   validators, and cursor/insert editing are natural extensions of `Session`.
 - **Themes**: copy `pages/layout.py` or create another layout package. The core
@@ -500,8 +608,12 @@ The library boundaries are deliberate:
 - 40 columns, 24 content rows. Row 0 is the terminal's status area.
 - One idea per page.
 - Use inverse and double width for hierarchy, not decoration.
+- Use `ACCENT` for numbers/actions, `SECONDARY` for metadata/hints, and
+  `WARNING` for errors; on mono these are grey levels.
 - Keep the `PAGE:` field at row 20 and the footer at row 22.
 - Design uppercase-first; accents cost three bytes each.
+- Sanitize remote text with `minitel.text.sanitize` and wrap it with
+  `minitel.text.wrap` before drawing.
 - Prefer `REP`-friendly runs (the renderer already compresses runs of 3+).
 - Test on the M1 and with the virtual Minitel.
 - Keep `minitel/` free of application content; keep `pages/` free of protocol

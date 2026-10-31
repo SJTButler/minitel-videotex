@@ -4,6 +4,7 @@ import importlib
 import pkgutil
 from dataclasses import dataclass
 
+from .paging import Pager
 from .screen import Screen
 
 
@@ -29,6 +30,7 @@ class PageContext:
         self.fields = []
         self.values = session.values
         self.focus_name = None
+        self.pager = None
 
     @property
     def line(self):
@@ -45,6 +47,13 @@ class PageContext:
     @property
     def state(self):
         return self.session.state
+
+    @property
+    def services(self):
+        return self.session.services
+
+    def service(self, name, default=None):
+        return self.services.get(name, default)
 
     @property
     def active_name(self):
@@ -69,6 +78,17 @@ class PageContext:
             "input", row, col, width,
             mask=mask, value=value, cursor=cursor,
         )
+
+    def set_pager(self, total, page_size, *, offset=None):
+        if offset is None:
+            current = self.session.pager
+            if current is not None:
+                offset = current.offset
+            else:
+                stored = self.session.pagers.get(self.page.number)
+                offset = stored.offset if stored is not None else 0
+        self.pager = Pager(total, page_size, offset).clamp()
+        return self.pager
 
     def field(self, name):
         for field in self.fields:
@@ -102,7 +122,7 @@ class Page:
     def on_key(self, ctx: PageContext, key: str):
         return None
 
-    def on_tick(self, ctx: PageContext):
+    def on_tick(self, ctx):
         return None
 
     def matches(self, key: str) -> bool:
