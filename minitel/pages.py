@@ -1,0 +1,146 @@
+"""Page API, page context, and registry."""
+
+import importlib
+import pkgutil
+from dataclasses import dataclass
+
+from .screen import Screen
+
+
+@dataclass
+class InputField:
+    row: int
+    col: int
+    width: int
+    mask: str | None = None
+    value: str = ""
+
+
+class PageContext:
+    def __init__(self, session, page, registry):
+        self.session = session
+        self.page = page
+        self.registry = registry
+        self.input = None
+
+    @property
+    def line(self):
+        return self.session.line
+
+    @property
+    def profile(self):
+        return self.session.profile
+
+    @property
+    def last_key(self):
+        return self.session.last_key
+
+    @property
+    def state(self):
+        return self.session.state
+
+    def set_input(self, row, col, width, *, mask=None, value=""):
+        self.input = InputField(row, col, width, mask=mask, value=value)
+
+    def page_for(self, key):
+        return self.registry.get(key)
+
+
+class Page:
+    number = ""
+    title = ""
+    aliases = ()
+    meta = {}
+
+    def render(self, ctx: PageContext) -> Screen:
+        raise NotImplementedError
+
+    def on_submit(self, ctx: PageContext, line: str):
+        return None
+
+    def on_key(self, ctx: PageContext, key: str):
+        return None
+
+    def matches(self, key: str) -> bool:
+        return key == self.number or key in self.aliases
+
+
+class FunctionPage(Page):
+    def __init__(self, number, render, *, title="", aliases=(), on_submit=None,
+                 on_key=None, meta=None):
+        self.number = number
+        self._render = render
+        self.title = title
+        self.aliases = tuple(aliases)
+        self._on_submit = on_submit
+        self._on_key = on_key
+        self.meta = dict(meta or {})
+
+    def render(self, ctx):
+        return self._render(ctx)
+
+    def on_submit(self, ctx, line):
+        if self._on_submit:
+            return self._on_submit(ctx, line)
+        return None
+
+    def on_key(self, ctx, key):
+        if self._on_key:
+            return self._on_key(ctx, key)
+        return None
+
+
+def page(number, *, title="", aliases=(), on_submit=None, on_key=None, **meta):
+    def decorator(fn):
+        return FunctionPage(
+            number,
+            fn,
+            title=title,
+            aliases=aliases,
+            on_submit=on_submit,
+            on_key=on_key,
+            meta=meta,
+        )
+    return decorator
+
+
+class Registry:
+    def __init__(self):
+        self._pages = []
+        self._by_key = {}
+
+    def add(self, page: Page):
+        for key in (page.number, *page.aliases):
+            existing = self._by_key.get(key)
+            if existing is page:
+                continue
+            if existing is not None:
+                raise ValueError(
+                    f"page key {key!r} already registered by {existing.title!r}"
+                )
+        self._pages.append(page)
+        for key in (page.number, *page.aliases):
+            self._by_key[key] = page
+        return page
+
+    def get(self, key):
+        return self._by_key.get(key.strip())
+
+    def resolve(self, key):
+        page = self.get(key)
+        if page is None:
+            raise KeyError(key)
+        return page
+
+    def all(self):
+        return tuple(self._pages)
+
+    def discover(self, package_name):
+        package = importlib.import_module(package_name)
+        modules = sorted(pkgutil.iter_modules(package.__path__), key=lambda m: m.name)
+        for module_info in modules:
+            module = importlib.import_module(f"{package_name}.{module_info.name}")
+            for value in vars(module).values():
+                if isinstance(value, Page):
+                    self.add(value)
+        return self

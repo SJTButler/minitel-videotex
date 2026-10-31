@@ -1,0 +1,86 @@
+"""Application layer: wire a registry, profile, session, and TCP transport."""
+
+import socket
+import time
+
+from . import transport
+from .profiles import M1
+from .render import render
+from .session import Session
+
+
+class MinitelApp:
+    def __init__(self, registry, *, profile=M1, initial="100", fallback=None,
+                 guide=None, cps=None, echo=False, log=None):
+        self.registry = registry
+        self.profile = profile
+        self.initial = initial
+        self.fallback = fallback
+        self.guide = guide
+        self.cps = cps if cps is not None else profile.max_speed / 9
+        self.echo = echo
+        self.log = log or self._default_log
+
+    def _default_log(self, peer, message):
+        stamp = time.strftime("%H:%M:%S")
+        print(f"[{stamp}] {peer} {message}", flush=True)
+
+    def new_session(self):
+        return Session(
+            self.registry,
+            self.profile,
+            initial=self.initial,
+            fallback=self.fallback,
+            guide=self.guide,
+            echo=self.echo,
+        )
+
+    async def send(self, writer, screen, log):
+        data = render(screen)
+        await transport.paced_write(writer, data, self.cps)
+        log(f"SENT page ({len(data)} bytes)")
+
+    async def handle(self, reader, writer):
+        peer = writer.get_extra_info("peername")
+        sock = writer.get_extra_info("socket")
+        if sock is not None:
+            sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
+
+        def log(message):
+            self.log(peer, message)
+
+        self.log(peer, "connect")
+        log(f"profile {self.profile.name}, cps={self.cps}, echo={self.echo}")
+
+        session = self.new_session()
+        try:
+            await self.send(writer, session.start(), log)
+            while True:
+                data = await reader.read(64)
+                if not data:
+                    break
+                log("RX " + " ".join(f"{b:02X}" for b in data))
+                for action in session.feed(data):
+                    if action.raw:
+                        writer.write(action.raw)
+                        await writer.drain()
+                    if action.page is not None:
+                        log(f"PAGE {action.page.number}")
+                    if action.screen is not None:
+                        await self.send(writer, action.screen, log)
+        except (ConnectionResetError, BrokenPipeError):
+            pass
+
+        self.log(peer, "disconnect")
+        writer.close()
+        await writer.wait_closed()
+
+    async def serve(self, host="0.0.0.0", port=3615):
+        server = await transport.serve(self.handle, host, port)
+        print(f"listening on {host}:{port}", flush=True)
+        print(
+            f"cps={self.cps} echo={self.echo} profile={self.profile.name}",
+            flush=True,
+        )
+        async with server:
+            await server.serve_forever()
