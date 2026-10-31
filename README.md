@@ -43,6 +43,10 @@ If the terminal's local echo is off:
 python3 -m minitel.server --port 3615 --echo
 ```
 
+Server echo is recommended for dynamic/tick pages: it serialises key echo with
+clock updates. Disable local echo first, otherwise characters are doubled. See
+`docs/authoring-pages.md` for the tradeoff.
+
 `--cps 0` disables pacing for a local test.
 
 ## Tests

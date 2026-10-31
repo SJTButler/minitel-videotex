@@ -211,6 +211,30 @@ duplicate history when the target is the current page.
 `on_key` receives `GUIDE`, `SUITE`, `REPETITION`, arrows, and other keys after
 the session's built-in handling. Return a key or `Page` to navigate.
 
+## Echo mode
+
+Two models:
+
+- **Local echo** (default): the terminal displays keys as they are pressed; the
+  server only updates its line buffer. Instant, zero setup, fewer bytes. But a
+  tick can move the cursor while the terminal echoes a key, so on a tick page a
+  keypress during the tick can land at the clock. Fine for static pages.
+- **Server echo**: the server writes each key at the input cursor. Run with
+  `--echo` and the terminal's local echo off. The app serialises ticks and key
+  echo, so a character always lands at the field. Recommended for tick pages
+  and forms.
+
+To switch:
+
+1. disable local echo in the terminal/dongle settings;
+2. start with `python3 -m minitel.server --port 3615 --echo`;
+3. type. Double characters mean local echo is still on. If keys stop reaching
+   the server, that setting controlled the key path rather than local echo;
+   revert it and keep local echo.
+
+The example defaults to local echo because it requires no terminal setting
+change.
+
 ## Dynamic pages
 
 A page can update a region without repainting the whole screen. Set
