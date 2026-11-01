@@ -148,7 +148,6 @@ def submit_tables(ctx, line):
     tick_interval=5.0,
     on_submit=submit_tables,
     on_tick=tables_screen,
-    no_screensaver=True,
 )
 def tables(ctx):
     return tables_screen(ctx)

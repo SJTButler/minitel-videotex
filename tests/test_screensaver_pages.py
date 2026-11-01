@@ -105,6 +105,14 @@ class ScreensaverPageTests(unittest.TestCase):
         self.assertIsNotNone(session.screensaver)
         self.assertTrue(session.screensaver_active)
 
+    def test_only_substantial_repaint_pages_opt_out(self):
+        opted_out = {
+            page.number
+            for page in self.registry.all()
+            if page.no_screensaver
+        }
+        self.assertEqual(opted_out, {"111", "150"})
+
     def test_home_links_to_veille(self):
         session = Session(
             self.registry,

@@ -99,7 +99,6 @@ def status_screen(ctx):
     back_page=LIVE_PAGE,
     tick_interval=5.0,
     on_tick=status_screen,
-    no_screensaver=True,
 )
 def feed_status(ctx):
     return status_screen(ctx)

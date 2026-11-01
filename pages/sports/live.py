@@ -2,7 +2,7 @@
 
 from dataclasses import dataclass
 
-from minitel import codec
+from minitel import Carousel, codec
 from minitel.pages import page
 from minitel.screen import Screen
 from minitel.text import fit, sanitize
@@ -134,6 +134,14 @@ def _pages(feed, matches):
     return tuple(pages)
 
 
+def _score_pager(ctx, pages):
+    return ctx.set_pager(
+        len(pages),
+        1,
+        carousel=Carousel(hold=30.0, wrap=True),
+    )
+
+
 def _current_page(pager, pages):
     window = pager.window(pages)
     return window[0] if window else None
@@ -234,7 +242,7 @@ def live_screen(ctx):
     )
     matches = _matches(feed_snapshot) if configured(feed) else ()
     pages = _pages(feed, matches)
-    pager = ctx.set_pager(len(pages), 1)
+    pager = _score_pager(ctx, pages)
     page = _current_page(pager, pages)
     window = page.matches if page is not None else ()
 
@@ -320,7 +328,7 @@ def submit_live(ctx, line):
     )
     matches = _matches(feed_snapshot) if configured(feed) else ()
     pages = _pages(feed, matches)
-    pager = ctx.set_pager(len(pages), 1)
+    pager = _score_pager(ctx, pages)
     page = _current_page(pager, pages)
     window = page.matches if page is not None else ()
 

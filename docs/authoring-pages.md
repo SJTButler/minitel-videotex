@@ -86,8 +86,10 @@ def render(ctx):
 - `screensaver="group"` declares this page as part of a screensaver sequence;
   see [Screensavers](#screensavers).
 - `no_screensaver=True` suppresses automatic screensaver takeover while this
-  page is current. Manual activation still works. Use it for pages that already
-  change on idle; see [Content carousels](#content-carousels).
+  page is current. Manual activation still works. Use it only for pages that
+  repeatedly repaint the main content on idle, such as a carousel; a page that
+  only updates one region should leave the screensaver enabled to prevent
+  burn-in. See [Content carousels](#content-carousels).
 - `meta` is free-form; useful for a custom app.
 
 For stateful or larger pages, subclass `Page`:
@@ -528,9 +530,11 @@ a takeover. `Carousel` is exported from `minitel`.
 - A data refresh that changes the total does not reset an unchanged page
   position. Going from no pages to pages starts a fresh hold.
 
-A page that changes on idle will usually also set `no_screensaver=True`. That
-keeps the automatic screensaver from interrupting the content carousel; manual
-activation through the selector still works.
+A page whose carousel repeatedly replaces the main content may also set
+`no_screensaver=True`. That keeps the automatic screensaver from interrupting
+the content carousel; manual activation through the selector still works. A
+page that only repaints a region should leave the screensaver enabled, because
+the screensaver is the burn-in defence.
 
 If a page has several ways to register its pager (normal render, `on_tick`, and
 `on_submit`), declare the carousel in one helper and use that helper everywhere.
@@ -538,10 +542,11 @@ Otherwise the session sees a different declaration and restarts the interval.
 This is also why the data tick must re-register the same pager with the same
 policy.
 
-The Hacker News list is not converted yet. Converting it means choosing a hold,
-declaring the same policy wherever the list registers its pager, adding
-`no_screensaver=True`, and leaving the two-second data tick in place. All of the
-timing remains in the session; the page gains no timer code.
+The Hacker News list and sports live page are the current carousel callers.
+Both declare one hold, register the same policy wherever the pager is set, set
+`no_screensaver=True` because the main content changes, and leave their data
+ticks in place. All of the timing remains in the session; the pages gain no
+timer code.
 
 ## Partial updates
 
@@ -677,8 +682,9 @@ The sports service is the reference for a keyed, shared, live feed:
   the title is `LIVE SCORES - PL`, kickoff times are section headers, and the
   matches under each time are laid out in two `HOME SCORE AWAY` columns. A
   league with more than ten time-pair rows continues on another page; the
-  session pager moves through league pages. Numeric `1`-`N` opens detail, and
-  the complete `Screen` is returned from `on_tick` so the session diffs it.
+  session pager moves through league pages with a 30-second `Carousel` on idle.
+  Numeric `1`-`N` opens detail, and the complete `Screen` is returned from
+  `on_tick` so the session diffs it.
   `151` declares `back_page="150"`; `153` is the read-mostly table sibling;
   `154` shows the provider, quota, poll intervals, and last error. Today's
   finished matches already appear on `150`, so there is no separate results
@@ -874,6 +880,8 @@ The library boundaries are deliberate:
 - Screensaver pages draw the full screen, hide the cursor, and keep motion
   sparse; do not give them a `PAGE:` field.
 - Content carousels are declared on the pager, not implemented with page-local
-  timers. Pages that change on idle should usually set `no_screensaver=True`.
+  timers. Pages that repeatedly repaint the main content on idle through a
+  carousel may set `no_screensaver=True`; region-only updates should leave the
+  screensaver on.
 - Keep `minitel/` free of application content; keep `pages/` free of protocol
   byte wrangling.

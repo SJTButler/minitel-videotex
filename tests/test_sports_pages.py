@@ -96,8 +96,20 @@ class FakeSports:
         return competition_name(code)
 
 
-def make_session(service=None, initial="150"):
+class FakeClock:
+    def __init__(self):
+        self.now = 0.0
+
+    def __call__(self):
+        return self.now
+
+    def advance(self, seconds):
+        self.now += seconds
+
+
+def make_session(service=None, initial="150", clock=None):
     registry = pages.build_registry()
+    kwargs = {"clock": clock} if clock is not None else {}
     session = Session(
         registry,
         profiles.M1,
@@ -105,6 +117,7 @@ def make_session(service=None, initial="150"):
         fallback=registry.get(pages.NOT_FOUND),
         guide=pages.GUIDE,
         services={"sports": service} if service is not None else None,
+        **kwargs,
     )
     session.start()
     session.navigate(initial)
@@ -177,6 +190,23 @@ class LivePageTests(unittest.TestCase):
             session.screen.to_text().splitlines()[1].strip(),
             "LIVE SCORES - PL",
         )
+
+    def test_carousel_advances_between_leagues(self):
+        matches = [
+            make_match(index=1, code="PL"),
+            make_match(index=2, code="PD"),
+        ]
+        clock = FakeClock()
+        session = make_session(
+            FakeSports(loaded_snapshot(matches)), clock=clock
+        )
+        self.assertIn("LIVE SCORES - PL", session.screen.to_text())
+
+        clock.advance(30.0)
+        session.on_timeout()
+
+        self.assertEqual(session.pager.offset, 1)
+        self.assertIn("LIVE SCORES - PD", session.screen.to_text())
 
     def test_large_league_paginates_within_the_league(self):
         matches = [

@@ -259,7 +259,8 @@ shell. The key is never logged or rendered.
 
 - `pages/sports/live.py` shows one league per page with the league in the title,
   kickoff times as section headers, and two match columns under each time.
-  `SUITE` moves through league pages; numeric selection opens match detail.
+  `SUITE` moves through league pages, a 30-second `Carousel` rotates them while
+  idle, and numeric selection opens match detail.
 - `services/sports/source.py` owns the football-data.org URLs, field names, status
   mapping, team abbreviations, and parsing. Pages only see `Match`, `Team`,
   `Goal`, and `StandingRow`.
@@ -313,9 +314,11 @@ provides the same configuration for another service. Pages may call
 
 A content page can also give its pager a carousel policy. The session then
 advances the window on idle, resets on input, ignores data ticks, pauses while
-a field has text, and suspends during the screensaver. Pages that change on idle
-can set `no_screensaver=True` so the screensaver does not interrupt them. The
-Hacker News list has not been converted yet; the plumbing is in the library.
+a field has text, and suspends during the screensaver. A page that repeatedly
+repaints the main content on idle through a carousel may set
+`no_screensaver=True`; pages that only update a region should leave the
+screensaver enabled so it can prevent burn-in. The Hacker News list and sports
+live page are the current carousel callers.
 
 ## Adding pages
 

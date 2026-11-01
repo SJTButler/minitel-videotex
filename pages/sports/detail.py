@@ -136,7 +136,6 @@ def detail_screen(ctx):
     back_page=LIVE_PAGE,
     tick_interval=5.0,
     on_tick=detail_screen,
-    no_screensaver=True,
 )
 def match_detail(ctx):
     return detail_screen(ctx)
