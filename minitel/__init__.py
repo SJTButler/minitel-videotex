@@ -5,6 +5,7 @@ __version__ = "0.2.0"
 from . import cache, codec, http, paging, text
 from .cache import ResourceCache, Snapshot
 from .http import HttpError, get_json
+from .carousel import Carousel
 from .paging import Pager
 from .profiles import (
     M1,
@@ -28,6 +29,7 @@ __all__ = [
     "M2_COLOUR",
     "M2_MONO",
     "Action",
+    "Carousel",
     "Cell",
     "FunctionPage",
     "HttpError",

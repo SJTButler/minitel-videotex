@@ -17,7 +17,8 @@ minitel/       reusable, content-free library
   render.py    screen -> Videotex bytes
   pages.py     Page, PageContext, Registry, @page
   session.py   input, navigation, history, idle takeover
-  screensaver.py screensaver pages, idle delay, rotation
+  carousel.py  timed advance policy for a page sequence
+  screensaver.py idle takeover, page sequence, carousel timing
   app.py       registry + profile + session + transport + services
   transport.py TCP and paced writes
   text.py      remote text sanitising, fit/wrap, domain, age
@@ -28,7 +29,6 @@ pages/         example service, one file per page, auto-discovered
   news.py      page 110, the news service directory
   news_source.py Hacker News parsing, source, and cached service
   hackernews.py  pages 111/112, headlines and story detail
-  manifest.py    content declarations: screensaver modes and labels
   screensaver.py  page 190, the screensaver selector
   screensaver_clock.py  page 900, clock
   screensaver_mire.py   page 901, test card
@@ -180,19 +180,21 @@ navigation, so ticking pages still fall asleep.
 
 ```sh
 uv run python -m minitel.server --screensaver clock
-uv run python -m minitel.server --screensaver ball --screensaver-after 60
+uv run python -m minitel.server --screensaver bouncing_ball --screensaver-after 60
 uv run python -m minitel.server --screensaver off
 ```
 
-`--screensaver` accepts `clock`, `mire`, `carousel`, `ball`, `all`, or `off`.
-The modes and their page keys are declared in `pages/manifest.py`; `minitel/`
-only carries a configured `Screensaver`, not a page list. `--screensaver-after`
-is the idle delay in seconds; `0` disables automatic activation but leaves
-manual activation available. `--screensaver-hold` sets the seconds per page for
-a multi-page screensaver.
+`--screensaver` accepts `clock`, `test_card`, `bouncing_ball`, `carousel`,
+`all`, or `off`. Screensaver pages declare their group with
+`@page(..., screensaver="group")`; `Registry.screensaver_groups()` collects
+them. `minitel/` carries a `Screensaver` with a page sequence and a `Carousel`
+timing policy, but no specific page numbers. `--screensaver-after` is the idle
+delay in seconds; `0` disables automatic activation but leaves manual
+activation available. `--screensaver-hold` sets the seconds per page for a
+multi-page screensaver.
 
 Page `190` (`7` on the home menu) is the selector. Type `1`-`4` to choose CLOCK,
-TEST CARD, CAROUSEL, or BOUNCING BALL, `6` to cycle the auto delay, and `0` to
+TEST CARD, BOUNCING BALL, or CAROUSEL, `6` to cycle the auto delay, and `0` to
 activate immediately. The screensaver pages are `900` CLOCK, `901` TEST CARD,
 `903` BOUNCING BALL, and the `910`-`912` CAROUSEL frames.
 

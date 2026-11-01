@@ -13,7 +13,7 @@ def _promo(title, lines, prompt):
     return s
 
 
-@page("910", title="KILO", back_page="190")
+@page("910", title="KILO", back_page="190", screensaver="carousel")
 def kilo(ctx):
     return _promo(
         "3615 KILO",
@@ -27,7 +27,7 @@ def kilo(ctx):
     )
 
 
-@page("911", title="NEWS", back_page="190")
+@page("911", title="NEWS", back_page="190", screensaver="carousel")
 def news_promo(ctx):
     return _promo(
         "THE NEWS",
@@ -40,7 +40,7 @@ def news_promo(ctx):
     )
 
 
-@page("912", title="WEATHER", back_page="190")
+@page("912", title="WEATHER", back_page="190", screensaver="carousel")
 def weather_promo(ctx):
     return _promo(
         "THE WEATHER",

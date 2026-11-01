@@ -55,6 +55,6 @@ def ball_tick(ctx):
 
 
 @page("903", title="BOUNCING BALL", tick_interval=1.0, on_tick=ball_tick,
-      back_page="190")
+      back_page="190", screensaver="bouncing_ball")
 def ball(ctx):
     return _draw(ctx)

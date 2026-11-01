@@ -98,8 +98,10 @@ class PageContext:
     def idle_elapsed(self):
         return self.session.idle_elapsed
 
-    def set_screensaver(self, pages, *, after=120.0, hold=20.0):
-        return self.session.set_screensaver(pages, after=after, hold=hold)
+    def set_screensaver(self, pages, *, after=120.0, hold=20.0, wrap=True):
+        return self.session.set_screensaver(
+            pages, after=after, hold=hold, wrap=wrap
+        )
 
     def disable_screensaver(self):
         return self.session.disable_screensaver()
@@ -128,6 +130,7 @@ class Page:
     form = False
     transient = False
     back_page = None
+    screensaver = None
     tick_interval = None
     on_form = None
 
@@ -150,12 +153,18 @@ class Page:
 class FunctionPage(Page):
     def __init__(self, number, render, *, title="", aliases=(), on_submit=None,
                  on_key=None, on_tick=None, tick_interval=None, form=False,
-                 on_form=None, transient=False, back_page=None, meta=None):
+                 on_form=None, transient=False, back_page=None,
+                 screensaver=None, meta=None):
+        if screensaver is not None and (
+            not isinstance(screensaver, str) or not screensaver
+        ):
+            raise TypeError("screensaver must be a non-empty string or None")
         self.number = number
         self._render = render
         self.title = title
         self.aliases = tuple(aliases)
         self.back_page = back_page
+        self.screensaver = screensaver or None
         self._on_submit = on_submit
         self._on_key = on_key
         self._on_tick = on_tick
@@ -186,7 +195,7 @@ class FunctionPage(Page):
 
 def page(number, *, title="", aliases=(), on_submit=None, on_key=None,
          on_tick=None, tick_interval=None, form=False, on_form=None,
-         transient=False, back_page=None, **meta):
+         transient=False, back_page=None, screensaver=None, **meta):
     def decorator(fn):
         return FunctionPage(
             number,
@@ -201,6 +210,7 @@ def page(number, *, title="", aliases=(), on_submit=None, on_key=None,
             on_form=on_form,
             transient=transient,
             back_page=back_page,
+            screensaver=screensaver,
             meta=meta,
         )
     return decorator
@@ -233,6 +243,29 @@ class Registry:
         if page is None:
             raise KeyError(key)
         return page
+
+    def screensaver_groups(self):
+        groups = {}
+        for page in self._pages:
+            name = page.screensaver
+            if isinstance(name, str) and name:
+                groups.setdefault(name, []).append(page)
+        return {
+            name: tuple(groups[name])
+            for name in sorted(
+                groups,
+                key=lambda name: min(page.number for page in groups[name]),
+            )
+        }
+
+    def screensaver_pages(self, name):
+        if name == "all":
+            return tuple(
+                page
+                for pages in self.screensaver_groups().values()
+                for page in pages
+            )
+        return self.screensaver_groups().get(name)
 
     def all(self):
         return tuple(self._pages)

@@ -52,8 +52,7 @@ class Session:
         self.screensaver_active = False
         self.last_activity = self.clock()
         self._screensaver_since = 0.0
-        self._screensaver_next = 0.0
-        self._screensaver_index = 0
+        self._screensaver_page = None
         self._screensaver_request = None
 
     @property
@@ -260,23 +259,39 @@ class Session:
     @property
     def display_page(self):
         if self.screensaver_active and self.screensaver and self.screensaver.pages:
-            pages = self.screensaver.pages
-            return pages[self._screensaver_index % len(pages)]
+            return self._screensaver_current_page()
         return self.current
 
-    def set_screensaver(self, pages, *, after=120.0, hold=20.0):
+    def _screensaver_current_page(self):
+        screensaver = self.screensaver
+        carousel = screensaver.carousel
+        pages = screensaver.pages
+        if not carousel.active or len(pages) < 2:
+            index = 0
+        else:
+            elapsed = max(0.0, self.clock() - self._screensaver_since)
+            steps = int(elapsed // carousel.hold)
+            if carousel.wrap:
+                index = steps % len(pages)
+            else:
+                index = min(steps, len(pages) - 1)
+        return screensaver.page(index)
+
+    def set_screensaver(self, pages, *, after=120.0, hold=20.0, wrap=True):
         self.screensaver = Screensaver.from_spec(
-            self.registry, pages, after=after, hold=hold
+            self.registry, pages, after=after, hold=hold, wrap=wrap
         )
         self.screensaver_active = False
-        self._screensaver_next = 0.0
+        self._screensaver_since = 0.0
+        self._screensaver_page = None
         self._screensaver_request = None
         return self.screensaver
 
     def disable_screensaver(self):
         self.screensaver = None
         self.screensaver_active = False
-        self._screensaver_next = 0.0
+        self._screensaver_since = 0.0
+        self._screensaver_page = None
         self._screensaver_request = None
 
     def request_screensaver(self, index=0):
@@ -293,18 +308,14 @@ class Session:
         if not self.screensaver or not self.screensaver.pages:
             return None
         pages = self.screensaver.pages
-        self._screensaver_index = index % len(pages)
         now = self.clock()
-        hold = self.screensaver.hold
-        if hold is not None and hold > 0:
-            self._screensaver_since = now - self._screensaver_index * hold
-            self._screensaver_next = self._screensaver_since + (
-                self._screensaver_index + 1
-            ) * hold
+        carousel = self.screensaver.carousel
+        if carousel.active:
+            self._screensaver_since = now - (index % len(pages)) * carousel.hold
         else:
             self._screensaver_since = now
-            self._screensaver_next = float("inf")
         self.screensaver_active = True
+        self._screensaver_page = self.display_page
         return self._render_screensaver()
 
     def _render_screensaver(self):
@@ -317,6 +328,7 @@ class Session:
                 "expected Screen"
             )
         screen.set_cursor(codec.ROWS - 1, 0, False)
+        self._screensaver_page = page
         self.screen = screen
         return Action(screen=screen)
 
@@ -324,6 +336,7 @@ class Session:
         if not self.screensaver_active:
             return Action()
         self.screensaver_active = False
+        self._screensaver_page = None
         self._touch()
         return Action(screen=self.render())
 
@@ -348,22 +361,17 @@ class Session:
     def _rotation_delay(self, now):
         if not self.screensaver_active:
             return None
-        if not self.screensaver or len(self.screensaver.pages) < 2:
+        screensaver = self.screensaver
+        if not screensaver or len(screensaver.pages) < 2:
             return None
-        hold = self.screensaver.hold
-        if hold is None or hold <= 0:
+        carousel = screensaver.carousel
+        if not carousel.active:
             return None
-        return max(0.0, self._screensaver_next - now)
-
-    def _advance_screensaver(self, now):
-        pages = self.screensaver.pages
-        hold = self.screensaver.hold
-        if hold is None or hold <= 0 or len(pages) < 2:
-            return
         elapsed = now - self._screensaver_since
-        steps = max(1, int(elapsed // hold))
-        self._screensaver_index = steps % len(pages)
-        self._screensaver_next = self._screensaver_since + (steps + 1) * hold
+        steps = int(elapsed // carousel.hold)
+        if not carousel.wrap and steps >= len(screensaver.pages) - 1:
+            return None
+        return (steps + 1) * carousel.hold - elapsed
 
     def next_timeout(self):
         now = self.clock()
@@ -389,9 +397,7 @@ class Session:
     def on_timeout(self):
         now = self.clock()
         if self.screensaver_active:
-            rotation = self._rotation_delay(now)
-            if rotation is not None and rotation <= 0:
-                self._advance_screensaver(now)
+            if self.display_page is not self._screensaver_page:
                 return self._render_screensaver()
             return self.tick()
         idle = self._idle_delay(now)

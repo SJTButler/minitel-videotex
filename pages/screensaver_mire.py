@@ -5,7 +5,7 @@ from minitel.pages import page
 from minitel.screen import Screen
 
 
-@page("901", title="TEST CARD", back_page="190")
+@page("901", title="TEST CARD", back_page="190", screensaver="test_card")
 def mire(ctx):
     s = Screen()
     s.text(0, 0, "TEST CARD 3615 KILO")

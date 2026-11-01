@@ -3,26 +3,23 @@ from minitel.pages import page
 from minitel.screen import Screen
 
 from .layout import ACCENT, footer, page_input, status
-from .manifest import SCREENSAVER_LABELS, SCREENSAVER_MODES, SELECTABLE_SCREENSAVERS
-
-SCREENSAVER_CHOICES = tuple(
-    (SCREENSAVER_LABELS[name], SCREENSAVER_MODES[name])
-    for name in SELECTABLE_SCREENSAVERS
-)
 
 DELAYS = (120.0, 300.0, 600.0, None)
 
 
-def _pages(ctx, keys):
-    return tuple(ctx.registry.get(key) for key in keys)
+def _choices(ctx):
+    return tuple(
+        (name.replace("_", " ").replace("-", " ").upper(), pages)
+        for name, pages in ctx.registry.screensaver_groups().items()
+    )
 
 
-def _selected_label(ctx):
+def _selected_label(ctx, choices):
     current = ctx.screensaver
     if current is None:
         return "NONE"
-    for label, keys in SCREENSAVER_CHOICES:
-        if current.pages == _pages(ctx, keys):
+    for label, pages in choices:
+        if current.pages == pages:
             return label
     return "CUSTOM"
 
@@ -36,16 +33,19 @@ def _delay_label(after):
     return f"{int(after)} SEC"
 
 
-def _choose(ctx, keys):
+def _choose(ctx, pages):
     current = ctx.screensaver
     after = current.after if current else 120.0
     hold = current.hold if current else 20.0
-    ctx.set_screensaver(keys, after=after, hold=hold)
+    wrap = current.wrap if current else True
+    ctx.set_screensaver(pages, after=after, hold=hold, wrap=wrap)
 
 
 def _ensure(ctx):
     if ctx.screensaver is None:
-        _choose(ctx, SCREENSAVER_CHOICES[0][1])
+        choices = _choices(ctx)
+        if choices:
+            _choose(ctx, choices[0][1])
 
 
 def _cycle_delay(ctx):
@@ -57,14 +57,17 @@ def _cycle_delay(ctx):
     except ValueError:
         index = -1
     after = DELAYS[(index + 1) % len(DELAYS)]
-    ctx.set_screensaver(current.pages, after=after, hold=current.hold)
+    ctx.set_screensaver(
+        current.pages, after=after, hold=current.hold, wrap=current.wrap
+    )
 
 
 def screensaver_submit(ctx, line):
     line = line.strip()
     ctx.values.clear()
-    if line in ("1", "2", "3", "4"):
-        _choose(ctx, SCREENSAVER_CHOICES[int(line) - 1][1])
+    choices = _choices(ctx)[:8]
+    if line.isdigit() and 1 <= int(line) <= len(choices):
+        _choose(ctx, choices[int(line) - 1][1])
     elif line == "0":
         _ensure(ctx)
         ctx.start_screensaver()
@@ -82,13 +85,16 @@ def screensaver(ctx):
     s.text(1, 0, "SCREENSAVER", inverse=True, size=codec.DOUBLE_WIDTH)
     s.text(3, 0, "SCREENSAVER SETTINGS")
 
-    selected = _selected_label(ctx)
-    for index, (label, _) in enumerate(SCREENSAVER_CHOICES):
-        row = 5 + index
+    choices = _choices(ctx)
+    visible = choices[:8]
+    selected = _selected_label(ctx, choices)
+    for index, (label, _) in enumerate(visible):
+        row = 5 + index % 4
+        col = 0 if index < 4 else 20
         chosen = label == selected
         s.text(
             row,
-            0,
+            col,
             f"{'>' if chosen else ' '} {index + 1}  {label}",
             inverse=chosen,
             fg=ACCENT if chosen else codec.WHITE,
@@ -100,7 +106,10 @@ def screensaver(ctx):
     after = current.after if current else None
     s.text(12, 0, f"CHOICE: {selected}")
     s.text(13, 0, f"AUTO: {_delay_label(after)}")
-    s.text(15, 0, "1-4 SELECT   0 ACTIVATE")
+    if visible:
+        s.text(15, 0, f"1-{len(visible)} SELECT   0 ACTIVATE")
+    else:
+        s.text(15, 0, "0 ACTIVATE")
     s.text(16, 0, "6 DELAY")
     page_input(s, ctx)
     footer(s)

@@ -1,7 +1,6 @@
 import unittest
 
 import pages
-from pages.manifest import DEFAULT_SCREENSAVER, SCREENSAVER_MODES
 
 from minitel import M1, Session
 
@@ -23,11 +22,23 @@ class ScreensaverPageTests(unittest.TestCase):
     def feed(self, data):
         return self.session.feed(data)
 
-    def test_manifest_declares_existing_pages(self):
-        self.assertIn(DEFAULT_SCREENSAVER, SCREENSAVER_MODES)
-        for keys in SCREENSAVER_MODES.values():
-            for key in keys:
-                self.assertIsNotNone(self.registry.get(key), key)
+    def test_registry_declares_screensaver_groups(self):
+        groups = self.registry.screensaver_groups()
+        self.assertIn(pages.DEFAULT_SCREENSAVER, groups)
+        self.assertEqual(
+            list(groups),
+            ["clock", "test_card", "bouncing_ball", "carousel"],
+        )
+        self.assertEqual(
+            [page.number for page in groups["carousel"]],
+            ["910", "911", "912"],
+        )
+        self.assertEqual(
+            [page.number for page in self.registry.screensaver_pages("all")],
+            ["900", "901", "903", "910", "911", "912"],
+        )
+        self.assertIsNone(self.registry.screensaver_pages("missing"))
+        self.assertEqual(self.registry.get("900").screensaver, "clock")
 
     def test_selector_layout(self):
         text = self.session.screen.to_text().splitlines()
@@ -43,22 +54,31 @@ class ScreensaverPageTests(unittest.TestCase):
         self.feed(b"3" + ENVOI)
         self.assertEqual(
             [page.number for page in self.session.screensaver.pages],
-            ["910", "911", "912"],
+            ["903"],
         )
-        self.assertIn("CAROUSEL", self.session.screen.to_text())
+        self.assertIn("BOUNCING BALL", self.session.screen.to_text())
 
         self.feed(b"4" + ENVOI)
         self.assertEqual(
             [page.number for page in self.session.screensaver.pages],
-            ["903"],
+            ["910", "911", "912"],
         )
-        self.assertIn("BOUNCING BALL", self.session.screen.to_text())
+        self.assertIn("CAROUSEL", self.session.screen.to_text())
 
     def test_selector_activates_the_current_choice(self):
         self.feed(b"0" + ENVOI)
         self.assertTrue(self.session.screensaver_active)
         self.assertEqual(self.session.current.number, "190")
         self.assertIn("LOCAL TIME", self.session.screen.to_text())
+
+    def test_selector_preserves_carousel_policy(self):
+        self.session.set_screensaver(
+            ("900",), after=300.0, hold=7.0, wrap=False
+        )
+        self.feed(b"1" + ENVOI)
+        self.assertEqual(self.session.screensaver.after, 300.0)
+        self.assertEqual(self.session.screensaver.hold, 7.0)
+        self.assertFalse(self.session.screensaver.wrap)
 
     def test_selector_cycles_the_delay(self):
         self.assertEqual(self.session.screensaver.after, 120.0)

@@ -4,13 +4,20 @@ import argparse
 import asyncio
 
 import pages
-from pages.manifest import DEFAULT_SCREENSAVER, SCREENSAVER_MODES
 
 from .app import MinitelApp
 from .profiles import M1
 
 
 def main():
+    registry = pages.build_registry()
+    modes = registry.screensaver_groups()
+    default_mode = (
+        pages.DEFAULT_SCREENSAVER
+        if pages.DEFAULT_SCREENSAVER in modes
+        else "off"
+    )
+
     ap = argparse.ArgumentParser(description="Minitel 1 Videotex server")
     ap.add_argument("--host", default="0.0.0.0")
     ap.add_argument("--port", type=int, default=3615)
@@ -27,9 +34,9 @@ def main():
     )
     ap.add_argument(
         "--screensaver",
-        choices=(*SCREENSAVER_MODES, "off"),
-        default=DEFAULT_SCREENSAVER,
-        help=f"default screensaver sequence (default: {DEFAULT_SCREENSAVER})",
+        choices=(*modes, "all", "off"),
+        default=default_mode,
+        help=f"default screensaver sequence (default: {default_mode})",
     )
     ap.add_argument(
         "--screensaver-after",
@@ -45,11 +52,10 @@ def main():
     )
     args = ap.parse_args()
 
-    registry = pages.build_registry()
     screensaver = (
         None
         if args.screensaver == "off"
-        else SCREENSAVER_MODES[args.screensaver]
+        else registry.screensaver_pages(args.screensaver) or None
     )
     app = MinitelApp(
         registry,

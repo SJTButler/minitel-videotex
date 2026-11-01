@@ -5,7 +5,7 @@ The server is split into two layers:
 ```
 minitel/     reusable library: codec, screen, render, profiles, page API,
              session, app, transport, text, paging, cache, http, screensaver
-pages/       the example service: manifest, layout helpers, pages, data sources
+pages/       the example service: layout helpers, pages, and data sources
 tests/       library and page tests
 tools/       first-light server, virtual Minitel decoder
 ```
@@ -127,7 +127,7 @@ Every `render`, `on_submit`, `on_form`, and `on_key` receives a
 | `ctx.page_for(key)` | look up another page |
 | `ctx.screensaver` | the session's `Screensaver`, or `None` |
 | `ctx.idle_elapsed` | seconds since the last input or navigation |
-| `ctx.set_screensaver(pages, *, after=120, hold=20)` | select the session screensaver |
+| `ctx.set_screensaver(pages, *, after=120, hold=20, wrap=True)` | select the session screensaver |
 | `ctx.disable_screensaver()` | remove the session screensaver |
 | `ctx.start_screensaver(index=0)` | request an immediate takeover from a handler |
 
@@ -430,12 +430,12 @@ app = MinitelApp(
 )
 ```
 
-- `screensaver` is a page, a page key, or a sequence of keys/pages. A sequence
-  rotates at `screensaver_hold` seconds per page.
+- `screensaver` is a page, a page key, or a sequence of keys/pages.
 - `screensaver_after` is the idle delay in seconds. `None` or `0` disables
   automatic activation; manual activation still works.
 - `screensaver_hold` is the time each page is held before rotating. `0` keeps
-  the first page.
+  the first page. The hold lives on a `Carousel` policy; the page sequence is
+  organised by a `Pager`.
 - The CLI exposes the same settings: `--screensaver`,
   `--screensaver-after`, and `--screensaver-hold`.
 
@@ -445,27 +445,27 @@ ticks stop; only the screensaver page's ticks and rotation run. Activation,
 rotation, and wake are full paints, which also avoids stale double-size glyphs
 on wake. Screensaver ticks still use the normal diff.
 
-The example service declares its available screensavers in
-`pages/manifest.py`:
+Screensaver pages declare their group on the page itself:
 
 ```python
-SELECTABLE_SCREENSAVERS = ("clock", "mire", "carousel", "ball")
-SCREENSAVER_MODES = {
-    "clock": ("900",),
-    "mire": ("901",),
-    "carousel": ("910", "911", "912"),
-    "ball": ("903",),
-}
-SCREENSAVER_MODES["all"] = tuple(
-    key for name in SELECTABLE_SCREENSAVERS for key in SCREENSAVER_MODES[name]
-)
-SCREENSAVER_LABELS = {"clock": "CLOCK", ...}
-DEFAULT_SCREENSAVER = "clock"
+@page("900", title="CLOCK", screensaver="clock")
+@page("910", title="KILO", screensaver="carousel")
+@page("903", title="BOUNCING BALL", screensaver="bouncing_ball")
 ```
 
-`minitel/server.py` and the selector page read that declaration. `minitel/`
-contains no screensaver page numbers; it only receives a configured
-`Screensaver`.
+`Registry.screensaver_groups()` collects pages by that string in page-number
+order, and `Registry.screensaver_pages("all")` returns the union. The CLI and
+the selector derive their choices from the registry. `pages.DEFAULT_SCREENSAVER`
+is the service default. `minitel/` contains no screensaver page numbers.
+
+The timing is separate from the sequence:
+
+- `Pager` is the page cursor. `Screensaver.page(index)` windows the page tuple
+  with `Pager(len(pages), 1, index)`.
+- `Carousel` is the timed policy: `hold` seconds per page, with `wrap`.
+- `Screensaver` holds the pages, the idle `after` delay, and the `Carousel`.
+
+This keeps “when to sleep”, “which pages”, and “when to advance” separate.
 
 A page can select or start a screensaver for its own session:
 
@@ -478,8 +478,8 @@ ctx.disable_screensaver()
 `ctx.start_screensaver()` is a request, not a return value: the session applies
 it after the handler finishes, so return a page key normally. The selector page
 `190` (`7` on the home menu) is the reference implementation. It lets the user
-choose `900` CLOCK, `901` TEST CARD, `910`-`912` CAROUSEL, or `903` BOUNCING
-BALL, cycle the auto delay, and activate the current choice with `0`.
+choose `900` CLOCK, `901` TEST CARD, `903` BOUNCING BALL, or `910`-`912`
+CAROUSEL, cycle the auto delay, and activate the current choice with `0`.
 
 Rules for screensaver pages:
 
@@ -488,7 +488,8 @@ Rules for screensaver pages:
 - Do not register input fields; the cursor is hidden. Input wakes instead.
 - Use `back_page="190"` so direct entry returns to the selector first.
 - Reserve `9xx` for screensaver pages and the promo frames.
-- Declare new modes in `pages/manifest.py`; keep page keys out of `minitel/`.
+- Declare new groups with `@page(..., screensaver="group")`; keep page keys out
+  of `minitel/`. Do not use `all` or `off` as group names; they are reserved.
 - Keep motion sparse and hold full-screen frames for several seconds; the M1
   budget is 133 cps.
 - A page that is itself in the screensaver set does not auto-activate.

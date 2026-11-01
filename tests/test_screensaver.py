@@ -1,6 +1,6 @@
 import unittest
 
-from minitel import M1, Page, Screen, Screensaver, page
+from minitel import Carousel, M1, Page, Screen, Screensaver, page
 from minitel.pages import Registry
 from minitel.session import Session
 
@@ -67,7 +67,9 @@ class ScreensaverMechanismTests(unittest.TestCase):
             M1,
             initial="700",
             fallback=self.main,
-            screensaver=Screensaver((self.saver_a,), after=10.0, hold=5.0),
+            screensaver=Screensaver.from_spec(
+                self.registry, (self.saver_a,), after=10.0, hold=5.0
+            ),
             clock=self.clock,
         )
         self.session.start()
@@ -182,6 +184,21 @@ class ScreensaverMechanismTests(unittest.TestCase):
         self.session.feed(b"B")
         self.assertEqual(self.session.current.number, "701")
 
+    def test_screensaver_pages_use_the_pager(self):
+        self.session.set_screensaver(
+            (self.saver_a, self.saver_b), after=10.0, hold=5.0
+        )
+        self.assertIs(self.session.screensaver.page(0), self.saver_a)
+        self.assertIs(self.session.screensaver.page(1), self.saver_b)
+        self.assertEqual(self.session.screensaver.hold, 5.0)
+        self.assertTrue(self.session.screensaver.wrap)
+
+    def test_carousel_validates_and_disables(self):
+        self.assertTrue(Carousel(hold=5.0).active)
+        self.assertFalse(Carousel(hold=0).active)
+        with self.assertRaises(ValueError):
+            Carousel(hold=-1)
+
     def test_active_screen_saver_tick_runs_instead_of_current_page(self):
         calls = {}
         registry, main, _other, saver_a, _saver_b = build_registry(calls)
@@ -190,7 +207,9 @@ class ScreensaverMechanismTests(unittest.TestCase):
             M1,
             initial="700",
             fallback=main,
-            screensaver=Screensaver((saver_a,), after=10.0, hold=5.0),
+            screensaver=Screensaver.from_spec(
+                registry, (saver_a,), after=10.0, hold=5.0
+            ),
             clock=self.clock,
         )
         session.start()
