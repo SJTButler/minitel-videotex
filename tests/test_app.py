@@ -43,6 +43,11 @@ class AppTests(unittest.IsolatedAsyncioTestCase):
         app = MinitelApp(self.registry)
         self.assertEqual(app.new_session().services, {})
 
+    def test_build_services_includes_weather(self):
+        services = pages.build_services()
+        self.assertIn("hackernews", services)
+        self.assertIn("weather", services)
+
     def test_screensaver_config_propagates_to_sessions(self):
         app = MinitelApp(
             self.registry,

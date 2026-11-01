@@ -615,6 +615,18 @@ The news example is split along the same lines:
   and one for comments. The cache does not block a page paint; the first paint
   shows `LOADING` and a later tick shows the data.
 
+The weather page is a second, deliberately different cached source:
+
+- `pages/weather_source.py` owns the Open-Meteo URL, the location table, WMO
+  condition labels, and one cache entry per city. Each city is a separate key,
+  so one failed location does not hide the others.
+- `pages/weather.py` renders one row per city with current temperature,
+  condition, and today's low/high. It derives `LOADING`, `UNAVAILABLE`, and
+  `OFFLINE - CACHED` from the snapshots and ticks every 30 seconds to pick up
+  background loads.
+- The page credits Open-Meteo. The source is keyless and uses only the standard
+  library.
+
 A page that returns a complete `Screen` from `on_tick` gets the same cursor
 restoration as a normal render. That is what makes a list or detail page usable
 with the `PAGE:` field still active.
@@ -657,7 +669,7 @@ Keep page numbers stable and descriptive. The example scheme is:
 | `110` | news service directory |
 | `111` | Hacker News headline list |
 | `112` | story detail |
-| `120` | weather |
+| `120` | weather: current conditions and today's forecast |
 | `130` | about / guide |
 | `140` | guestbook |
 | `190` | screensaver selector (`7` on the home menu) |

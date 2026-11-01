@@ -29,6 +29,8 @@ pages/         example service, one file per page, auto-discovered
   news.py      page 110, the news service directory
   news_source.py Hacker News parsing, source, and cached service
   hackernews.py  pages 111/112, headlines and story detail
+  weather.py   page 120, current conditions and today's forecast
+  weather_source.py Open-Meteo locations, parsing, and cached service
   screensaver.py  page 190, the screensaver selector
   screensaver_clock.py  page 900, clock
   screensaver_mire.py   page 901, test card
@@ -122,7 +124,7 @@ The example service's layout helpers are in `pages/layout.py`. The application
 is wired in `minitel/server.py` with `MinitelApp`, so a different service can
 pass its own registry and page package without touching the library.
 
-## Live data and the news service
+## Live data and services
 
 Long-running services are injected into the app and copied into each session:
 
@@ -133,7 +135,7 @@ app = MinitelApp(registry, services=pages.build_services())
 A service may define `start()` and `stop()`; either may be a normal function or
 a coroutine. `MinitelApp.serve()` starts services before listening and stops
 them in a `finally` block. Pages reach them through `ctx.services` or
-`ctx.service("hackernews")`.
+`ctx.service("hackernews")`, `ctx.service("weather")`, and so on.
 
 The news service is the worked example:
 
@@ -160,6 +162,19 @@ The news service is the worked example:
 - `pages/layout.py` exposes `BODY`, `ACCENT`, `SECONDARY`, and `WARNING`. The
   news pages use yellow story badges, cyan metadata, and magenta warnings; on
   the monochrome M1 these are grey levels.
+
+The weather page is the second cached service:
+
+- `pages/weather_source.py` owns the Open-Meteo URL, the four locations
+  (`LONDON`, `PARIS`, `LYON`, `MARSEILLE`), WMO condition labels, parsing, and
+  one `ResourceCache` entry per city. Data is cached for 600 seconds and failed
+  loads retry after 60 seconds.
+- `pages/weather.py` renders `120` with one row per city: current temperature,
+  condition, and today's low/high. It shows `LOADING`, `UNAVAILABLE`, or
+  `OFFLINE - CACHED` from the snapshots and ticks every 30 seconds to pick up a
+  background load.
+- The page credits `OPEN-METEO`. The source is keyless and uses only the
+  standard library, like the news source.
 - On `111`, `ctx.set_pager(...)` registers a session-owned cursor. `SUITE`
   advances and wraps; `RETOUR` walks back one page and only leaves the list from
   page 1, the same boundary pattern as multi-field form focus. The cursor is

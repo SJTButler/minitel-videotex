@@ -14,8 +14,8 @@ from .layout import (
     key_footer,
     page_input,
     status,
+    updated_label,
 )
-from .news import updated_label
 
 NEWS_PAGE = "111"
 STORY_PAGE = "112"

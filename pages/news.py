@@ -1,6 +1,5 @@
 """Page 110: the news service directory."""
 
-import time
 from dataclasses import dataclass
 
 from minitel import codec
@@ -15,6 +14,7 @@ from .layout import (
     key_footer,
     page_input,
     status,
+    updated_label,
 )
 
 
@@ -29,16 +29,6 @@ class NewsServiceEntry:
 NEWS_SERVICES = (
     NewsServiceEntry("1", "HACKER NEWS", "111", "hackernews"),
 )
-
-
-def updated_label(snapshot):
-    age = snapshot.age()
-    if age is None:
-        return ""
-    try:
-        return time.strftime("%H:%M", time.localtime(time.time() - age))
-    except (OSError, OverflowError, ValueError):
-        return "--:--"
 
 
 def status_colour(text):

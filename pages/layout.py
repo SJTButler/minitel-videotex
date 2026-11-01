@@ -1,5 +1,7 @@
 """Shared layout helpers for the example service."""
 
+import time
+
 from minitel import codec
 
 STATUS_MARGIN = 4
@@ -11,6 +13,16 @@ BODY = codec.WHITE
 ACCENT = codec.YELLOW
 SECONDARY = codec.CYAN
 WARNING = codec.MAGENTA
+
+
+def updated_label(snapshot):
+    age = snapshot.age()
+    if age is None:
+        return ""
+    try:
+        return time.strftime("%H:%M", time.localtime(time.time() - age))
+    except (OSError, OverflowError, ValueError):
+        return "--:--"
 
 
 def status(screen, page):
