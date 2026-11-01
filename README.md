@@ -30,6 +30,7 @@ pages/         example service, auto-discovered
   home.py      page 100
   about.py     page 130
   not_found.py fallback
+  page_directory.py page 199, hidden developer directory
   news/
     directory.py page 110, the news service directory
     hackernews.py pages 111/112, headlines and story detail

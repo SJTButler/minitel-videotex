@@ -673,6 +673,7 @@ Keep page numbers stable and descriptive. The example scheme is:
 | `130` | about / guide |
 | `140` | guestbook |
 | `190` | screensaver selector (`7` on the home menu) |
+| `199` | hidden developer page directory; not linked from home |
 | `900` | CLOCK screensaver |
 | `901` | TEST CARD screensaver |
 | `903` | BOUNCING BALL screensaver |
