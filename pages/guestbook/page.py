@@ -2,8 +2,8 @@ from minitel import codec
 from minitel.pages import page
 from minitel.screen import Screen
 
-from . import guestbook_store
-from .layout import form_footer, line_field, status
+from . import store as guestbook_store
+from ..layout import form_footer, line_field, status
 
 GUESTBOOK_PAGE = "140"
 ENTRY_LIMIT = 3

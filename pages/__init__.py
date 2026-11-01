@@ -11,8 +11,8 @@ def build_registry():
 
 
 def build_services():
-    from .news_source import HackerNewsService
-    from .weather_source import WeatherService
+    from .news.source import HackerNewsService
+    from .weather.source import WeatherService
 
     return {
         "hackernews": HackerNewsService(),

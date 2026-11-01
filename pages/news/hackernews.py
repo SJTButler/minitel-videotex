@@ -7,7 +7,7 @@ from minitel.pages import page
 from minitel.screen import Screen
 from minitel.text import age, fit, sanitize, wrap
 
-from .layout import (
+from ..layout import (
     ACCENT,
     SECONDARY,
     WARNING,

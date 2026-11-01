@@ -283,6 +283,9 @@ class Registry:
         package = importlib.import_module(package_name)
         modules = sorted(pkgutil.iter_modules(package.__path__), key=lambda m: m.name)
         for module_info in modules:
+            if module_info.ispkg:
+                self.discover(f"{package_name}.{module_info.name}")
+                continue
             module = importlib.import_module(f"{package_name}.{module_info.name}")
             for value in vars(module).values():
                 if isinstance(value, Page):

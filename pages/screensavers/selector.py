@@ -2,7 +2,7 @@ from minitel import codec
 from minitel.pages import page
 from minitel.screen import Screen
 
-from .layout import ACCENT, footer, page_input, status
+from ..layout import ACCENT, footer, page_input, status
 
 DELAYS = (120.0, 300.0, 600.0, None)
 

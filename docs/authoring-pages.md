@@ -358,7 +358,7 @@ def render_list(ctx):
   page resumes the same list page; each paginated page has its own cursor.
 - Page-specific error text is the page's responsibility. If it should disappear
   when the page changes, store the offset with the error and clear it when the
-  pager offset differs, as `pages/hackernews.py` does.
+  pager offset differs, as `pages/news/hackernews.py` does.
 - Use one cursor style per page: multi-field form focus or a pager, not both.
 
 This is the same shape as multi-field forms: a bounded list, a session-owned
@@ -600,27 +600,27 @@ The library pieces:
 
 The news example is split along the same lines:
 
-- `pages/news.py` renders `110`, a data-driven directory. `NEWS_SERVICES` is the
+- `pages/news/directory.py` renders `110`, a data-driven directory. `NEWS_SERVICES` is the
   extension point; a matching number opens its page, and other numbers fall
   through to normal registry routing.
-- `pages/hackernews.py` renders `111` (four stories with a blank separator row,
+- `pages/news/hackernews.py` renders `111` (four stories with a blank separator row,
   `1`-`4` + `ENVOI` selects) and `112` (metadata first, comment on a later
   tick). `111` registers its window with `ctx.set_pager`, so the session handles
   `SUITE`/`RETOUR`; `RETOUR` walks back through pages and only leaves from page
   1. `112` declares `back_page="111"`, so typing `112` directly returns to the
   list first, then follows the existing history. A selected `Story` is kept in
   `ctx.state["news_story"]`; direct access to `112` shows `NO STORY SELECTED`.
-- `pages/news_source.py` owns the Hacker News URLs and field names, parses
+- `pages/news/source.py` owns the Hacker News URLs and field names, parses
   `Story`/`Comment` objects, and wraps one `ResourceCache` for the front page
   and one for comments. The cache does not block a page paint; the first paint
   shows `LOADING` and a later tick shows the data.
 
 The weather page is a second, deliberately different cached source:
 
-- `pages/weather_source.py` owns the Open-Meteo URL, the location table, WMO
+- `pages/weather/source.py` owns the Open-Meteo URL, the location table, WMO
   condition labels, and one cache entry per city. Each city is a separate key,
   so one failed location does not hide the others.
-- `pages/weather.py` renders one row per city with current temperature,
+- `pages/weather/page.py` renders one row per city with current temperature,
   condition, and today's low/high. It derives `LOADING`, `UNAVAILABLE`, and
   `OFFLINE - CACHED` from the snapshots and ticks every 30 seconds to pick up
   background loads.

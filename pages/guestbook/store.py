@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 
-DEFAULT_PATH = Path(__file__).resolve().parents[1] / "guestbook.sqlite3"
+DEFAULT_PATH = Path(__file__).resolve().parents[2] / "guestbook.sqlite3"
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS entries (

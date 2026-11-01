@@ -6,7 +6,7 @@ from minitel import codec
 from minitel.pages import page
 from minitel.screen import Screen
 
-from .layout import (
+from ..layout import (
     ACCENT,
     SECONDARY,
     WARNING,
