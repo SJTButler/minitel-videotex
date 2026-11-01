@@ -1,6 +1,6 @@
 """Small shared helpers for the sports pages."""
 
-from .models import FeedSnapshot
+from services.sports.models import FeedSnapshot
 
 
 def service(ctx):

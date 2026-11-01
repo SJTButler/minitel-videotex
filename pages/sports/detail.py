@@ -16,7 +16,7 @@ from .layout import (
     score_label,
 )
 from .live import DETAIL_PAGE, LIVE_PAGE
-from .models import MatchStatus
+from services.sports.models import MatchStatus
 
 GOAL_ROWS = 6
 
@@ -132,6 +132,7 @@ def detail_screen(ctx):
 @page(
     DETAIL_PAGE,
     title="MATCH",
+    requires=("sports",),
     back_page=LIVE_PAGE,
     tick_interval=5.0,
     on_tick=detail_screen,

@@ -8,7 +8,7 @@ from minitel.cache import Snapshot
 from minitel.render import render
 from minitel.session import Session
 from pages.layout import ACCENT, SECONDARY
-from pages.news.source import Comment, Story
+from services.news import Comment, Story
 from test_render import decode
 
 ENVOI = bytes([0x13, 0x41])

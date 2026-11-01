@@ -9,8 +9,8 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from minitel.http import HttpError
-from pages.sports.config import SportsConfig
-from pages.sports.source import FootballDataSource
+from services.sports.config import SportsConfig
+from services.sports.source import FootballDataSource
 
 
 def _print_match(match):

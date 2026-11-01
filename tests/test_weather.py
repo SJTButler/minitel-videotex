@@ -6,7 +6,7 @@ import pages
 from minitel import profiles
 from minitel.cache import Snapshot
 from minitel.session import Session
-from pages.weather.source import LOCATIONS, Weather
+from services.weather import LOCATIONS, Weather
 
 
 def loaded(weather, when=None):

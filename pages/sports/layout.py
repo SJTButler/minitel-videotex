@@ -5,7 +5,7 @@ from datetime import timezone
 
 from minitel.text import fit
 
-from .models import MatchStatus
+from services.sports.models import MatchStatus
 
 try:
     from zoneinfo import ZoneInfo

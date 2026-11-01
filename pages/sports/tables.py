@@ -143,6 +143,7 @@ def submit_tables(ctx, line):
 @page(
     TABLES_PAGE,
     title="TABLES",
+    requires=("sports",),
     back_page=LIVE_PAGE,
     tick_interval=5.0,
     on_submit=submit_tables,

@@ -7,9 +7,9 @@ import pages
 from minitel import codec, profiles
 from minitel.cache import Snapshot
 from minitel.session import Session
-from pages.sports.config import SportsConfig
 from pages.sports.layout import kickoff_label
-from pages.sports.models import (
+from services.sports.config import SportsConfig
+from services.sports.models import (
     Alert,
     FeedSnapshot,
     Match,
@@ -261,7 +261,7 @@ class DetailPageTests(unittest.TestCase):
         self.assertEqual(session.current.number, "150")
 
     def test_goal_lines(self):
-        from pages.sports.models import Goal
+        from services.sports.models import Goal
 
         base = ars_che()
         match = Match(

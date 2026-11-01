@@ -1,17 +1,20 @@
 # 11 - Authoring pages: the library API
 
-The server is split into two layers:
+The server is split into three layers:
 
 ```
 minitel/     reusable library: codec, screen, render, profiles, page API,
-             session, app, transport, text, paging, cache, http, screensaver
-pages/       the example service: layout helpers, pages, and data sources
-tests/       library and page tests
-tools/       first-light server, virtual Minitel decoder, interactive client
+             session, app, transport, text, paging, cache, http,
+             services, screensaver
+services/    background services: provider adapters, caches, pollers, config
+pages/       presentation: layout helpers and pages
+tests/       library, service, and page tests
+tools/       server probes, virtual Minitel decoder, interactive client
 ```
 
-`minitel/` has no knowledge of `pages/`. You can point `MinitelApp` at any
-registry, which makes it usable as a library rather than a single application.
+`minitel/` has no knowledge of `services/` or `pages/`; `services/` may import
+`minitel/` but never `pages/`. You can point `MinitelApp` at any registry, which
+makes it usable as a library rather than a single application.
 
 ## Quick start: add a page
 
@@ -562,22 +565,52 @@ sent.
 ## Live data and services
 
 Keep network calls out of `render`, `on_submit`, `on_key`, and `on_tick`. Fetch
-in a background thread, cache the result, and render from the cache. The app
-injects services once and each session gets a copy:
+in a background thread, cache the result, and render from the cache.
+
+Background services live in `services/` and are discovered at startup:
 
 ```python
+page_registry = pages.build_registry()
+service_registry = services.build_registry()
+missing = page_registry.missing_requirements(service_registry)
+if missing:
+    raise SystemExit(f"missing services: {missing}")
+
 app = MinitelApp(
-    registry,
+    page_registry,
     initial="100",
-    fallback=registry.get("__not_found__"),
-    services=pages.build_services(),
+    fallback=page_registry.get("__not_found__"),
+    services=service_registry,
 )
 ```
 
-A service is any object. If it has `start()` or `stop()`, `MinitelApp.serve()`
-calls them before listening and in a `finally` block. A hook may be a normal
-function or a coroutine. Pages read services with `ctx.services` or
-`ctx.service("hackernews")`.
+A service package exports one decorated builder:
+
+```python
+from minitel.services import service
+
+@service("weather", description="Open-Meteo current conditions")
+def build_weather_service():
+    return WeatherService()
+```
+
+The decorator returns a `ServiceSpec(key, factory, description)`; the factory
+must be cheap and side-effect free. `ServiceRegistry.discover("services")`
+imports the package tree, sorts specs by key, builds each once, and rejects
+duplicate keys. `ServiceRegistry.start()` runs in key order; `stop()` runs in
+reverse order in a `finally` block. Hooks are optional and may be normal
+functions or coroutines.
+
+Pages declare their dependencies:
+
+```python
+@page("150", title="LIVE SCORES", requires=("sports",))
+```
+
+The server validates the full page/service graph before listening. Pages read
+services with `ctx.services` or `ctx.service("sports")`; they never construct a
+service or import its provider module. `minitel/` stays content-free;
+`services/` owns background data and lifecycle; `pages/` owns presentation.
 
 The library pieces:
 
@@ -612,14 +645,14 @@ The news example is split along the same lines:
   1. `112` declares `back_page="111"`, so typing `112` directly returns to the
   list first, then follows the existing history. A selected `Story` is kept in
   `ctx.state["news_story"]`; direct access to `112` shows `NO STORY SELECTED`.
-- `pages/news/source.py` owns the Hacker News URLs and field names, parses
+- `services/news/service.py` owns the Hacker News URLs and field names, parses
   `Story`/`Comment` objects, and wraps one `ResourceCache` for the front page
   and one for comments. The cache does not block a page paint; the first paint
   shows `LOADING` and a later tick shows the data.
 
 The weather page is a second, deliberately different cached source:
 
-- `pages/weather/source.py` owns the Open-Meteo URL, the location table, WMO
+- `services/weather/service.py` owns the Open-Meteo URL, the location table, WMO
   condition labels, and one cache entry per city. Each city is a separate key,
   so one failed location does not hide the others.
 - `pages/weather/page.py` renders one row per city with current temperature,
@@ -631,11 +664,11 @@ The weather page is a second, deliberately different cached source:
 
 The sports service is the reference for a keyed, shared, live feed:
 
-- `pages/sports/source.py` owns football-data.org v4 URLs, the `X-Auth-Token`
+- `services/sports/source.py` owns football-data.org v4 URLs, the `X-Auth-Token`
   header, status and team normalisation, and parsing. `get_json_response` is
   used so the source can read `x-requests-available-minute` (the documented
   `X-RequestsAvailable` alias is also accepted) and `X-RequestCounter-Reset`.
-- `pages/sports/feed.py` is the only poller. Pages call
+- `services/sports/feed.py` is the only poller. Pages call
   `ctx.service("sports").snapshot()` and never fetch. The snapshot is an
   immutable `FeedSnapshot` with `matches`, `alerts`, `loaded_at`, `updated_at`,
   `error`, `loading`, and quota fields. A failed refresh keeps the last good
@@ -660,7 +693,7 @@ The sports service is the reference for a keyed, shared, live feed:
 Configuration and secrets:
 
 - Copy `.env.example` to `.env`; `.env` is tracked by neither the inner nor the
-  outer Git repository. `pages/sports/config.py` loads simple `KEY=VALUE` lines
+  outer Git repository. `services/common/config.py` loads simple `KEY=VALUE` lines
   from the current directory or the repository root and calls
   `os.environ.setdefault`, so an exported variable wins.
 - The key is `FOOTBALL_API_KEY` (or `FOOTBALL_DATA_TOKEN`). Other settings are

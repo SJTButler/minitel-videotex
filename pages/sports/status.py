@@ -9,7 +9,7 @@ from ..layout import SECONDARY, WARNING, key_footer, page_input, status
 from .common import configured, service
 from .layout import clock_label
 from .live import LIVE_PAGE
-from .models import FeedSnapshot
+from services.sports.models import FeedSnapshot
 
 STATUS_PAGE = "154"
 
@@ -95,6 +95,7 @@ def status_screen(ctx):
 @page(
     STATUS_PAGE,
     title="FEED STATUS",
+    requires=("sports",),
     back_page=LIVE_PAGE,
     tick_interval=5.0,
     on_tick=status_screen,

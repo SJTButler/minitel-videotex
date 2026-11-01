@@ -5,6 +5,7 @@ from dataclasses import dataclass
 
 from minitel.cache import ResourceCache
 from minitel.http import get_json
+from minitel.services import service
 from minitel.text import domain
 
 FRONT_PAGE_URL = (
@@ -149,3 +150,8 @@ class HackerNewsService:
         return self.comment_cache.get(
             story_id, lambda: self.source.top_comment(story_id)
         )
+
+
+@service("hackernews", description="Hacker News front page and comments")
+def build_hackernews_service():
+    return HackerNewsService()

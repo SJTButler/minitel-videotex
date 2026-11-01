@@ -1,6 +1,7 @@
 import unittest
 
 import pages
+import services
 
 from minitel.app import MinitelApp
 from minitel.profiles import M1
@@ -43,11 +44,11 @@ class AppTests(unittest.IsolatedAsyncioTestCase):
         app = MinitelApp(self.registry)
         self.assertEqual(app.new_session().services, {})
 
-    def test_build_services_includes_weather(self):
-        services = pages.build_services()
-        self.assertIn("hackernews", services)
-        self.assertIn("weather", services)
-        self.assertIn("sports", services)
+    def test_discovered_services_include_weather(self):
+        service_registry = services.build_registry()
+        self.assertIn("hackernews", service_registry)
+        self.assertIn("weather", service_registry)
+        self.assertIn("sports", service_registry)
 
     def test_screensaver_config_propagates_to_sessions(self):
         app = MinitelApp(
@@ -81,8 +82,8 @@ class AppTests(unittest.IsolatedAsyncioTestCase):
             [
                 "one:start", "one:started",
                 "two:start", "two:started",
-                "one:stop", "one:stopped",
                 "two:stop", "two:stopped",
+                "one:stop", "one:stopped",
             ],
         )
 

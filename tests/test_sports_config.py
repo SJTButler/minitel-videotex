@@ -4,11 +4,11 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from pages.sports.config import (
+from services.common.config import load_env_file
+from services.sports.config import (
     DEFAULT_COMPETITIONS,
     DEFAULT_BASE_URL,
     SportsConfig,
-    load_env_file,
 )
 
 

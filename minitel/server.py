@@ -4,13 +4,28 @@ import argparse
 import asyncio
 
 import pages
+import services
 
 from .app import MinitelApp
 from .profiles import M1
 
 
+def missing_service_message(missing):
+    return ", ".join(
+        f"{key} (pages {', '.join(numbers)})"
+        for key, numbers in missing.items()
+    )
+
+
 def main():
     registry = pages.build_registry()
+    service_registry = services.build_registry()
+    missing = registry.missing_requirements(service_registry)
+    if missing:
+        raise SystemExit(
+            f"missing services: {missing_service_message(missing)}"
+        )
+
     modes = registry.screensaver_groups()
     default_mode = (
         pages.DEFAULT_SCREENSAVER
@@ -65,7 +80,7 @@ def main():
         guide=pages.GUIDE,
         cps=args.cps,
         echo=args.echo,
-        services=pages.build_services(),
+        services=service_registry,
         screensaver=screensaver,
         screensaver_after=args.screensaver_after,
         screensaver_hold=args.screensaver_hold,

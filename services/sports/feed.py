@@ -8,6 +8,7 @@ from datetime import datetime, timezone
 
 from minitel.cache import ResourceCache, Snapshot
 from minitel.http import HttpError
+from minitel.services import service
 
 from .config import SportsConfig
 from .models import Alert, FeedSnapshot, MatchStatus, competition_name
@@ -230,3 +231,8 @@ class SportsService:
             if (soonest - now).total_seconds() <= SOON_WINDOW:
                 return self.config.day_interval
         return self.config.idle_interval
+
+
+@service("sports", description="football-data.org")
+def build_sports_service():
+    return SportsService(config=SportsConfig.from_env())

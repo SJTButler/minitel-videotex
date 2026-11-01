@@ -3,9 +3,9 @@ import unittest
 from pathlib import Path
 
 from minitel.http import JsonResponse
-from pages.sports.config import DEFAULT_COMPETITIONS
-from pages.sports.models import MatchStatus
-from pages.sports.source import (
+from services.sports.config import DEFAULT_COMPETITIONS
+from services.sports.models import MatchStatus
+from services.sports.source import (
     FootballDataSource,
     goals_available,
     parse_goals,

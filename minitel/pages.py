@@ -139,6 +139,7 @@ class Page:
     no_screensaver = False
     tick_interval = None
     on_form = None
+    requires = ()
 
     def render(self, ctx: PageContext) -> Screen:
         raise NotImplementedError
@@ -160,15 +161,23 @@ class FunctionPage(Page):
     def __init__(self, number, render, *, title="", aliases=(), on_submit=None,
                  on_key=None, on_tick=None, tick_interval=None, form=False,
                  on_form=None, transient=False, back_page=None,
-                 screensaver=None, no_screensaver=False, meta=None):
+                 screensaver=None, no_screensaver=False, requires=(),
+                 meta=None):
         if screensaver is not None and (
             not isinstance(screensaver, str) or not screensaver
         ):
             raise TypeError("screensaver must be a non-empty string or None")
+        if isinstance(requires, str) or any(
+            not isinstance(key, str) or not key.strip()
+            for key in requires
+        ):
+            raise TypeError("requires must be a sequence of service keys")
+        requires = tuple(key.strip() for key in requires)
         self.number = number
         self._render = render
         self.title = title
         self.aliases = tuple(aliases)
+        self.requires = requires
         self.back_page = back_page
         self.screensaver = screensaver or None
         self.no_screensaver = bool(no_screensaver)
@@ -203,7 +212,7 @@ class FunctionPage(Page):
 def page(number, *, title="", aliases=(), on_submit=None, on_key=None,
          on_tick=None, tick_interval=None, form=False, on_form=None,
          transient=False, back_page=None, screensaver=None,
-         no_screensaver=False, **meta):
+         no_screensaver=False, requires=(), **meta):
     def decorator(fn):
         return FunctionPage(
             number,
@@ -220,6 +229,7 @@ def page(number, *, title="", aliases=(), on_submit=None, on_key=None,
             back_page=back_page,
             screensaver=screensaver,
             no_screensaver=no_screensaver,
+            requires=requires,
             meta=meta,
         )
     return decorator
@@ -252,6 +262,16 @@ class Registry:
         if page is None:
             raise KeyError(key)
         return page
+
+    def missing_requirements(self, services):
+        missing = {}
+        for page in self._pages:
+            for key in page.requires:
+                if key not in services:
+                    missing.setdefault(key, []).append(page.number)
+        return {
+            key: tuple(numbers) for key, numbers in missing.items()
+        }
 
     def screensaver_groups(self):
         groups = {}

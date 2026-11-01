@@ -1,7 +1,7 @@
 import asyncio
 import unittest
 
-from pages.weather.source import (
+from services.weather import (
     LOCATIONS,
     Weather,
     WeatherService,

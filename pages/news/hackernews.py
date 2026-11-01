@@ -206,6 +206,7 @@ def submit_list(ctx, line):
 @page(
     NEWS_PAGE,
     title="HACKER NEWS",
+    requires=("hackernews",),
     tick_interval=2.0,
     on_submit=submit_list,
     on_tick=list_screen,
@@ -295,6 +296,7 @@ def detail_screen(ctx):
 @page(
     STORY_PAGE,
     title="STORY",
+    requires=("hackernews",),
     back_page=NEWS_PAGE,
     tick_interval=1.0,
     on_tick=detail_screen,

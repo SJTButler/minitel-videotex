@@ -1,7 +1,7 @@
 import asyncio
 import unittest
 
-from pages.news.source import (
+from services.news import (
     Comment,
     HackerNewsService,
     HackerNewsSource,

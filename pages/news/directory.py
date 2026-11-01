@@ -90,6 +90,7 @@ def submit_directory(ctx, line):
     "110",
     title="NEWS",
     aliases=("1",),
+    requires=("hackernews",),
     tick_interval=5.0,
     on_submit=submit_directory,
     on_tick=directory_screen,

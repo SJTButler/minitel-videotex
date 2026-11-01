@@ -2,7 +2,7 @@
 
 __version__ = "0.2.0"
 
-from . import cache, codec, http, paging, text
+from . import cache, codec, http, paging, services, text
 from .cache import ResourceCache, Snapshot
 from .http import HttpError, JsonResponse, get_json, get_json_response
 from .carousel import Carousel
@@ -19,6 +19,7 @@ from .profiles import (
 from .screen import Cell, Screen
 from .render import render, render_diff
 from .pages import FunctionPage, InputField, Page, PageContext, Registry, page
+from .services import ServiceRegistry, ServiceSpec, service
 from .screensaver import Screensaver
 from .session import Action, Session
 from .app import MinitelApp
@@ -43,6 +44,8 @@ __all__ = [
     "ResourceCache",
     "Screen",
     "Screensaver",
+    "ServiceRegistry",
+    "ServiceSpec",
     "Session",
     "Snapshot",
     "TerminalProfile",
@@ -57,5 +60,7 @@ __all__ = [
     "paging",
     "render",
     "render_diff",
+    "service",
+    "services",
     "text",
 ]

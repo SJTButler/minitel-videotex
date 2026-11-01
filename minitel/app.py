@@ -1,7 +1,6 @@
 """Application layer: wire a registry, profile, session, and TCP transport."""
 
 import asyncio
-import inspect
 import socket
 import time
 
@@ -9,6 +8,7 @@ from . import transport
 from .profiles import M1
 from .render import render
 from .screensaver import Screensaver
+from .services import ServiceRegistry
 from .session import Session
 
 
@@ -25,7 +25,10 @@ class MinitelApp:
         self.cps = cps if cps is not None else profile.max_speed / 9
         self.echo = echo
         self.log = log or self._default_log
-        self.services = dict(services or {})
+        self.services = (
+            services if isinstance(services, ServiceRegistry)
+            else ServiceRegistry(services)
+        )
         self.clock = clock or time.monotonic
         self.screensaver = (
             Screensaver.from_spec(
@@ -108,22 +111,10 @@ class MinitelApp:
         await writer.wait_closed()
 
     async def _start_services(self):
-        for service in self.services.values():
-            hook = getattr(service, "start", None)
-            if hook is None:
-                continue
-            result = hook()
-            if inspect.isawaitable(result):
-                await result
+        await self.services.start()
 
     async def _stop_services(self):
-        for service in self.services.values():
-            hook = getattr(service, "stop", None)
-            if hook is None:
-                continue
-            result = hook()
-            if inspect.isawaitable(result):
-                await result
+        await self.services.stop()
 
     async def serve(self, host="0.0.0.0", port=3615):
         try:

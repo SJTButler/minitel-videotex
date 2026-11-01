@@ -23,7 +23,7 @@ from .layout import (
     minute_label,
     score_label,
 )
-from .models import FeedSnapshot, MatchStatus
+from services.sports.models import FeedSnapshot, MatchStatus
 
 LIVE_PAGE = "150"
 DETAIL_PAGE = "151"
@@ -351,6 +351,7 @@ def submit_live(ctx, line):
     LIVE_PAGE,
     title="LIVE SCORES",
     aliases=("5",),
+    requires=("sports",),
     tick_interval=5.0,
     on_submit=submit_live,
     on_tick=live_screen,

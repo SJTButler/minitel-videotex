@@ -5,6 +5,7 @@ from dataclasses import dataclass
 
 from minitel.cache import ResourceCache
 from minitel.http import get_json
+from minitel.services import service
 
 BASE_URL = "https://api.open-meteo.com/v1/forecast"
 
@@ -160,3 +161,8 @@ class WeatherService:
         return self.cache.get(
             location.key, lambda: self.source.weather(location)
         )
+
+
+@service("weather", description="Open-Meteo current conditions")
+def build_weather_service():
+    return WeatherService()

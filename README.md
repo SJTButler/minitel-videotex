@@ -20,12 +20,25 @@ minitel/       reusable, content-free library
   carousel.py  timed advance policy for a page sequence
   screensaver.py idle takeover, page sequence, carousel timing
   app.py       registry + profile + session + transport + services
+  services.py  ServiceRegistry, ServiceSpec, @service
   transport.py TCP and paced writes
   text.py      remote text sanitising, fit/wrap, domain, age
   paging.py    fixed-size paging arithmetic
   cache.py     non-blocking cache with stale-on-error snapshots
   http.py      small synchronous JSON client
-pages/         example service, auto-discovered
+services/      background services, auto-discovered
+  common/
+    config.py    .env loader and shared env helpers
+  news/
+    service.py   Hacker News source, cache, and service
+  weather/
+    service.py   Open-Meteo source, cache, and service
+  sports/
+    config.py    football-data.org configuration
+    models.py    provider-neutral Match, Team, Goal, and FeedSnapshot
+    source.py    football-data.org parsing and HTTP source
+    feed.py      one shared poller, alerts, quota, and standings cache
+pages/         example site, auto-discovered
   layout.py    shared status bar, PAGE field, footers
   home.py      page 100
   about.py     page 130
@@ -34,14 +47,9 @@ pages/         example service, auto-discovered
   news/
     directory.py page 110, the news service directory
     hackernews.py pages 111/112, headlines and story detail
-    source.py    Hacker News parsing and cached service
   weather/
     page.py      page 120, current conditions and today's forecast
-    source.py    Open-Meteo locations, parsing, and cached service
   sports/
-    models.py    provider-neutral Match, Team, Goal, and FeedSnapshot
-    source.py    football-data.org parsing, HTTP source, and fixtures
-    feed.py      one shared poller, alerts, quota, and standings cache
     live.py      page 150, league pages, kickoff groups, vidiprinter
     detail.py    page 151, match detail
     tables.py    page 153, league tables
@@ -55,8 +63,8 @@ pages/         example service, auto-discovered
   guestbook/
     page.py      page 140
     store.py     SQLite storage
-tests/         library and page tests
-tools/         first-light server, virtual Minitel decoder, interactive client
+tests/         library, service, and page tests
+tools/         server probes, virtual Minitel decoder, interactive client
 docs/          authoring guide
 ```
 
@@ -155,16 +163,29 @@ pass its own registry and page package without touching the library.
 
 ## Live data and services
 
-Long-running services are injected into the app and copied into each session:
+Long-running services live under `services/` and are discovered by the server:
 
 ```python
-app = MinitelApp(registry, services=pages.build_services())
+page_registry = pages.build_registry()
+service_registry = services.build_registry()
+missing = page_registry.missing_requirements(service_registry)
+app = MinitelApp(page_registry, services=service_registry)
 ```
 
-A service may define `start()` and `stop()`; either may be a normal function or
-a coroutine. `MinitelApp.serve()` starts services before listening and stops
-them in a `finally` block. Pages reach them through `ctx.services` or
-`ctx.service("hackernews")`, `ctx.service("weather")`, and so on.
+Each service package declares a cheap builder with `@service("key")`; the
+factory must not perform network I/O. `ServiceRegistry` starts services before
+listening and stops them in reverse order in a `finally` block. `start()` and
+`stop()` are optional and may be normal functions or coroutines.
+
+Pages declare their dependencies:
+
+```python
+@page("150", title="LIVE SCORES", requires=("sports",))
+```
+
+The server refuses to start if a required service key is missing. Pages reach
+services through `ctx.services` or `ctx.service("sports")`. `services/` is app
+infrastructure; `minitel/` remains content-free; `pages/` remains presentation.
 
 The news service is the worked example:
 
@@ -175,7 +196,7 @@ The news service is the worked example:
             -> 112 STORY detail with one comment
 ```
 
-- `pages/news/source.py` owns the Hacker News URLs, field names, parsing, and
+- `services/news/service.py` owns the Hacker News URLs, field names, parsing, and
   the cached service. The pages only see `Story` and `Comment` objects.
 - `minitel/cache.py` starts at most one loader thread per key and never blocks
   the render path. A stale value is kept when a refresh fails, so the terminal
@@ -194,7 +215,7 @@ The news service is the worked example:
 
 The weather page is the second cached service:
 
-- `pages/weather/source.py` owns the Open-Meteo URL, the four locations
+- `services/weather/service.py` owns the Open-Meteo URL, the four locations
   (`LONDON`, `PARIS`, `LYON`, `MARSEILLE`), WMO condition labels, parsing, and
   one `ResourceCache` entry per city. Data is cached for 600 seconds and failed
   loads retry after 60 seconds.
@@ -225,7 +246,7 @@ cp .env.example .env
 # edit FOOTBALL_API_KEY=...
 ```
 
-The loader in `pages/sports/config.py` reads `.env` from the current directory or
+The loader in `services/common/config.py` reads `.env` from the current directory or
 the repository root and never overrides variables already exported in the
 shell. The key is never logged or rendered.
 
@@ -239,10 +260,10 @@ shell. The key is never logged or rendered.
 - `pages/sports/live.py` shows one league per page with the league in the title,
   kickoff times as section headers, and two match columns under each time.
   `SUITE` moves through league pages; numeric selection opens match detail.
-- `pages/sports/source.py` owns the football-data.org URLs, field names, status
+- `services/sports/source.py` owns the football-data.org URLs, field names, status
   mapping, team abbreviations, and parsing. Pages only see `Match`, `Team`,
   `Goal`, and `StandingRow`.
-- `pages/sports/feed.py` owns the only poller. It fetches today's matches for the
+- `services/sports/feed.py` owns the only poller. It fetches today's matches for the
   configured competition codes in one request, derives goal/FT/KO/HT alerts, and
   keeps an immutable `FeedSnapshot`. A failed refresh keeps the last good
   snapshot and turns the pages into `DATA STALE` rather than blanking them.

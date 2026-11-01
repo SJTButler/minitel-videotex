@@ -3,10 +3,10 @@ import unittest
 from datetime import datetime, timezone
 
 from minitel.http import HttpError
-from pages.sports.config import SportsConfig
-from pages.sports.feed import SportsService
-from pages.sports.models import Match, MatchStatus, StandingRow, Team
-from pages.sports.source import FetchResult
+from services.sports.config import SportsConfig
+from services.sports.feed import SportsService
+from services.sports.models import Match, MatchStatus, StandingRow, Team
+from services.sports.source import FetchResult
 
 KICKOFF = datetime(2026, 11, 1, 15, 0, tzinfo=timezone.utc)
 

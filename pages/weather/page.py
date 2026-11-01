@@ -94,7 +94,7 @@ def weather_screen(ctx):
     return s
 
 
-@page("120", title="WEATHER", aliases=("2",), tick_interval=30.0,
-      on_tick=weather_screen)
+@page("120", title="WEATHER", aliases=("2",),
+      requires=("weather",), tick_interval=30.0, on_tick=weather_screen)
 def weather(ctx):
     return weather_screen(ctx)

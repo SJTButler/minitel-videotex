@@ -5,6 +5,7 @@ import pages
 
 from minitel import profiles
 from minitel.screen import Screen
+from minitel.server import missing_service_message
 from minitel.session import Session
 from pages.layout import footer, page_input, status
 
@@ -75,6 +76,14 @@ class PageTests(unittest.TestCase):
         ctx = Mock()
         page_input(s, ctx, cursor="auto")
         ctx.set_input.assert_called_once_with(20, 6, 10, cursor="auto")
+
+    def test_missing_service_message_names_pages(self):
+        self.assertEqual(
+            missing_service_message(
+                {"sports": ("150", "151"), "weather": ("120",)}
+            ),
+            "sports (pages 150, 151), weather (pages 120)",
+        )
 
 
 if __name__ == "__main__":
