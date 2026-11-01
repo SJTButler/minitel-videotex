@@ -5,7 +5,7 @@ from dataclasses import dataclass, replace
 
 from . import codec
 from .pages import Page, PageContext
-from .render import render_diff
+from .render import render_diff, reset
 from .screen import Screen
 from .screensaver import Screensaver
 
@@ -518,6 +518,8 @@ class Session:
             return Action()
         if isinstance(frame, (bytes, bytearray)):
             frame = bytes(frame)
+            if frame:
+                frame = reset() + frame
             if not self.screensaver_active and frame and self.active_field is not None:
                 frame += self._focus_frame()
             return Action(raw=frame)

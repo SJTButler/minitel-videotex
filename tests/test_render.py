@@ -55,6 +55,7 @@ class RenderTests(unittest.TestCase):
         grid = decoded.text().splitlines()
         self.assertTrue(grid[0].startswith("STATUS"))
         self.assertTrue(grid[1].startswith("HELLO"))
+        self.assertTrue(decoded.rows[1][0].inverse)
         self.assertTrue(grid[3].startswith("FIRST LIGHT"))
         self.assertEqual(grid[5], "=" * 40)
         self.assertTrue(grid[7].startswith("ACCENTS: é ç"))
@@ -85,6 +86,15 @@ class RenderTests(unittest.TestCase):
         s.text(1, 0, "BIG", size=codec.DOUBLE_WIDTH)
         decoded = decode(render(s))
         self.assertTrue(all(decoded.rows[1][i].size == codec.DOUBLE_WIDTH for i in range(3)))
+
+    def test_inverse_after_full_inverse_row_is_reasserted(self):
+        s = Screen()
+        s.fill(0, 0, 40, " ", inverse=True)
+        s.text(0, 0, "STATUS", inverse=True)
+        s.text(1, 0, "TITLE", inverse=True)
+
+        decoded = decode(render(s))
+        self.assertTrue(all(decoded.rows[1][i].inverse for i in range(5)))
 
     def test_repeat_rule_is_compact(self):
         s = Screen()
@@ -136,6 +146,22 @@ class DiffTests(unittest.TestCase):
         self.assertTrue(diff)
         decoded = apply_diff(old, diff)
         self.assertEqual((decoded.row, decoded.col), (10, 5))
+
+    def test_diff_resets_attributes_left_by_previous_paint(self):
+        old = Screen()
+        old.fill(9, 0, 40, " ", inverse=True)
+        old.text(9, 0, "TOP COMMENT", inverse=True)
+        old.field(20, 6, 10)
+
+        new = Screen()
+        new.fill(9, 0, 40, " ", inverse=True)
+        new.text(9, 0, "TOP COMMENT", inverse=True)
+        new.field(20, 6, 10)
+        new.text(10, 0, "COMMENT BODY")
+
+        decoded = apply_diff(old, render_diff(old, new))
+        self.assertTrue(decoded.text().splitlines()[10].startswith("COMMENT BODY"))
+        self.assertFalse(any(cell.inverse for cell in decoded.rows[10]))
 
     def test_diff_is_smaller_than_full_page(self):
         old = Screen()

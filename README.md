@@ -48,7 +48,7 @@ pages/         example service, auto-discovered
     page.py      page 140
     store.py     SQLite storage
 tests/         library and page tests
-tools/         first-light server and virtual Minitel decoder
+tools/         first-light server, virtual Minitel decoder, interactive client
 docs/          authoring guide
 ```
 
@@ -90,6 +90,16 @@ clock updates. Disable local echo first, otherwise characters are doubled. See
 `docs/authoring-pages.md` for the tradeoff.
 
 `--cps 0` disables pacing for a local test.
+
+To drive the server from this machine instead of a real terminal:
+
+```sh
+uv run python tools/minitel_client.py --connect 127.0.0.1:3615
+```
+
+The client uses local echo by default, matching the server default. If the
+server runs with `--echo`, start the client with `--no-local-echo` to avoid
+doubled characters. Use `--cps 0` on the server for an immediate local paint.
 
 ## Tests
 
@@ -246,11 +256,17 @@ discovered automatically.
 
 - `tools/hello.py` - first-light TCP server with terminal probes and key logging.
 - `tools/virtual_minitel.py` - decode a Videotex stream into a 25x40 grid.
+- `tools/minitel_client.py` - interactive curses terminal client that decodes a
+  live server session and sends Minitel keys.
 
 ```sh
 uv run python tools/virtual_minitel.py --demo --plain
 uv run python tools/virtual_minitel.py --connect 127.0.0.1:3615 --plain
+uv run python tools/minitel_client.py --connect 127.0.0.1:3615
 ```
+
+The interactive client shares the virtual Minitel decoder. `F9` shows the key
+map; `Ctrl+Q` quits.
 
 ## Scope
 

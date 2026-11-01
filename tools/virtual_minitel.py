@@ -86,6 +86,9 @@ class Screen:
         self.row = max(0, min(ROWS - 1, row))
         self.col = max(0, min(COLS - 1, col))
 
+    def reset_pen(self):
+        self.pen = Cell()
+
     def put(self, ch):
         if self.col >= COLS:
             self.col = 0
@@ -132,6 +135,7 @@ class Decoder:
                 row = self.buf[i + 1] - 0x40
                 col = self.buf[i + 2] - 0x40 - 1
                 self.screen.pos(row, col)
+                self.screen.reset_pen()
                 i += 3
             elif b == 0x19:
                 consumed, i = self._ss2(i)
@@ -152,6 +156,7 @@ class Decoder:
                 i += 1
             elif b == 0x1E:
                 self.screen.pos(1, 0)
+                self.screen.reset_pen()
                 i += 1
             elif b == 0x18:
                 self.screen.can()
@@ -170,6 +175,9 @@ class Decoder:
                 i += 1
             elif b == 0x0D:
                 self.screen.col = 0
+                i += 1
+            elif b == 0x08:
+                self.screen.col = max(0, self.screen.col - 1)
                 i += 1
             elif b == 0x0A or b == 0x0B:
                 self.screen.row = min(ROWS - 1, self.screen.row + 1)

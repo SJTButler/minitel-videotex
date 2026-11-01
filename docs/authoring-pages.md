@@ -7,7 +7,7 @@ minitel/     reusable library: codec, screen, render, profiles, page API,
              session, app, transport, text, paging, cache, http, screensaver
 pages/       the example service: layout helpers, pages, and data sources
 tests/       library and page tests
-tools/       first-light server, virtual Minitel decoder
+tools/       first-light server, virtual Minitel decoder, interactive client
 ```
 
 `minitel/` has no knowledge of `pages/`. You can point `MinitelApp` at any
@@ -387,9 +387,9 @@ def dynamic(ctx):
 - `tick_interval` is in seconds. `None` (the default) means static.
 - `MinitelApp` calls `on_tick` while the page is current. Navigating away stops
   ticks; navigating back paints the full page once and resumes.
-- Return **only the dynamic region** as raw bytes. The session appends
-  `pos(input)` plus the current cursor visibility, so the insertion point
-  returns to the `PAGE:` field.
+- Return **only the dynamic region** as raw bytes. The session prepends a full
+  attribute reset and appends `pos(input)` plus the current cursor visibility,
+  so the insertion point returns to the `PAGE:` field with a known pen state.
 - If a tick moves the cursor, use `page_input(s, ctx, cursor="auto")`. While
   the page is idle the cursor is hidden and ticks run. The first typed
   character sends `CON`, the cursor appears, and ticks pause while the line is
@@ -707,6 +707,16 @@ For a visual check:
 ```sh
 cd home_minitel_server
 python3 -m minitel.server --port 43620 --cps 0
+python3 tools/minitel_client.py --connect 127.0.0.1:43620
+```
+
+The interactive client renders the live session and sends real Minitel keys.
+Use `--no-local-echo` when the server runs with `--echo`; otherwise characters
+are doubled. `F9` shows the key map, and `Ctrl+Q` quits.
+
+For a one-shot capture or a replayable plain grid:
+
+```sh
 python3 tools/virtual_minitel.py --connect 127.0.0.1:43620 --plain
 ```
 

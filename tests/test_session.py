@@ -3,6 +3,7 @@ import unittest
 import pages
 
 from minitel import Registry, Screen, codec, page, profiles
+from minitel.render import reset
 from minitel.session import Session
 
 ENVOI = bytes([0x13, 0x41])
@@ -208,7 +209,11 @@ class SessionTests(unittest.TestCase):
         self.assertEqual(session.next_tick_delay(), 0.5)
         action = session.tick()
         expected = (
-            b"CLOCK" + codec.pos(20, 6) + codec.cursor(True) + codec.inverse(False)
+            reset()
+            + b"CLOCK"
+            + codec.pos(20, 6)
+            + codec.cursor(True)
+            + codec.inverse(False)
         )
         self.assertEqual(action.raw, expected)
 
@@ -231,7 +236,11 @@ class SessionTests(unittest.TestCase):
         self.assertFalse(screen.cursor_visible)
         action = session.tick()
         expected = (
-            b"X" + codec.pos(20, 6) + codec.cursor(False) + codec.inverse(False)
+            reset()
+            + b"X"
+            + codec.pos(20, 6)
+            + codec.cursor(False)
+            + codec.inverse(False)
         )
         self.assertEqual(action.raw, expected)
 

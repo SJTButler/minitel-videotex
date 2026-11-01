@@ -7,6 +7,16 @@ DEFAULT_ATTRS = (codec.WHITE, codec.BLACK, False, False, False, codec.NORMAL)
 DEFAULT_CELL = Cell()
 
 
+def default_state():
+    return {
+        "fg": codec.WHITE,
+        "bg": codec.BLACK,
+        "inverse": False,
+        "flash": False,
+        "underline": False,
+    }
+
+
 def attrs(cell):
     return (cell.fg, cell.bg, cell.inverse, cell.flash, cell.underline, cell.size)
 
@@ -65,13 +75,7 @@ def render(screen):
     out += reset()
     out += codec.pos(0, 0) + bytes([codec.CAN])
     out += codec.clear()
-    state = {
-        "fg": codec.WHITE,
-        "bg": codec.BLACK,
-        "inverse": False,
-        "flash": False,
-        "underline": False,
-    }
+    state = default_state()
     out += reset()
 
     for row_index, row in enumerate(screen.rows):
@@ -89,6 +93,7 @@ def render(screen):
 
             run = row[start:col]
             out += codec.pos(row_index, start)
+            state = default_state()
             out += attr_bytes(state, run[0])
             if run[0].size != codec.NORMAL:
                 out += codec.size(run[0].size)
@@ -97,6 +102,7 @@ def render(screen):
                 out += codec.size(codec.NORMAL)
 
     out += codec.pos(screen.cursor_row, screen.cursor_col)
+    state = default_state()
     out += codec.cursor(screen.cursor_visible)
     cell = screen.rows[screen.cursor_row][screen.cursor_col]
     out += attr_bytes(state, cell)
@@ -121,18 +127,14 @@ def render_diff(old, new):
     out = bytearray()
     if changed:
         out += codec.cursor(False)
+    out += reset()
 
-    state = {
-        "fg": codec.WHITE,
-        "bg": codec.BLACK,
-        "inverse": False,
-        "flash": False,
-        "underline": False,
-    }
+    state = default_state()
 
     for row_index in changed:
         row = new.rows[row_index]
         out += codec.pos(row_index, 0)
+        state = default_state()
         out += attr_bytes(state, DEFAULT_CELL)
         out += bytes([codec.CAN])
 
@@ -150,6 +152,7 @@ def render_diff(old, new):
 
             run = row[start:col]
             out += codec.pos(row_index, start)
+            state = default_state()
             out += attr_bytes(state, run[0])
             if run[0].size != codec.NORMAL:
                 out += codec.size(run[0].size)
@@ -158,6 +161,7 @@ def render_diff(old, new):
                 out += codec.size(codec.NORMAL)
 
     out += codec.pos(new.cursor_row, new.cursor_col)
+    state = default_state()
     out += codec.cursor(new.cursor_visible)
     cursor_cell = new.rows[new.cursor_row][new.cursor_col]
     out += attr_bytes(state, cursor_cell)
