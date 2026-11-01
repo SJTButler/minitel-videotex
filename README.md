@@ -38,6 +38,14 @@ pages/         example service, auto-discovered
   weather/
     page.py      page 120, current conditions and today's forecast
     source.py    Open-Meteo locations, parsing, and cached service
+  sports/
+    models.py    provider-neutral Match, Team, Goal, and FeedSnapshot
+    source.py    football-data.org parsing, HTTP source, and fixtures
+    feed.py      one shared poller, alerts, quota, and standings cache
+    live.py      page 150, league pages, kickoff groups, vidiprinter
+    detail.py    page 151, match detail
+    tables.py    page 153, league tables
+    status.py    page 154, feed status
   screensavers/
     selector.py  page 190
     clock.py     page 900
@@ -207,6 +215,50 @@ The weather page is the second cached service:
 shadow screen and restores the input cursor. Raw bytes remain the cheaper choice
 for a single changing region.
 
+## Sports and live scores
+
+The football service uses [football-data.org](https://www.football-data.org/) v4.
+Put the token in `home_minitel_server/.env`; that file is ignored by Git.
+
+```sh
+cp .env.example .env
+# edit FOOTBALL_API_KEY=...
+```
+
+The loader in `pages/sports/config.py` reads `.env` from the current directory or
+the repository root and never overrides variables already exported in the
+shell. The key is never logged or rendered.
+
+```
+5 LIVE SCORES (page 150)
+  -> 151 MATCH detail
+  -> 153 TABLES
+  -> 154 FEED STATUS
+```
+
+- `pages/sports/live.py` shows one league per page with the league in the title,
+  kickoff times as section headers, and two match columns under each time.
+  `SUITE` moves through league pages; numeric selection opens match detail.
+- `pages/sports/source.py` owns the football-data.org URLs, field names, status
+  mapping, team abbreviations, and parsing. Pages only see `Match`, `Team`,
+  `Goal`, and `StandingRow`.
+- `pages/sports/feed.py` owns the only poller. It fetches today's matches for the
+  configured competition codes in one request, derives goal/FT/KO/HT alerts, and
+  keeps an immutable `FeedSnapshot`. A failed refresh keeps the last good
+  snapshot and turns the pages into `DATA STALE` rather than blanking them.
+- Polling adapts: 60 s while a match is live, 15 min near kickoff, 30 min when
+  idle. `x-requests-available-minute` and `X-RequestCounter-Reset` feed the quota line on
+  page 154; the poller slows down if the quota is nearly exhausted.
+- Standings are cached per competition for one day and loaded in the background.
+- The free football-data.org tier includes the top five leagues and other
+  competitions, but its scores are delayed and goal events are not included.
+  Live scores require the paid "Free w/ Livescores" plan; goal events require a
+  plan with goal scorers. Match detail omits the goals block entirely when the
+  provider does not return events, rather than drawing an empty section.
+
+`docs/authoring-pages.md` documents the page contract and the `.env`/service
+pattern.
+
 ## Screensavers
 
 An idle session can take over the display without navigating away from the
@@ -258,6 +310,8 @@ discovered automatically.
 - `tools/virtual_minitel.py` - decode a Videotex stream into a 25x40 grid.
 - `tools/minitel_client.py` - interactive curses terminal client that decodes a
   live server session and sends Minitel keys.
+- `tools/sports_probe.py` - fetch today's matches and an optional table through
+  the sports source without starting the server; never prints the token.
 
 ```sh
 uv run python tools/virtual_minitel.py --demo --plain

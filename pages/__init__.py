@@ -12,9 +12,12 @@ def build_registry():
 
 def build_services():
     from .news.source import HackerNewsService
+    from .sports.config import SportsConfig
+    from .sports.feed import SportsService
     from .weather.source import WeatherService
 
     return {
         "hackernews": HackerNewsService(),
         "weather": WeatherService(),
+        "sports": SportsService(config=SportsConfig.from_env()),
     }

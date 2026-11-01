@@ -180,9 +180,9 @@ def submit_list(ctx, line):
     pager = _list_pager(ctx, stories)
     window = pager.window(stories)
 
-    if value.isdigit() and 1 <= int(value) <= PAGE_SIZE:
+    if value.isdigit() and len(value) == 1 and int(value) != 0:
         number = int(value)
-        if number <= len(window):
+        if number <= PAGE_SIZE and number <= len(window):
             ctx.state["news_story"] = window[number - 1]
             _clear_error(ctx)
             return STORY_PAGE

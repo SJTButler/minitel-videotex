@@ -5,13 +5,14 @@ from email.message import Message
 from unittest.mock import patch
 from urllib.error import HTTPError, URLError
 
-from minitel.http import HttpError, get_json
+from minitel.http import HttpError, get_json, get_json_response
 
 
 class Response:
-    def __init__(self, body, status=200):
+    def __init__(self, body, status=200, headers=None):
         self.body = body
         self.status = status
+        self.headers = headers if headers is not None else Message()
 
     def read(self):
         return self.body
@@ -40,6 +41,21 @@ class HttpTests(unittest.TestCase):
         self.assertEqual(seen["url"], "https://example.test/data")
         self.assertTrue(seen["agent"].startswith("minitel-videotex/"))
         self.assertEqual(seen["timeout"], 3.0)
+
+    def test_response_headers_are_exposed(self):
+        headers = Message()
+        headers["X-RequestsAvailable"] = "9"
+
+        with patch(
+            "minitel.http.urlopen",
+            return_value=Response(
+                json.dumps({"ok": True}).encode("utf-8"), headers=headers
+            ),
+        ):
+            result = get_json_response("https://example.test/")
+
+        self.assertEqual(result.payload, {"ok": True})
+        self.assertEqual(result.headers["X-RequestsAvailable"], "9")
 
     def test_caller_headers_merge(self):
         seen = {}

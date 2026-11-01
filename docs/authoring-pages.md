@@ -590,6 +590,8 @@ The library pieces:
   deterministic tests.
 - `minitel/http.py` - `get_json(url, headers=None, timeout=10.0)` raises
   `HttpError` with `status`, `body`, and `retry_after`.
+  `get_json_response(...)` returns a `JsonResponse(payload, status, headers)`
+  when a service needs response headers such as rate-limit counters.
 - `minitel/text.py` - `plain`, `sanitize`, `fit`, `wrap`, `domain`, and `age`.
   Remote text is not guaranteed to be encodable: HTML tags, entities, curly
   quotes, emoji, and non-Latin scripts will crash the renderer if passed
@@ -626,6 +628,46 @@ The weather page is a second, deliberately different cached source:
   background loads.
 - The page credits Open-Meteo. The source is keyless and uses only the standard
   library.
+
+The sports service is the reference for a keyed, shared, live feed:
+
+- `pages/sports/source.py` owns football-data.org v4 URLs, the `X-Auth-Token`
+  header, status and team normalisation, and parsing. `get_json_response` is
+  used so the source can read `x-requests-available-minute` (the documented
+  `X-RequestsAvailable` alias is also accepted) and `X-RequestCounter-Reset`.
+- `pages/sports/feed.py` is the only poller. Pages call
+  `ctx.service("sports").snapshot()` and never fetch. The snapshot is an
+  immutable `FeedSnapshot` with `matches`, `alerts`, `loaded_at`, `updated_at`,
+  `error`, `loading`, and quota fields. A failed refresh keeps the last good
+  snapshot.
+- `pages/sports/live.py` is `150` and the `5` alias. One page is one league:
+  the title is `LIVE SCORES - PL`, kickoff times are section headers, and the
+  matches under each time are laid out in two `HOME SCORE AWAY` columns. A
+  league with more than ten time-pair rows continues on another page; the
+  session pager moves through league pages. Numeric `1`-`N` opens detail, and
+  the complete `Screen` is returned from `on_tick` so the session diffs it.
+  `151` declares `back_page="150"`; `153` is the read-mostly table sibling;
+  `154` shows the provider, quota, poll intervals, and last error. Today's
+  finished matches already appear on `150`, so there is no separate results
+  page.
+- Poll intervals adapt to the snapshot: live, near kickoff, or idle. Do not add
+  a page-local timer. A free football-data.org token returns delayed scores and
+  no goal events. `FeedSnapshot.goals_available` records whether the provider
+  included events; the detail page shows the goal list only when there are
+  goals, and otherwise omits the block (or shows one compact plan note). The
+  pages show `UPDATED` and never claim real-time.
+
+Configuration and secrets:
+
+- Copy `.env.example` to `.env`; `.env` is tracked by neither the inner nor the
+  outer Git repository. `pages/sports/config.py` loads simple `KEY=VALUE` lines
+  from the current directory or the repository root and calls
+  `os.environ.setdefault`, so an exported variable wins.
+- The key is `FOOTBALL_API_KEY` (or `FOOTBALL_DATA_TOKEN`). Other settings are
+  `FOOTBALL_API_BASE`, `FOOTBALL_COMPETITIONS`, the three intervals, the retry
+  delay, and the timeout.
+- Never log, render, or include a token in an error message. `HttpError` carries
+  the URL, status, body, and `Retry-After`, not request headers.
 
 A page that returns a complete `Screen` from `on_tick` gets the same cursor
 restoration as a normal render. That is what makes a list or detail page usable
@@ -672,6 +714,10 @@ Keep page numbers stable and descriptive. The example scheme is:
 | `120` | weather: current conditions and today's forecast |
 | `130` | about / guide |
 | `140` | guestbook |
+| `150` | live scores (`5` on the home menu) |
+| `151` | match detail |
+| `153` | league tables |
+| `154` | feed status |
 | `190` | screensaver selector (`7` on the home menu) |
 | `199` | hidden developer page directory; not linked from home |
 | `900` | CLOCK screensaver |

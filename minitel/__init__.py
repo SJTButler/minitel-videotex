@@ -4,7 +4,7 @@ __version__ = "0.2.0"
 
 from . import cache, codec, http, paging, text
 from .cache import ResourceCache, Snapshot
-from .http import HttpError, get_json
+from .http import HttpError, JsonResponse, get_json, get_json_response
 from .carousel import Carousel
 from .paging import Pager
 from .profiles import (
@@ -34,6 +34,7 @@ __all__ = [
     "FunctionPage",
     "HttpError",
     "InputField",
+    "JsonResponse",
     "MinitelApp",
     "Page",
     "PageContext",
@@ -50,6 +51,7 @@ __all__ = [
     "codec",
     "cps",
     "get_json",
+    "get_json_response",
     "http",
     "page",
     "paging",

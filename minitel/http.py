@@ -2,11 +2,26 @@
 
 import json
 import time
+from dataclasses import dataclass, field
 from email.utils import parsedate_to_datetime
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
 DEFAULT_USER_AGENT = "minitel-videotex/0.2"
+
+
+@dataclass(frozen=True)
+class JsonResponse:
+    payload: object
+    status: int | None = None
+    headers: dict[str, str] = field(default_factory=dict)
+
+
+def _headers(response):
+    headers = getattr(response, "headers", None)
+    if headers is None:
+        return {}
+    return {str(name): str(value) for name, value in headers.items()}
 
 
 class HttpError(Exception):
@@ -36,7 +51,7 @@ def _retry_after(value):
     return max(0, int(when.timestamp() - time.time()))
 
 
-def get_json(url, headers=None, timeout=10.0):
+def get_json_response(url, headers=None, timeout=10.0):
     request_headers = {"User-Agent": DEFAULT_USER_AGENT}
     if headers:
         request_headers.update(headers)
@@ -45,6 +60,7 @@ def get_json(url, headers=None, timeout=10.0):
     try:
         with urlopen(request, timeout=timeout) as response:
             status = getattr(response, "status", None)
+            response_headers = _headers(response)
             body = response.read()
     except HTTPError as exc:
         body = exc.read() if exc.fp is not None else b""
@@ -63,8 +79,13 @@ def get_json(url, headers=None, timeout=10.0):
         raise HttpError(url, message=str(exc), body=b"") from exc
 
     try:
-        return json.loads(body.decode("utf-8"))
+        payload = json.loads(body.decode("utf-8"))
     except (UnicodeDecodeError, json.JSONDecodeError) as exc:
         raise HttpError(
             url, status=status, message="invalid JSON", body=body
         ) from exc
+    return JsonResponse(payload, status=status, headers=response_headers)
+
+
+def get_json(url, headers=None, timeout=10.0):
+    return get_json_response(url, headers=headers, timeout=timeout).payload

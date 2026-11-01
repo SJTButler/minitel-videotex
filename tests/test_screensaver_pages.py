@@ -113,8 +113,9 @@ class ScreensaverPageTests(unittest.TestCase):
             fallback=self.registry.get(pages.NOT_FOUND),
         )
         text = session.start().to_text().splitlines()
-        self.assertEqual(text[9].strip(), "7  SCREENSAVER")
-        self.assertIn("TYPE A NUMBER", text[10])
+        self.assertEqual(text[9].strip(), "5  LIVE SCORES")
+        self.assertEqual(text[10].strip(), "7  SCREENSAVER")
+        self.assertIn("TYPE A NUMBER", text[11])
 
     def test_clock_page(self):
         session = Session(
