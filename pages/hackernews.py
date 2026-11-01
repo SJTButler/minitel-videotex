@@ -122,7 +122,7 @@ def _list_pager(ctx, stories):
     return ctx.set_pager(
         len(stories),
         PAGE_SIZE,
-        carousel=Carousel(hold=20.0, wrap=True)
+        carousel=Carousel(hold=30.0, wrap=True)
     )
 
 def list_screen(ctx):

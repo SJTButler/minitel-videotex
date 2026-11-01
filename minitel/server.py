@@ -47,8 +47,8 @@ def main():
     ap.add_argument(
         "--screensaver-hold",
         type=float,
-        default=20.0,
-        help="seconds to hold each screensaver page (default: 20)",
+        default=30.0,
+        help="seconds to hold each screensaver page (default: 30)",
     )
     args = ap.parse_args()
 
