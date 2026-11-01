@@ -5,7 +5,7 @@ from dataclasses import dataclass
 
 @dataclass(frozen=True)
 class Carousel:
-    hold: float = 20.0
+    hold: float = 30.0
     wrap: bool = True
 
     def __post_init__(self):

@@ -59,7 +59,8 @@ The decorator form is the shortest:
 ```python
 @page(number, title="", aliases=(), on_submit=None, on_key=None,
       on_tick=None, tick_interval=None, form=False, on_form=None,
-      transient=False, back_page=None, **meta)
+      transient=False, back_page=None, screensaver=None,
+      no_screensaver=False, **meta)
 def render(ctx):
     return Screen()
 ```
@@ -79,6 +80,11 @@ def render(ctx):
 - `back_page="111"` is the logical `RETOUR` target for direct entry. If history
   does not already point there, `RETOUR` navigates there without pushing the
   current page; the next `RETOUR` follows the saved history.
+- `screensaver="group"` declares this page as part of a screensaver sequence;
+  see [Screensavers](#screensavers).
+- `no_screensaver=True` suppresses automatic screensaver takeover while this
+  page is current. Manual activation still works. Use it for pages that already
+  change on idle; see [Content carousels](#content-carousels).
 - `meta` is free-form; useful for a custom app.
 
 For stateful or larger pages, subclass `Page`:
@@ -121,7 +127,7 @@ Every `render`, `on_submit`, `on_form`, and `on_key` receives a
 | `ctx.fields` | the registered fields |
 | `ctx.add_field(name, row, col, width, *, cursor="visible")` | register a named field |
 | `ctx.set_input(row, col, width, *, cursor="visible")` | one-field shorthand |
-| `ctx.set_pager(total, page_size, *, offset=None)` | register a session-owned pager |
+| `ctx.set_pager(total, page_size, *, offset=None, carousel=None)` | register a session-owned pager, optionally with timed advance |
 | `ctx.pager` | the `Pager` registered for this render |
 | `ctx.focus(name)` | request focus when the page rerenders |
 | `ctx.page_for(key)` | look up another page |
@@ -498,6 +504,42 @@ Rules for screensaver pages:
 Mechanism tests use a fake clock and call `next_timeout()`/`on_timeout()`
 directly; page tests assert layout and the ball's bounds. No sleeps are needed.
 
+## Content carousels
+
+A page can give its content pager a timed advance policy. It is the same
+`Carousel` value the screensaver uses, attached to the page's `Pager` rather than
+a takeover. `Carousel` is exported from `minitel`.
+
+- The page registers the pager with a carousel hold and wrap flag.
+- The session owns the deadline and advances the pager when the page is current,
+  the field is empty, and the screensaver is not active.
+- Input and navigation reset the interval. Page ticks do **not**.
+- Any non-empty field pauses the carousel, so a list cannot move under a
+  half-typed selection.
+- Fewer than two pages means no advancement. With `wrap=False`, the carousel
+  stops at the last page.
+- Auto-advance updates the remembered pager offset and re-renders with the normal
+  diff. It does not navigate, push history, or call the submit handler.
+- The screensaver suspends the content carousel; wake or return starts a fresh
+  hold.
+- A data refresh that changes the total does not reset an unchanged page
+  position. Going from no pages to pages starts a fresh hold.
+
+A page that changes on idle will usually also set `no_screensaver=True`. That
+keeps the automatic screensaver from interrupting the content carousel; manual
+activation through the selector still works.
+
+If a page has several ways to register its pager (normal render, `on_tick`, and
+`on_submit`), declare the carousel in one helper and use that helper everywhere.
+Otherwise the session sees a different declaration and restarts the interval.
+This is also why the data tick must re-register the same pager with the same
+policy.
+
+The Hacker News list is not converted yet. Converting it means choosing a hold,
+declaring the same policy wherever the list registers its pager, adding
+`no_screensaver=True`, and leaving the two-second data tick in place. All of the
+timing remains in the session; the page gains no timer code.
+
 ## Partial updates
 
 The session keeps a shadow `Screen`. `Session.refresh()` re-renders the current
@@ -729,5 +771,7 @@ The library boundaries are deliberate:
 - Test on the M1 and with the virtual Minitel.
 - Screensaver pages draw the full screen, hide the cursor, and keep motion
   sparse; do not give them a `PAGE:` field.
+- Content carousels are declared on the pager, not implemented with page-local
+  timers. Pages that change on idle should usually set `no_screensaver=True`.
 - Keep `minitel/` free of application content; keep `pages/` free of protocol
   byte wrangling.

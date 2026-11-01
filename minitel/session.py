@@ -40,6 +40,9 @@ class Session:
         self.requested_focus = None
         self.pager = None
         self.pagers = {}
+        self._pager_carousel = None
+        self._pager_carousel_next = None
+        self._pager_carousel_key = None
         self.screen = None
         self.clock = clock
         self.screensaver = (
@@ -78,7 +81,10 @@ class Session:
             self.values[field.name] = value
 
     def _touch(self):
-        self.last_activity = self.clock()
+        now = self.clock()
+        self.last_activity = now
+        if self._pager_carousel is not None and self._pager_carousel.active:
+            self._pager_carousel_next = now + self._pager_carousel.hold
 
     def _reset_page(self):
         self.fields = []
@@ -87,6 +93,45 @@ class Session:
         self.active_name = None
         self.requested_focus = None
         self.pager = None
+        self._pager_carousel = None
+        self._pager_carousel_next = None
+        self._pager_carousel_key = None
+
+    def _has_input_text(self):
+        return any(self.values.get(field.name, "") for field in self.fields)
+
+    def _adopt_pager(self, pager, carousel):
+        if pager is None:
+            self.pager = None
+            self.pagers.pop(self.current.number, None)
+            self._pager_carousel = None
+            self._pager_carousel_next = None
+            self._pager_carousel_key = None
+            return
+        self.pager = pager
+        self.pagers[self.current.number] = pager
+        key = (pager.page_size, pager.offset, carousel)
+        if (
+            key != self._pager_carousel_key
+            or pager.page_count < 2
+            or (
+                self._pager_carousel_next is None
+                and carousel is not None
+                and carousel.active
+            )
+        ):
+            self._pager_carousel_key = key
+            self._pager_carousel = carousel
+            if (
+                carousel is not None
+                and carousel.active
+                and pager.page_count >= 2
+            ):
+                self._pager_carousel_next = self.clock() + carousel.hold
+            else:
+                self._pager_carousel_next = None
+        else:
+            self._pager_carousel = carousel
 
     def _clear_active_field(self):
         field = self.active_field
@@ -151,11 +196,7 @@ class Session:
             raise TypeError(
                 f"page {self.current.number!r} returned {type(screen)!r}, expected Screen"
             )
-        self.pager = ctx.pager
-        if ctx.pager is not None:
-            self.pagers[self.current.number] = ctx.pager
-        else:
-            self.pagers.pop(self.current.number, None)
+        self._adopt_pager(ctx.pager, ctx.pager_carousel)
         self.fields = ctx.fields
         names = [field.name for field in self.fields]
         self.values = {name: self.values.get(name, "") for name in names}
@@ -354,7 +395,11 @@ class Session:
 
     def _idle_delay(self, now):
         after = self._screensaver_after()
-        if after is None or self.current in self.screensaver.pages:
+        if after is None:
+            return None
+        if getattr(self.current, "no_screensaver", False):
+            return None
+        if self.current in self.screensaver.pages:
             return None
         return max(0.0, after - (now - self.last_activity))
 
@@ -373,6 +418,38 @@ class Session:
             return None
         return (steps + 1) * carousel.hold - elapsed
 
+    def _pager_carousel_delay(self, now):
+        if self.screensaver_active or self.pager is None:
+            return None
+        carousel = self._pager_carousel
+        if carousel is None or not carousel.active:
+            return None
+        if self._pager_carousel_next is None or self.pager.page_count < 2:
+            return None
+        if (
+            not carousel.wrap
+            and self.pager.page_index >= self.pager.page_count - 1
+        ):
+            return None
+        if self._has_input_text():
+            return None
+        return max(0.0, self._pager_carousel_next - now)
+
+    def _advance_pager_carousel(self, now):
+        carousel = self._pager_carousel
+        if carousel is None or self.pager is None:
+            return Action()
+        self.pager = self.pager.next(wrap=carousel.wrap)
+        self.pagers[self.current.number] = self.pager
+        self._pager_carousel_key = (
+            self.pager.page_size,
+            self.pager.offset,
+            carousel,
+        )
+        self._pager_carousel_next = now + carousel.hold
+        self._clear_active_field()
+        return self.refresh()
+
     def next_timeout(self):
         now = self.clock()
         deadlines = []
@@ -389,6 +466,9 @@ class Session:
             idle = self._idle_delay(now)
             if idle is not None:
                 deadlines.append(idle)
+            pager_carousel = self._pager_carousel_delay(now)
+            if pager_carousel is not None:
+                deadlines.append(pager_carousel)
             tick = self.next_tick_delay()
             if tick is not None:
                 deadlines.append(tick)
@@ -405,6 +485,9 @@ class Session:
             action = self.activate_screensaver()
             if action is not None:
                 return action
+        pager_carousel = self._pager_carousel_delay(now)
+        if pager_carousel is not None and pager_carousel <= 0:
+            return self._advance_pager_carousel(now)
         return self.tick()
 
     def _page_tick_interval(self, page, *, pause_on_input=True):
@@ -430,8 +513,7 @@ class Session:
         ctx = PageContext(self, page, self.registry)
         frame = page.on_tick(ctx)
         if not self.screensaver_active and ctx.pager is not None:
-            self.pager = ctx.pager
-            self.pagers[self.current.number] = ctx.pager
+            self._adopt_pager(ctx.pager, ctx.pager_carousel)
         if frame is None:
             return Action()
         if isinstance(frame, (bytes, bytearray)):

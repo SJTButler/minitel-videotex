@@ -202,6 +202,12 @@ activate immediately. The screensaver pages are `900` CLOCK, `901` TEST CARD,
 provides the same configuration for another service. Pages may call
 `ctx.set_screensaver(...)` or `ctx.start_screensaver()`.
 
+A content page can also give its pager a carousel policy. The session then
+advances the window on idle, resets on input, ignores data ticks, pauses while
+a field has text, and suspends during the screensaver. Pages that change on idle
+can set `no_screensaver=True` so the screensaver does not interrupt them. The
+Hacker News list has not been converted yet; the plumbing is in the library.
+
 ## Adding pages
 
 The full guide is in [`docs/authoring-pages.md`](docs/authoring-pages.md).

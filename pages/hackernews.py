@@ -2,7 +2,7 @@
 
 import time
 
-from minitel import codec
+from minitel import codec, Carousel
 from minitel.pages import page
 from minitel.screen import Screen
 from minitel.text import age, fit, sanitize, wrap
@@ -118,11 +118,17 @@ def _hint(ctx, snapshot, stories):
         return "LOADING NEWS..."
     return "TYPE 1-4, THEN ENVOI"
 
+def _list_pager(ctx, stories):
+    return ctx.set_pager(
+        len(stories),
+        PAGE_SIZE,
+        carousel=Carousel(hold=20.0, wrap=True)
+    )
 
 def list_screen(ctx):
     snapshot = _snapshot(ctx)
     stories = _stories(snapshot)
-    pager = ctx.set_pager(len(stories), PAGE_SIZE)
+    pager = _list_pager(ctx, stories)
     if (
         ctx.state.get("news_error")
         and ctx.state.get("news_error_offset") != pager.offset
@@ -171,7 +177,7 @@ def submit_list(ctx, line):
     value = line.strip()
     snapshot = _snapshot(ctx)
     stories = _stories(snapshot)
-    pager = ctx.set_pager(len(stories), PAGE_SIZE)
+    pager = _list_pager(ctx, stories)
     window = pager.window(stories)
 
     if value.isdigit() and 1 <= int(value) <= PAGE_SIZE:
@@ -203,6 +209,7 @@ def submit_list(ctx, line):
     tick_interval=2.0,
     on_submit=submit_list,
     on_tick=list_screen,
+    no_screensaver=True
 )
 def hacker_news(ctx):
     return list_screen(ctx)

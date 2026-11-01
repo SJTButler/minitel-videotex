@@ -4,6 +4,7 @@ import importlib
 import pkgutil
 from dataclasses import dataclass
 
+from .carousel import Carousel
 from .paging import Pager
 from .screen import Screen
 
@@ -31,6 +32,7 @@ class PageContext:
         self.values = session.values
         self.focus_name = None
         self.pager = None
+        self.pager_carousel = None
 
     @property
     def line(self):
@@ -79,7 +81,9 @@ class PageContext:
             mask=mask, value=value, cursor=cursor,
         )
 
-    def set_pager(self, total, page_size, *, offset=None):
+    def set_pager(self, total, page_size, *, offset=None, carousel=None):
+        if carousel is not None and not isinstance(carousel, Carousel):
+            raise TypeError("carousel must be a Carousel or None")
         if offset is None:
             current = self.session.pager
             if current is not None:
@@ -88,6 +92,7 @@ class PageContext:
                 stored = self.session.pagers.get(self.page.number)
                 offset = stored.offset if stored is not None else 0
         self.pager = Pager(total, page_size, offset).clamp()
+        self.pager_carousel = carousel
         return self.pager
 
     @property
@@ -131,6 +136,7 @@ class Page:
     transient = False
     back_page = None
     screensaver = None
+    no_screensaver = False
     tick_interval = None
     on_form = None
 
@@ -154,7 +160,7 @@ class FunctionPage(Page):
     def __init__(self, number, render, *, title="", aliases=(), on_submit=None,
                  on_key=None, on_tick=None, tick_interval=None, form=False,
                  on_form=None, transient=False, back_page=None,
-                 screensaver=None, meta=None):
+                 screensaver=None, no_screensaver=False, meta=None):
         if screensaver is not None and (
             not isinstance(screensaver, str) or not screensaver
         ):
@@ -165,6 +171,7 @@ class FunctionPage(Page):
         self.aliases = tuple(aliases)
         self.back_page = back_page
         self.screensaver = screensaver or None
+        self.no_screensaver = bool(no_screensaver)
         self._on_submit = on_submit
         self._on_key = on_key
         self._on_tick = on_tick
@@ -195,7 +202,8 @@ class FunctionPage(Page):
 
 def page(number, *, title="", aliases=(), on_submit=None, on_key=None,
          on_tick=None, tick_interval=None, form=False, on_form=None,
-         transient=False, back_page=None, screensaver=None, **meta):
+         transient=False, back_page=None, screensaver=None,
+         no_screensaver=False, **meta):
     def decorator(fn):
         return FunctionPage(
             number,
@@ -211,6 +219,7 @@ def page(number, *, title="", aliases=(), on_submit=None, on_key=None,
             transient=transient,
             back_page=back_page,
             screensaver=screensaver,
+            no_screensaver=no_screensaver,
             meta=meta,
         )
     return decorator
