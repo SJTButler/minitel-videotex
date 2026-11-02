@@ -40,6 +40,8 @@ class Session:
         self.requested_focus = None
         self.pager = None
         self.pagers = {}
+        self._resources = []
+        self._closed = False
         self._pager_carousel = None
         self._pager_carousel_next = None
         self._pager_carousel_key = None
@@ -96,6 +98,32 @@ class Session:
         self._pager_carousel = None
         self._pager_carousel_next = None
         self._pager_carousel_key = None
+
+    def add_resource(self, resource):
+        if self._closed:
+            raise RuntimeError("session is closed")
+        if resource is None:
+            raise TypeError("resource must not be None")
+        if not any(existing is resource for existing in self._resources):
+            self._resources.append(resource)
+        return resource
+
+    def close(self):
+        if self._closed:
+            return
+        self._closed = True
+        errors = []
+        for resource in reversed(self._resources):
+            hook = getattr(resource, "close", None)
+            if hook is None:
+                continue
+            try:
+                hook()
+            except Exception as exc:
+                errors.append(exc)
+        self._resources.clear()
+        if errors:
+            raise errors[0]
 
     def _has_input_text(self):
         return any(self.values.get(field.name, "") for field in self.fields)

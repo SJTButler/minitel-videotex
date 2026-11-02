@@ -13,6 +13,7 @@ def _store(ctx):
     store = ctx.state.get("guestbook_store")
     if store is None:
         store = guestbook_store.GuestbookStore()
+        ctx.add_resource(store)
         ctx.state["guestbook_store"] = store
     return store
 

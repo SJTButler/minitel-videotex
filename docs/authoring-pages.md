@@ -127,6 +127,7 @@ Every `render`, `on_submit`, `on_form`, and `on_key` receives a
 | `ctx.state` | a per-session dict for page state |
 | `ctx.services` | the process-wide injected services |
 | `ctx.service(name, default=None)` | look up one service |
+| `ctx.add_resource(resource)` | register a per-session object to close on disconnect |
 | `ctx.active_name` | the active field name, including a pending focus |
 | `ctx.values` | all field values for the current page |
 | `ctx.fields` | the registered fields |
@@ -143,6 +144,27 @@ Every `render`, `on_submit`, `on_form`, and `on_key` receives a
 | `ctx.start_screensaver(index=0)` | request an immediate takeover from a handler |
 
 `set_input` is the one-field shorthand; multi-field pages use `add_field`.
+
+## Session resources
+
+A service is process-wide and discovered by the server. A **session resource**
+is per-connection: a store, connection, or other object that a page creates for
+one connected terminal and that must be cleaned up when that connection ends.
+
+```python
+store = GuestbookStore()
+ctx.add_resource(store)
+ctx.state["guestbook_store"] = store
+```
+
+`Session.close()` calls each registered resource's `close()` once, in reverse
+registration order, and `MinitelApp.handle()` calls it when the connection
+ends, including on error. Resource close errors are logged by the app and do not
+prevent the other resources from closing.
+
+Use `ctx.add_resource` for stores and connection-scoped handles. Do not register
+a process-wide service; the app owns service lifecycle. Do not add a resource
+after the session has closed.
 Both tell the session where the cursor belongs and what the maximum length is.
 The cursor policy is `visible` (the default), `hidden` (never show it), or
 `auto` (hide while idle, show while the field is non-empty, and pause ticks

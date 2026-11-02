@@ -1,4 +1,5 @@
 import unittest
+from unittest.mock import patch
 
 import pages
 
@@ -121,6 +122,43 @@ class GuestbookFlowTests(unittest.TestCase):
         screen = self.session.render()
         self.assertIn("BOB", screen.to_text())
         self.assertIn("FIRST", screen.to_text())
+
+
+class GuestbookResourceTests(unittest.TestCase):
+    def test_session_close_closes_the_created_store(self):
+        created = []
+
+        class FakeStore:
+            def __init__(self, path=None):
+                self.closed = False
+                created.append(self)
+
+            def recent(self, limit=3):
+                return []
+
+            def add(self, handle, message):
+                pass
+
+            def close(self):
+                self.closed = True
+
+        registry = pages.build_registry()
+        session = Session(
+            registry,
+            profiles.M1,
+            initial="140",
+            fallback=registry.get(pages.NOT_FOUND),
+        )
+        with patch(
+            "pages.guestbook.page.guestbook_store.GuestbookStore",
+            FakeStore,
+        ):
+            session.start()
+            self.assertEqual(len(created), 1)
+            self.assertIs(session.state["guestbook_store"], created[0])
+            session.close()
+
+        self.assertTrue(created[0].closed)
 
 
 if __name__ == "__main__":

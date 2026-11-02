@@ -57,6 +57,9 @@ class PageContext:
     def service(self, name, default=None):
         return self.services.get(name, default)
 
+    def add_resource(self, resource):
+        return self.session.add_resource(resource)
+
     @property
     def active_name(self):
         return self.session.requested_focus or self.session.active_name

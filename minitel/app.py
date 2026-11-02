@@ -105,10 +105,14 @@ class MinitelApp:
                     await self._apply_action(writer, action, log)
         except (ConnectionResetError, BrokenPipeError):
             pass
-
-        self.log(peer, "disconnect")
-        writer.close()
-        await writer.wait_closed()
+        finally:
+            self.log(peer, "disconnect")
+            try:
+                session.close()
+            except Exception as exc:
+                self.log(peer, f"session close error: {exc!r}")
+            writer.close()
+            await writer.wait_closed()
 
     async def _start_services(self):
         await self.services.start()

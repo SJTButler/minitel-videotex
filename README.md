@@ -144,12 +144,14 @@ def hello(ctx):
 A page returns a `Screen`; `ctx.set_input(row, col, width)` tells the session
 where the cursor and input line belong. `PageContext` also provides
 `ctx.line`, `ctx.last_key`, `ctx.state`, `ctx.profile`, `ctx.registry`,
-`ctx.services`, `ctx.service(name)`, and `ctx.set_pager(total, page_size)`.
+`ctx.services`, `ctx.service(name)`, `ctx.add_resource(resource)`, and
+`ctx.set_pager(total, page_size)`.
 
 For a multi-field form, register fields with `ctx.add_field(...)`, set
 `form=True`, and implement `on_form(ctx, values)`. `SUITE`/`RETOUR` move focus;
 `RETOUR` at the first field goes back. The guestbook page is the reference
-example.
+example. Its SQLite store is registered with `ctx.add_resource` and closes when
+the connection ends.
 
 Partial updates use `render.render_diff` and `Session.refresh()`. Field echo,
 corrections, and focus keep the shadow screen in sync; a `Screen` returned by

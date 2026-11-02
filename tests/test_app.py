@@ -5,6 +5,7 @@ import services
 
 from minitel.app import MinitelApp
 from minitel.profiles import M1
+from minitel.screen import Screen
 
 
 class FakeService:
@@ -86,6 +87,49 @@ class AppTests(unittest.IsolatedAsyncioTestCase):
                 "one:stop", "one:stopped",
             ],
         )
+
+    async def test_handle_closes_the_session_on_disconnect(self):
+        closed = []
+
+        class FakeSession:
+            def start(self):
+                return Screen()
+
+            def next_timeout(self):
+                return None
+
+            def close(self):
+                closed.append(True)
+
+        class Reader:
+            async def read(self, size):
+                return b""
+
+        class Writer:
+            def get_extra_info(self, name):
+                return None
+
+            def write(self, data):
+                pass
+
+            async def drain(self):
+                pass
+
+            def close(self):
+                pass
+
+            async def wait_closed(self):
+                pass
+
+        app = MinitelApp(
+            self.registry,
+            cps=0,
+            log=lambda peer, message: None,
+        )
+        app.new_session = lambda: FakeSession()
+        await app.handle(Reader(), Writer())
+
+        self.assertEqual(closed, [True])
 
     async def test_sync_hooks_are_supported(self):
         events = []
