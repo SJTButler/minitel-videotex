@@ -20,8 +20,13 @@ minitel/       reusable, content-free library
   design/carousel.py   timed advance policy for a page sequence
   design/field.py      declarative input field
   pagemodel/model.py   Page, PageContext, Registry, @page
-  session/core.py      input, navigation, history, idle takeover
-  session/screensaver.py idle takeover, page sequence, carousel timing
+  session/core.py      Session orchestration: start/render/tick/handle/feed
+  session/navigation.py history, back_page, submit
+  session/editing.py   field focus, text editing, shadow cursor
+  session/idle.py      screensaver, idle timing, pager carousel
+  session/power.py     pause and resume
+  session/action.py    Action
+  session/screensaver.py Screensaver: pages, idle delay, carousel
   data/cache.py        non-blocking cache with stale-on-error snapshots
   data/http.py         small synchronous JSON client
   data/services.py     ServiceRegistry, ServiceSpec, @service
