@@ -149,9 +149,9 @@ def hello(ctx):
 
 A page returns a `Screen`; `ctx.set_input(row, col, width)` tells the session
 where the cursor and input line belong. `PageContext` also provides
-`ctx.line`, `ctx.last_key`, `ctx.state`, `ctx.profile`, `ctx.registry`,
-`ctx.services`, `ctx.service(name)`, `ctx.add_resource(resource)`, and
-`ctx.set_pager(total, page_size)`.
+`ctx.line`, `ctx.input_value`, `ctx.clear_input()`, `ctx.last_key`, `ctx.state`,
+`ctx.profile`, `ctx.registry`, `ctx.services`, `ctx.service(name)`,
+`ctx.add_resource(resource)`, and `ctx.set_pager(total, page_size)`.
 
 For a multi-field form, register fields with `ctx.add_field(...)`, set
 `form=True`, and implement `on_form(ctx, values)`. `SUITE`/`RETOUR` move focus;

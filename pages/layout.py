@@ -51,8 +51,8 @@ def form_footer(screen, ctx, fields):
     names = [name for name, _ in fields]
     active = ctx.active_name if ctx.active_name in names else (names[0] if names else None)
     index = names.index(active) if active in names else 0
-    next_label = fields[index + 1][1] if index + 1 < len(fields) else "(FIN)"
-    prev_label = fields[index - 1][1] if index > 0 else "SORTIR"
+    next_label = fields[index + 1][1] if index + 1 < len(fields) else "(END)"
+    prev_label = fields[index - 1][1] if index > 0 else "BACK"
     screen.text(
         22, 0, f"SUITE: {next_label}  RETOUR: {prev_label}"[:40]
     )

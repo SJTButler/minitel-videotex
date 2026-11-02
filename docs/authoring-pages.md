@@ -63,13 +63,15 @@ The decorator form is the shortest:
 @page(number, title="", aliases=(), on_submit=None, on_key=None,
       on_tick=None, tick_interval=None, form=False, on_form=None,
       transient=False, back_page=None, screensaver=None,
-      no_screensaver=False, **meta)
+      no_screensaver=False, requires=(), **meta)
 def render(ctx):
     return Screen()
 ```
 
 - `number` is the primary key (`"200"`).
 - `aliases` are extra keys (`("4",)` or `("", "0")` for the home page).
+- `requires=("sports",)` declares the process-wide services the page needs; the
+  server validates the graph at startup.
 - `title` is metadata; it is not drawn automatically.
 - `on_submit(ctx, line)` handles `ENVOI`/`Enter` for single-field pages.
 - `form=True` and `on_form(ctx, values)` handle multi-field forms; see
@@ -130,6 +132,8 @@ Every `render`, `on_submit`, `on_form`, and `on_key` receives a
 | `ctx.add_resource(resource)` | register a per-session object to close on disconnect |
 | `ctx.active_name` | the active field name, including a pending focus |
 | `ctx.values` | all field values for the current page |
+| `ctx.input_value` | the value of the `PAGE:` field |
+| `ctx.clear_input()` | clear the `PAGE:` field |
 | `ctx.fields` | the registered fields |
 | `ctx.add_field(name, row, col, width, *, cursor="visible")` | register a named field |
 | `ctx.set_input(row, col, width, *, cursor="visible")` | one-field shorthand |
@@ -144,6 +148,18 @@ Every `render`, `on_submit`, `on_form`, and `on_key` receives a
 | `ctx.start_screensaver(index=0)` | request an immediate takeover from a handler |
 
 `set_input` is the one-field shorthand; multi-field pages use `add_field`.
+Fields tell the session where the cursor belongs and what the maximum length is.
+The cursor policy is `visible` (the default), `hidden` (never show it), or
+`auto` (hide while idle, show while the field is non-empty, and pause ticks
+while typing). The inverse field remains the visual target when the cursor is
+hidden. `pages.layout.page_input` does both the drawing and the registration:
+
+```python
+page_input(s, ctx)
+```
+
+Without an input field, typing returns `BEL` and the cursor is parked at row
+24, column 0.
 
 ## Session resources
 
@@ -165,18 +181,6 @@ prevent the other resources from closing.
 Use `ctx.add_resource` for stores and connection-scoped handles. Do not register
 a process-wide service; the app owns service lifecycle. Do not add a resource
 after the session has closed.
-Both tell the session where the cursor belongs and what the maximum length is.
-The cursor policy is `visible` (the default), `hidden` (never show it), or
-`auto` (hide while idle, show while the field is non-empty, and pause ticks
-while typing). The inverse field remains the visual target when the cursor is
-hidden. `pages.layout.page_input` does both the drawing and the registration:
-
-```python
-page_input(s, ctx)
-```
-
-Without an input field, typing returns `BEL` and the cursor is parked at row
-24, column 0.
 
 ## Screen and attributes
 
