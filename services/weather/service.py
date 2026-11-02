@@ -26,10 +26,6 @@ class Weather:
     high: float | None = None
     low: float | None = None
 
-    @property
-    def condition(self):
-        return weather_label(self.code)
-
 
 LOCATIONS = (
     Location("london", "LONDON", 51.5072, -0.1276),
@@ -37,44 +33,6 @@ LOCATIONS = (
     Location("lyon", "LYON", 45.7640, 4.8357),
     Location("marseille", "MARSEILLE", 43.2965, 5.3698),
 )
-
-WEATHER_LABELS = {
-    0: "CLEAR",
-    1: "MAINLY CLEAR",
-    2: "PARTLY CLOUDY",
-    3: "OVERCAST",
-    45: "FOG",
-    48: "FOG",
-    51: "DRIZZLE",
-    53: "DRIZZLE",
-    55: "DRIZZLE",
-    56: "ICE DRIZZLE",
-    57: "ICE DRIZZLE",
-    61: "RAIN",
-    63: "RAIN",
-    65: "RAIN",
-    66: "ICE RAIN",
-    67: "ICE RAIN",
-    71: "SNOW",
-    73: "SNOW",
-    75: "SNOW",
-    77: "SNOW GRAINS",
-    80: "SHOWERS",
-    81: "SHOWERS",
-    82: "SHOWERS",
-    85: "SNOW SHOWERS",
-    86: "SNOW SHOWERS",
-    95: "THUNDERSTORM",
-    96: "STORM HAIL",
-    99: "STORM HAIL",
-}
-
-
-def weather_label(code):
-    if code is None:
-        return "UNKNOWN"
-    return WEATHER_LABELS.get(code, "UNKNOWN")
-
 
 def _as_float(value):
     try:

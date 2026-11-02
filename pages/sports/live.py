@@ -18,6 +18,7 @@ from ..common.messages import MessageLatch
 from ..common.service_status import ServiceState, classify, colour_for
 from ..common.widgets import page_input
 from .common import configured, service, snapshot
+from .labels import alert_text, competition_label
 from .layout import (
     clock_label,
     kickoff_label,
@@ -149,12 +150,6 @@ def _current_page(pager, pages):
     return window[0] if window else None
 
 
-def _competition_name(feed, code):
-    if feed is not None and hasattr(feed, "competition_name"):
-        return feed.competition_name(code)
-    return code
-
-
 def _header(feed, feed_snapshot, page):
     if not configured(feed):
         return "SPORTS FEED NOT CONFIGURED"
@@ -164,7 +159,7 @@ def _header(feed, feed_snapshot, page):
         return "LOADING MATCHES..."
     if page is None:
         return "NO MATCHES TODAY."
-    name = _competition_name(feed, page.code)
+    name = competition_label(page.code)
     if feed_snapshot.error:
         return fit(
             f"{name}  DATA STALE  UPD "
@@ -300,7 +295,7 @@ def live_screen(ctx):
     alerts = feed_snapshot.alerts[:ALERT_ROWS] if configured(feed) else ()
     if alerts:
         for index, alert in enumerate(alerts):
-            s.text(17 + index, 0, fit(alert.text, codec.COLS))
+            s.text(17 + index, 0, fit(alert_text(alert), codec.COLS))
     else:
         live = any(match.is_live for match in feed_snapshot.matches)
         note = "WATCHING FOR GOALS" if live else "WAITING FOR KICKOFF"

@@ -85,7 +85,12 @@ class Alert:
     at: datetime
     kind: str
     match_id: int
-    text: str
+    home: str
+    away: str
+    home_goals: int | None = None
+    away_goals: int | None = None
+    minute: int | None = None
+    injury_time: int | None = None
 
 
 @dataclass(frozen=True)
@@ -110,25 +115,3 @@ class FeedSnapshot:
         if now is None:
             now = time.monotonic()
         return max(0.0, now - self.loaded_at)
-
-
-COMPETITION_NAMES = {
-    "PL": "PREMIER LEAGUE",
-    "PD": "LA LIGA",
-    "BL1": "BUNDESLIGA",
-    "SA": "SERIE A",
-    "FL1": "LIGUE 1",
-    "CL": "CHAMPIONS LEAGUE",
-    "ELC": "CHAMPIONSHIP",
-    "EL1": "LEAGUE ONE",
-    "EL2": "LEAGUE TWO",
-    "DED": "EREDIVISIE",
-    "PPL": "PRIMEIRA LIGA",
-    "BSA": "BRASIL SERIE A",
-    "WC": "WORLD CUP",
-    "EC": "EUROPEAN CHAMPIONSHIP",
-}
-
-
-def competition_name(code):
-    return COMPETITION_NAMES.get(code.upper(), code.upper())

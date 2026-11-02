@@ -10,7 +10,6 @@ from .models import (
     MatchStatus,
     StandingRow,
     Team,
-    competition_name,
 )
 from .source import FootballDataSource, local_today
 
@@ -26,6 +25,5 @@ __all__ = [
     "StandingRow",
     "Team",
     "build_sports_service",
-    "competition_name",
     "local_today",
 ]

@@ -7,7 +7,6 @@ from services.weather import (
     WeatherService,
     WeatherSource,
     parse_weather,
-    weather_label,
 )
 
 
@@ -37,7 +36,6 @@ class ParseTests(unittest.TestCase):
         self.assertEqual(weather.code, 3)
         self.assertEqual(weather.high, 14.2)
         self.assertEqual(weather.low, 8.1)
-        self.assertEqual(weather.condition, "OVERCAST")
 
     def test_missing_optional_fields(self):
         weather = parse_weather({"current": {}}, "PARIS")
@@ -45,21 +43,12 @@ class ParseTests(unittest.TestCase):
         self.assertIsNone(weather.code)
         self.assertIsNone(weather.high)
         self.assertIsNone(weather.low)
-        self.assertEqual(weather.condition, "UNKNOWN")
 
     def test_invalid_payload(self):
         with self.assertRaises(ValueError):
             parse_weather(None, "LONDON")
         with self.assertRaises(ValueError):
             parse_weather({}, "LONDON")
-
-    def test_labels(self):
-        self.assertEqual(weather_label(0), "CLEAR")
-        self.assertEqual(weather_label(3), "OVERCAST")
-        self.assertEqual(weather_label(95), "THUNDERSTORM")
-        self.assertEqual(weather_label(None), "UNKNOWN")
-        self.assertEqual(weather_label(999), "UNKNOWN")
-
 
 class SourceTests(unittest.TestCase):
     def test_url_and_timeout(self):

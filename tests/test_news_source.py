@@ -55,10 +55,10 @@ class FrontPageParseTests(unittest.TestCase):
     def test_missing_fields_and_ask_hn_fallback(self):
         story = parse_front_page(self.payload())[1]
         self.assertEqual(story.id, 2)
-        self.assertEqual(story.title, "(NO TITLE)")
+        self.assertEqual(story.title, "")
         self.assertEqual(story.points, 0)
         self.assertEqual(story.comments, 0)
-        self.assertEqual(story.domain, "HACKER NEWS")
+        self.assertEqual(story.domain, "")
 
     def test_limit(self):
         self.assertEqual(len(parse_front_page(self.payload(), limit=1)), 1)

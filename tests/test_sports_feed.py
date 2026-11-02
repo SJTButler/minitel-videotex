@@ -99,8 +99,11 @@ class FeedTests(unittest.TestCase):
         alerts = feed.snapshot().alerts
         self.assertEqual(len(alerts), 1)
         self.assertEqual(alerts[0].kind, "GOAL")
-        self.assertIn("GOAL ARS 2-0 CHE", alerts[0].text)
-        self.assertIn("40'", alerts[0].text)
+        self.assertEqual(alerts[0].home, "ARS")
+        self.assertEqual(alerts[0].away, "CHE")
+        self.assertEqual(alerts[0].home_goals, 2)
+        self.assertEqual(alerts[0].away_goals, 0)
+        self.assertEqual(alerts[0].minute, 40)
 
     def test_finished_alert(self):
         source = FakeSource([
@@ -115,7 +118,10 @@ class FeedTests(unittest.TestCase):
 
         alerts = feed.snapshot().alerts
         self.assertEqual(alerts[0].kind, "FT")
-        self.assertEqual(alerts[0].text, "FT ARS 2-0 CHE")
+        self.assertEqual(alerts[0].home, "ARS")
+        self.assertEqual(alerts[0].away, "CHE")
+        self.assertEqual(alerts[0].home_goals, 2)
+        self.assertEqual(alerts[0].away_goals, 0)
 
     def test_kickoff_and_half_time_alerts(self):
         scheduled = match(

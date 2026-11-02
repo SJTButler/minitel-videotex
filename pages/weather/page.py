@@ -7,6 +7,7 @@ from minitel.screen import Screen
 from ..common.layout import SECONDARY, WARNING, footer, status
 from ..common.service_status import describe_many
 from ..common.widgets import page_input
+from .labels import condition_label
 
 
 def _temperature(value):
@@ -26,7 +27,7 @@ def _row(location, snapshot):
         weather = snapshot.value
         return (
             f"{location.name:<10} {_temperature(weather.temperature):>4}  "
-            f"{weather.condition[:13]:<13} "
+            f"{condition_label(weather.code)[:13]:<13} "
             f"{_degrees(weather.low):>3}/{_degrees(weather.high):<3}"
         )
     if snapshot.error is not None:

@@ -8,7 +8,6 @@ from .service import (
     WeatherSource,
     build_weather_service,
     parse_weather,
-    weather_label,
 )
 
 __all__ = [
@@ -19,5 +18,4 @@ __all__ = [
     "WeatherSource",
     "build_weather_service",
     "parse_weather",
-    "weather_label",
 ]

@@ -7,6 +7,7 @@ import pages
 from minitel import codec, profiles
 from minitel.cache import Snapshot
 from minitel.session import Session
+from pages.sports.labels import competition_label
 from pages.sports.layout import kickoff_label
 from services.sports.config import SportsConfig
 from services.sports.models import (
@@ -16,7 +17,6 @@ from services.sports.models import (
     MatchStatus,
     StandingRow,
     Team,
-    competition_name,
 )
 
 ENVOI = bytes([0x13, 0x41])
@@ -46,7 +46,7 @@ def make_match(match_id=1, status=MatchStatus.LIVE, home_goals=1,
         id=match_id,
         competition_id=2021,
         competition_code=code,
-        competition_name=competition_name(code),
+        competition_name=competition_label(code),
         home=Team(100 + number, f"TEAM {number:02d} HOME", f"T{number:02d}"[:3]),
         away=Team(200 + number, f"TEAM {number:02d} AWAY", f"A{number:02d}"[:3]),
         kickoff=kickoff,
@@ -91,9 +91,6 @@ class FakeSports:
         return self.standings_by_code.get(
             code, Snapshot(loading=True)
         )
-
-    def competition_name(self, code):
-        return competition_name(code)
 
 
 class FakeClock:
@@ -268,7 +265,7 @@ class LivePageTests(unittest.TestCase):
         )
 
     def test_vidiprinter_shows_alerts(self):
-        alert = Alert(KICKOFF, "GOAL", 1001, "GOAL ARS 2-1 CHE 34'")
+        alert = Alert(KICKOFF, "GOAL", 1001, "ARS", "CHE", 2, 1, 34)
         session = make_session(
             FakeSports(loaded_snapshot([ars_che()], alerts=[alert]))
         )

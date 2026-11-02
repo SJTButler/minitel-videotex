@@ -10,6 +10,7 @@ from ..common.messages import MessageLatch
 from ..common.service_status import ServiceState, classify, updated_label
 from ..common.widgets import page_input
 from .common import configured, service
+from .labels import competition_label
 from .live import LIVE_PAGE
 from .layout import table_header, table_row
 
@@ -41,7 +42,7 @@ def _header(feed, code, standings):
     state = _state(feed, standings)
     if state is ServiceState.MISSING:
         return "SPORTS FEED NOT CONFIGURED"
-    name = feed.competition_name(code)
+    name = competition_label(code)
     if state is ServiceState.LOADING:
         return f"{name}  LOADING TABLE..."
     if state is ServiceState.UNAVAILABLE:

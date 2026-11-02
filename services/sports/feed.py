@@ -11,7 +11,7 @@ from minitel.http import HttpError
 from minitel.services import service
 
 from .config import SportsConfig
-from .models import Alert, FeedSnapshot, MatchStatus, competition_name
+from .models import Alert, FeedSnapshot, MatchStatus
 from .source import FootballDataSource, local_today
 
 ALERT_LIMIT = 20
@@ -26,20 +26,6 @@ def _error_text(exc):
     if isinstance(exc, TimeoutError):
         return "TIMEOUT"
     return (str(exc) or exc.__class__.__name__)[:80]
-
-
-def _minute_text(match):
-    if match.minute is None:
-        return ""
-    if match.injury_time:
-        return f"{match.minute}+{match.injury_time}'"
-    return f"{match.minute}'"
-
-
-def _score_text(match):
-    if match.home_goals is None or match.away_goals is None:
-        return "V"
-    return f"{match.home_goals}-{match.away_goals}"
 
 
 class SportsService:
@@ -74,9 +60,6 @@ class SportsService:
     @property
     def competitions(self):
         return self.config.competitions
-
-    def competition_name(self, code):
-        return competition_name(code)
 
     def snapshot(self):
         return self._snapshot
@@ -167,21 +150,40 @@ class SportsService:
                 continue
             home = match.home.short
             away = match.away.short
-            score = _score_text(match)
             if (
                 old.status is MatchStatus.SCHEDULED
                 and match.status in (MatchStatus.LIVE, MatchStatus.HALF_TIME)
             ):
-                self._alert(match, "KO", f"KO {home} V {away}", now)
+                self._alert(Alert(now, "KO", match.id, home, away))
             if (
                 old.status is MatchStatus.LIVE
                 and match.status is MatchStatus.HALF_TIME
             ):
-                self._alert(match, "HT", f"HT {home} {score} {away}", now)
+                self._alert(
+                    Alert(
+                        now,
+                        "HT",
+                        match.id,
+                        home,
+                        away,
+                        match.home_goals,
+                        match.away_goals,
+                    )
+                )
             if (
                 old.is_live or old.status is MatchStatus.SCHEDULED
             ) and match.status is MatchStatus.FINISHED:
-                self._alert(match, "FT", f"FT {home} {score} {away}", now)
+                self._alert(
+                    Alert(
+                        now,
+                        "FT",
+                        match.id,
+                        home,
+                        away,
+                        match.home_goals,
+                        match.away_goals,
+                    )
+                )
             if (
                 old.home_goals is not None
                 and old.away_goals is not None
@@ -189,24 +191,47 @@ class SportsService:
                 and match.away_goals is not None
                 and match.goal_total > old.goal_total
             ):
-                minute = _minute_text(match)
-                suffix = f" {minute}" if minute else ""
                 self._alert(
-                    match,
-                    "GOAL",
-                    f"GOAL {home} {score} {away}{suffix}",
-                    now,
+                    Alert(
+                        now,
+                        "GOAL",
+                        match.id,
+                        home,
+                        away,
+                        match.home_goals,
+                        match.away_goals,
+                        match.minute,
+                        match.injury_time,
+                    )
                 )
 
-    def _alert(self, match, kind, text, now):
+    def _alert(self, alert):
+        key = (
+            alert.match_id,
+            alert.kind,
+            alert.home,
+            alert.away,
+            alert.home_goals,
+            alert.away_goals,
+            alert.minute,
+            alert.injury_time,
+        )
         if any(
-            alert.match_id == match.id
-            and alert.kind == kind
-            and alert.text == text
-            for alert in self._alerts
+            (
+                existing.match_id,
+                existing.kind,
+                existing.home,
+                existing.away,
+                existing.home_goals,
+                existing.away_goals,
+                existing.minute,
+                existing.injury_time,
+            )
+            == key
+            for existing in self._alerts
         ):
             return
-        self._alerts.insert(0, Alert(now, kind, match.id, text))
+        self._alerts.insert(0, alert)
         del self._alerts[ALERT_LIMIT:]
 
     def poll_delay(self, now=None):

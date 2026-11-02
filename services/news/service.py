@@ -27,7 +27,7 @@ class Story:
 
     @property
     def domain(self):
-        return domain(self.url) or "HACKER NEWS"
+        return domain(self.url)
 
 
 @dataclass(frozen=True)
@@ -64,7 +64,7 @@ def parse_front_page(payload, limit=30):
         stories.append(
             Story(
                 id=story_id,
-                title=hit.get("title") or "(NO TITLE)",
+                title=hit.get("title") or "",
                 url=hit.get("url") or "",
                 points=_as_int(hit.get("points"), 0),
                 comments=_as_int(hit.get("num_comments"), 0),
