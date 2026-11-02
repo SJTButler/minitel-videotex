@@ -17,9 +17,9 @@ from ..common.layout import (
 from ..common.messages import MessageLatch
 from ..common.service_status import ServiceState, classify, colour_for
 from ..common.widgets import page_input
-from .common import configured, service, snapshot
-from .labels import alert_text, competition_label
-from .layout import (
+from ._support.state import configured, service, snapshot
+from ._support.labels import alert_text, competition_label
+from ._support.layout import (
     clock_label,
     kickoff_label,
     match_sort_key,

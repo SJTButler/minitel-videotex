@@ -7,7 +7,7 @@ from minitel.text import fit
 
 from services.sports.models import MatchStatus
 
-from ..common.clock import clock_text
+from ...common.clock import clock_text
 
 try:
     from zoneinfo import ZoneInfo

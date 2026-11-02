@@ -1,7 +1,7 @@
 import unittest
 from datetime import datetime, timezone
 
-from pages.sports.labels import alert_text, competition_label
+from pages.sports._support.labels import alert_text, competition_label
 from services.sports.models import Alert
 
 NOW = datetime(2026, 11, 1, 15, 0, tzinfo=timezone.utc)

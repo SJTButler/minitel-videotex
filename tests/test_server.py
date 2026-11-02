@@ -7,7 +7,8 @@ from minitel import profiles
 from minitel.screen import Screen
 from minitel.session import Session
 from run_server import missing_service_message
-from pages.layout import footer, page_input, status
+from pages.common.layout import footer, status
+from pages.common.widgets import page_input
 
 
 class PageTests(unittest.TestCase):

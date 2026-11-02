@@ -7,7 +7,7 @@ from minitel import codec, profiles
 from minitel.cache import Snapshot
 from minitel.render import render
 from minitel.session import Session
-from pages.layout import ACCENT, SECONDARY
+from pages.common.layout import ACCENT, SECONDARY
 from services.news import Comment, Story
 from test_render import decode
 

@@ -7,8 +7,8 @@ from minitel.text import fit, wrap
 
 from ..common.layout import ACCENT, SECONDARY, WARNING, key_footer, status
 from ..common.widgets import page_input
-from .common import configured, find_match, service, snapshot
-from .layout import (
+from ._support.state import configured, find_match, service, snapshot
+from ._support.layout import (
     clock_label,
     day_label,
     goal_line,

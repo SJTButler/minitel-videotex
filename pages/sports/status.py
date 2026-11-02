@@ -7,8 +7,8 @@ from minitel.text import age, fit, sanitize, wrap
 
 from ..common.layout import SECONDARY, WARNING, key_footer, status
 from ..common.widgets import page_input
-from .common import configured, service
-from .layout import clock_label
+from ._support.state import configured, service
+from ._support.layout import clock_label
 from .live import LIVE_PAGE
 from services.sports.models import FeedSnapshot
 

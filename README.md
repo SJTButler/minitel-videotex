@@ -41,7 +41,7 @@ services/      background services, auto-discovered
     source.py    football-data.org parsing and HTTP source
     feed.py      one shared poller, alerts, quota, and standings cache
 pages/         example site, auto-discovered
-  layout.py    shared status bar, PAGE field, footers
+  common/      shared presentation: layout, widgets, status, messages, clock
   home.py      page 100
   about.py     page 130
   not_found.py fallback
@@ -51,11 +51,17 @@ pages/         example site, auto-discovered
     hackernews.py pages 111/112, headlines and story detail
   weather/
     page.py      page 120, current conditions and today's forecast
+    _support/
+      labels.py  condition labels
   sports/
     live.py      page 150, league pages, kickoff groups, vidiprinter
     detail.py    page 151, match detail
     tables.py    page 153, league tables
     status.py    page 154, feed status
+    _support/
+      state.py   service adapters and snapshot helpers
+      layout.py  sports formatting and geometry
+      labels.py  competition labels and alert text
   screensavers/
     selector.py  page 190
     clock.py     page 900
@@ -64,7 +70,8 @@ pages/         example site, auto-discovered
     promos.py    pages 910-912
   guestbook/
     page.py      page 140
-    store.py     SQLite storage
+    _support/
+      store.py   SQLite storage
 tests/         library, service, and page tests
 tools/         server probes, virtual Minitel decoder, interactive client
 docs/          authoring guide
@@ -165,9 +172,12 @@ corrections, and focus keep the shadow screen in sync; a `Screen` returned by
 tiny regions. Form focus re-renders and diffs, so `form_footer(s, ctx, fields)`
 can change its hints per field using `ctx.active_name`.
 
-The example service's layout helpers are in `pages/layout.py`. The application
-is wired in `run_server.py` with `MinitelApp`, so a different service can pass
-its own registry and page package without touching the library.
+The example service's shared presentation helpers are in `pages/common/`
+(`layout`, `widgets`, `service_status`, `messages`, and `clock`). Feature-private
+helpers live under `pages/<feature>/_support/`; the top level of each feature
+contains only page modules. The application is wired in `run_server.py` with
+`MinitelApp`, so a different service can pass its own registry and page package
+without touching the library.
 
 ## Live data and services
 
@@ -217,15 +227,16 @@ The news service is the worked example:
   remote title, author, domain, and comment goes through it before `Screen.text`.
 - `minitel/paging.py` provides the `Pager` used by the four-story list.
 - `minitel/http.py` provides `get_json()` and `HttpError` for cache threads.
-- `pages/layout.py` exposes `BODY`, `ACCENT`, `SECONDARY`, and `WARNING`. The
-  news pages use yellow story badges, cyan metadata, and magenta warnings; on
-  the monochrome M1 these are grey levels.
+- `pages/common/layout.py` exposes `BODY`, `ACCENT`, `SECONDARY`, and `WARNING`.
+  The news pages use yellow story badges, cyan metadata, and magenta warnings;
+  on the monochrome M1 these are grey levels.
 
 The weather page is the second cached service:
 
 - `services/weather/service.py` owns the Open-Meteo URL, the four locations
-  (`LONDON`, `PARIS`, `LYON`, `MARSEILLE`), WMO condition labels, parsing, and
-  one `ResourceCache` entry per city. Data is cached for 600 seconds and failed
+  (`LONDON`, `PARIS`, `LYON`, `MARSEILLE`), WMO code parsing, and one
+  `ResourceCache` entry per city. Condition labels live in
+  `pages/weather/_support/labels.py`. Data is cached for 600 seconds and failed
   loads retry after 60 seconds.
 - `pages/weather/page.py` renders `120` with one row per city: current temperature,
   condition, and today's low/high. It shows `LOADING`, `UNAVAILABLE`, or

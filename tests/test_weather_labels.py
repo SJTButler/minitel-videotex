@@ -1,6 +1,6 @@
 import unittest
 
-from pages.weather.labels import condition_label
+from pages.weather._support.labels import condition_label
 
 
 class WeatherLabelTests(unittest.TestCase):

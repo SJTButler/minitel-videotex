@@ -9,10 +9,10 @@ from ..common.layout import SECONDARY, WARNING, key_footer, status
 from ..common.messages import MessageLatch
 from ..common.service_status import ServiceState, classify, updated_label
 from ..common.widgets import page_input
-from .common import configured, service
-from .labels import competition_label
+from ._support.state import configured, service
+from ._support.labels import competition_label
 from .live import LIVE_PAGE
-from .layout import table_header, table_row
+from ._support.layout import table_header, table_row
 
 TABLES_PAGE = "153"
 PAGE_SIZE = 10

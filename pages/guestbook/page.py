@@ -2,7 +2,7 @@ from minitel import codec
 from minitel.pages import page
 from minitel.screen import Screen
 
-from . import store as guestbook_store
+from ._support import store as guestbook_store
 from ..common.layout import status
 from ..common.messages import MessageLatch
 from ..common.widgets import form_footer, line_field

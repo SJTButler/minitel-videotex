@@ -25,7 +25,8 @@ from datetime import datetime
 
 from minitel import Screen, codec, page
 
-from pages.layout import footer, page_input, status
+from pages.common.layout import footer, status
+from pages.common.widgets import page_input
 
 
 @page("200", title="HELLO")
@@ -152,7 +153,8 @@ Fields tell the session where the cursor belongs and what the maximum length is.
 The cursor policy is `visible` (the default), `hidden` (never show it), or
 `auto` (hide while idle, show while the field is non-empty, and pause ticks
 while typing). The inverse field remains the visual target when the cursor is
-hidden. `pages.layout.page_input` does both the drawing and the registration:
+hidden. `pages.common.widgets.page_input` does both the drawing and the
+registration:
 
 ```python
 page_input(s, ctx)
@@ -219,7 +221,9 @@ and the input parser. Most pages should not need it beyond constants.
 
 ## Layout helpers
 
-`pages/layout.py` is the shared theme:
+`pages/common/` is the shared presentation tier. Feature-private helpers live
+under `pages/<feature>/_support/`; the top level of each feature contains only
+page modules. The shared theme is:
 
 - `status(s, "PAGE 200")` paints the full inverse top row and keeps the page
   number clear of the terminal's `F/C` indicator.
@@ -311,7 +315,8 @@ def form(ctx):
 with:
 
 ```python
-from pages.layout import form_footer, line_field, status
+from pages.common.layout import status
+from pages.common.widgets import form_footer, line_field
 ```
 
 - `line_field` draws the label, inverse bar, and current value, then registers
@@ -858,7 +863,7 @@ default (1200/9).
 Give the model a small, concrete context:
 
 - this document,
-- `pages/home.py` and `pages/layout.py`,
+- `pages/home.py` and `pages/common/`,
 - `minitel/pages.py` and `minitel/screen.py`,
 - the test command.
 
@@ -867,7 +872,7 @@ A prompt that works well:
 ```
 Add a Minitel page in pages/ using the existing library.
 - Use @page from minitel and Screen.
-- Use pages.layout.status, footer, and page_input.
+- Use pages.common.layout.status/footer and pages.common.widgets.page_input.
 - Keep to 40 columns and rows 0-24; row 0 is status, row 20 is PAGE, row 22 is footer.
 - Call page_input(s, ctx) for a single field, or ctx.add_field(...) and
   form=True/on_form(ctx, values) for a multi-field form.
@@ -904,7 +909,7 @@ The library boundaries are deliberate:
   work above `Session`.
 - **Forms**: multi-field focus and `on_form` are implemented. Field masks,
   validators, and cursor/insert editing are natural extensions of `Session`.
-- **Themes**: copy `pages/layout.py` or create another layout package. The core
+- **Themes**: copy `pages/common/` or create another layout package. The core
   renderer does not contain the `3615 KILO` status bar.
 
 ## Rules of thumb

@@ -7,7 +7,7 @@ from minitel.screen import Screen
 from ..common.layout import SECONDARY, WARNING, footer, status
 from ..common.service_status import describe_many
 from ..common.widgets import page_input
-from .labels import condition_label
+from ._support.labels import condition_label
 
 
 def _temperature(value):

@@ -6,7 +6,7 @@ import pages
 from minitel import profiles
 from minitel.cache import Snapshot
 from minitel.session import Session
-from pages.layout import ACCENT, SECONDARY, WARNING
+from pages.common.layout import ACCENT, SECONDARY, WARNING
 from services.news import Story
 
 ENVOI = bytes([0x13, 0x41])

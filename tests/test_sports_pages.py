@@ -7,8 +7,8 @@ import pages
 from minitel import codec, profiles
 from minitel.cache import Snapshot
 from minitel.session import Session
-from pages.sports.labels import competition_label
-from pages.sports.layout import kickoff_label
+from pages.sports._support.labels import competition_label
+from pages.sports._support.layout import kickoff_label
 from services.sports.config import SportsConfig
 from services.sports.models import (
     Alert,

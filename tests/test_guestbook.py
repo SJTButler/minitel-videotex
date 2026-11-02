@@ -5,7 +5,7 @@ import pages
 
 from minitel import profiles
 from minitel.session import Session
-from pages.guestbook.store import GuestbookStore
+from pages.guestbook._support.store import GuestbookStore
 
 ENVOI = bytes([0x13, 0x41])
 RETOUR = bytes([0x13, 0x42])

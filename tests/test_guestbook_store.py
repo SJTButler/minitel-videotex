@@ -1,6 +1,6 @@
 import unittest
 
-from pages.guestbook.store import GuestbookStore
+from pages.guestbook._support.store import GuestbookStore
 
 
 class GuestbookStoreTests(unittest.TestCase):
