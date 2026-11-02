@@ -5,6 +5,7 @@ import socket
 import time
 
 from . import transport
+from .power import PowerSignals
 from .profiles import M1
 from .render import render
 from .screensaver import Screensaver
@@ -16,7 +17,7 @@ class MinitelApp:
     def __init__(self, registry, *, profile=M1, initial="100", fallback=None,
                  guide=None, cps=None, echo=False, log=None, services=None,
                  screensaver=None, screensaver_after=120.0,
-                 screensaver_hold=20.0, clock=None):
+                 screensaver_hold=20.0, power=None, clock=None):
         self.registry = registry
         self.profile = profile
         self.initial = initial
@@ -28,6 +29,9 @@ class MinitelApp:
         self.services = (
             services if isinstance(services, ServiceRegistry)
             else ServiceRegistry(services)
+        )
+        self.power_signals = (
+            power if isinstance(power, PowerSignals) else PowerSignals()
         )
         self.clock = clock or time.monotonic
         self.screensaver = (
@@ -55,6 +59,7 @@ class MinitelApp:
             echo=self.echo,
             services=self.services,
             screensaver=self.screensaver,
+            power=self.power_signals,
             clock=self.clock,
         )
 
@@ -64,6 +69,8 @@ class MinitelApp:
         log(f"SENT page ({len(data)} bytes)")
 
     async def _apply_action(self, writer, action, log):
+        if action.power is not None:
+            log("POWER off" if not action.power else "POWER on")
         if action.raw:
             await transport.paced_write(writer, action.raw, self.cps)
             if len(action.raw) > 4:

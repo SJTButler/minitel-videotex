@@ -7,6 +7,7 @@ import pages
 import services
 
 from .app import MinitelApp
+from .power import POWER_OFF, POWER_ON, PowerSignals
 from .profiles import M1
 
 
@@ -65,7 +66,41 @@ def main():
         default=30.0,
         help="seconds to hold each screensaver page (default: 30)",
     )
+    ap.add_argument(
+        "--power-off",
+        default=POWER_OFF.hex(),
+        help="hex bytes for terminal power-off; empty disables (default: 00)",
+    )
+    ap.add_argument(
+        "--power-on",
+        default=POWER_ON.hex(),
+        help=(
+            "hex bytes for terminal power-on; empty disables "
+            f"(default: {POWER_ON.hex()})"
+        ),
+    )
+    ap.add_argument(
+        "--no-power-pause",
+        action="store_true",
+        help="ignore power-off; keep the power-on full repaint",
+    )
+    ap.add_argument(
+        "--no-power",
+        action="store_true",
+        help="disable terminal power detection entirely",
+    )
     args = ap.parse_args()
+
+    try:
+        if args.no_power:
+            power = PowerSignals(off=b"", on=b"")
+        else:
+            power = PowerSignals(
+                off=b"" if args.no_power_pause else bytes.fromhex(args.power_off),
+                on=bytes.fromhex(args.power_on),
+            )
+    except ValueError as exc:
+        raise SystemExit(f"invalid power byte sequence: {exc}") from exc
 
     screensaver = (
         None
@@ -84,6 +119,7 @@ def main():
         screensaver=screensaver,
         screensaver_after=args.screensaver_after,
         screensaver_hold=args.screensaver_hold,
+        power=power,
     )
     asyncio.run(app.serve(args.host, args.port))
 

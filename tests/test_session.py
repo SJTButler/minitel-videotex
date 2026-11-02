@@ -3,6 +3,7 @@ import unittest
 import pages
 
 from minitel import Registry, Screen, codec, page, profiles
+from minitel.power import POWER_OFF, POWER_ON, PowerSignals
 from minitel.render import reset
 from minitel.session import Session
 
@@ -351,6 +352,69 @@ class SessionTests(unittest.TestCase):
         session.navigate("501")
         session.navigate("500")
         self.assertEqual(session.history, [])
+
+    def test_power_off_pauses_output_and_timers(self):
+        self.feed(b"AB")
+        actions = self.feed(POWER_OFF)
+        self.assertEqual(len(actions), 1)
+        self.assertIs(actions[0].power, False)
+        self.assertTrue(self.session.paused)
+        self.assertIsNone(self.session.next_timeout())
+        self.assertEqual(self.session.tick().raw, b"")
+        self.assertEqual(self.session.on_timeout().raw, b"")
+        self.assertEqual(self.session.line, "AB")
+
+    def test_power_on_repaints_and_preserves_input(self):
+        self.feed(b"AB")
+        self.feed(POWER_OFF)
+        actions = []
+        for chunk in (POWER_ON[:1], POWER_ON[1:4], POWER_ON[4:]):
+            actions.extend(self.feed(chunk))
+        self.assertFalse(self.session.paused)
+        self.assertEqual(len(actions), 1)
+        self.assertTrue(actions[0].power)
+        self.assertIsNotNone(actions[0].screen)
+        self.assertEqual(self.session.line, "AB")
+
+    def test_power_on_without_off_is_a_full_repaint(self):
+        actions = self.feed(POWER_ON)
+        self.assertFalse(self.session.paused)
+        self.assertEqual(len(actions), 1)
+        self.assertTrue(actions[0].power)
+        self.assertIsNotNone(actions[0].screen)
+
+    def test_unrecognized_input_while_paused_wakes_defensively(self):
+        self.feed(POWER_OFF)
+        actions = self.feed(b"Z")
+        self.assertFalse(self.session.paused)
+        self.assertEqual(len(actions), 1)
+        self.assertTrue(actions[0].power)
+        self.assertIsNotNone(actions[0].screen)
+        self.assertEqual(self.session.line, "")
+
+    def test_power_pause_can_be_disabled_while_keeping_wake(self):
+        session = Session(
+            self.registry,
+            profiles.M1,
+            initial=pages.INITIAL,
+            fallback=self.registry.get(pages.NOT_FOUND),
+            power=PowerSignals(off=b"", on=POWER_ON),
+        )
+        session.start()
+        actions = session.feed(POWER_OFF)
+        self.assertFalse(session.paused)
+        self.assertFalse(any(action.power is not None for action in actions))
+        actions = session.feed(POWER_ON)
+        self.assertEqual(len(actions), 1)
+        self.assertTrue(actions[0].power)
+        self.assertIsNotNone(actions[0].screen)
+        self.assertFalse(session.paused)
+
+    def test_power_on_discards_trailing_startup_bytes(self):
+        self.feed(POWER_OFF)
+        actions = self.feed(POWER_ON + b"Z")
+        self.assertTrue(actions[0].power)
+        self.assertEqual(self.session.line, "")
 
     def test_on_submit_hook_and_state(self):
         registry = Registry()

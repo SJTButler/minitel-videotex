@@ -4,6 +4,7 @@ import pages
 import services
 
 from minitel.app import MinitelApp
+from minitel.power import PowerSignals
 from minitel.profiles import M1
 from minitel.screen import Screen
 
@@ -66,6 +67,11 @@ class AppTests(unittest.IsolatedAsyncioTestCase):
     def test_screensaver_is_optional(self):
         app = MinitelApp(self.registry)
         self.assertIsNone(app.new_session().screensaver)
+
+    def test_power_signals_propagate_to_sessions(self):
+        signals = PowerSignals(off=b"\x01", on=b"\x02")
+        app = MinitelApp(self.registry, power=signals)
+        self.assertIs(app.new_session().power_signals, signals)
 
     async def test_async_start_and_stop_order(self):
         events = []

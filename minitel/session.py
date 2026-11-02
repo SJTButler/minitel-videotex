@@ -5,6 +5,7 @@ from dataclasses import dataclass, replace
 
 from . import codec
 from .pages import Page, PageContext
+from .power import Power, PowerSignals, PowerWatcher
 from .render import render_diff, reset
 from .screen import Screen
 from .screensaver import Screensaver
@@ -15,12 +16,13 @@ class Action:
     raw: bytes = b""
     screen: Screen | None = None
     page: Page | None = None
+    power: bool | None = None
 
 
 class Session:
     def __init__(self, registry, profile, *, initial="100", fallback=None,
                  guide=None, echo=False, services=None, screensaver=None,
-                 clock=time.monotonic):
+                 power=None, clock=time.monotonic):
         self.registry = registry
         self.profile = profile
         self.initial = initial
@@ -28,7 +30,12 @@ class Session:
         self.guide = guide
         self.echo = echo
         self.services = dict(services or {})
+        self.power_signals = (
+            power if isinstance(power, PowerSignals) else PowerSignals()
+        )
+        self.power = PowerWatcher(self.power_signals)
         self.parser = codec.InputParser()
+        self.paused = False
         self.last_key = ""
         self.state = {}
         self.history = []
@@ -87,6 +94,12 @@ class Session:
         self.last_activity = now
         if self._pager_carousel is not None and self._pager_carousel.active:
             self._pager_carousel_next = now + self._pager_carousel.hold
+
+    def _new_parser(self):
+        return codec.InputParser()
+
+    def _new_power(self):
+        return PowerWatcher(self.power_signals)
 
     def _reset_page(self):
         self.fields = []
@@ -206,11 +219,16 @@ class Session:
         self.screen.set_cursor(field.row, col, self._cursor_visible())
 
     def start(self):
+        self.paused = False
+        self.parser = self._new_parser()
+        self.power = self._new_power()
         self.screensaver_active = False
         self._touch()
         return self.render()
 
     def refresh(self):
+        if self.paused:
+            return Action()
         old = self.screen
         new = self.render()
         if old is None:
@@ -410,8 +428,30 @@ class Session:
         return Action(screen=self.render())
 
     def _wake_from_input(self):
-        self.parser = codec.InputParser()
+        self.parser = self._new_parser()
         return self.wake()
+
+    def pause(self):
+        if self.paused:
+            return Action()
+        self.paused = True
+        self.parser = self._new_parser()
+        self.power.reset()
+        return Action(power=False)
+
+    def resume(self):
+        now = self.clock()
+        self.paused = False
+        self.parser = self._new_parser()
+        self.power.reset()
+        self._touch()
+        if self.screensaver_active:
+            self._screensaver_since = now
+            action = self._render_screensaver()
+        else:
+            action = Action(screen=self.render())
+        action.power = True
+        return action
 
     def _screensaver_after(self):
         if not self.screensaver or not self.screensaver.pages:
@@ -479,6 +519,8 @@ class Session:
         return self.refresh()
 
     def next_timeout(self):
+        if self.paused:
+            return None
         now = self.clock()
         deadlines = []
         if self.screensaver_active:
@@ -503,6 +545,8 @@ class Session:
         return min(deadlines) if deadlines else None
 
     def on_timeout(self):
+        if self.paused:
+            return Action()
         now = self.clock()
         if self.screensaver_active:
             if self.display_page is not self._screensaver_page:
@@ -532,6 +576,8 @@ class Session:
         return self._page_tick_interval(self.current)
 
     def tick(self):
+        if self.paused:
+            return Action()
         page = self.display_page
         if self.screensaver_active:
             if self._page_tick_interval(page, pause_on_input=False) is None:
@@ -686,7 +732,7 @@ class Session:
             return self.navigate(self.guide)
         return Action()
 
-    def feed(self, data):
+    def _feed_bytes(self, data):
         if not data:
             return []
         if self.screensaver_active:
@@ -694,3 +740,22 @@ class Session:
         events = self.parser.feed(data)
         self._touch()
         return [self.handle(event) for event in events]
+
+    def feed(self, data):
+        if not data:
+            return []
+        actions = []
+        for token in self.power.feed(data):
+            if isinstance(token, Power):
+                if token.on:
+                    actions.append(self.resume())
+                else:
+                    action = self.pause()
+                    if action.power is not None:
+                        actions.append(action)
+                break
+            if self.paused:
+                actions.append(self.resume())
+                break
+            actions.extend(self._feed_bytes(token))
+        return actions

@@ -24,6 +24,7 @@ minitel/       reusable, content-free library
   transport.py TCP and paced writes
   text.py      remote text sanitising, fit/wrap, domain, age
   paging.py    fixed-size paging arithmetic
+  power.py     terminal power-off pause and power-on repaint
   cache.py     non-blocking cache with stale-on-error snapshots
   http.py      small synchronous JSON client
 services/      background services, auto-discovered
@@ -321,6 +322,39 @@ repaints the main content on idle through a carousel may set
 `no_screensaver=True`; pages that only update a region should leave the
 screensaver enabled so it can prevent burn-in. The Hacker News list and sports
 live page are the current carousel callers.
+
+## Terminal power pause
+
+The dongle keeps its TCP connection when the Minitel is switched off, so the
+server can otherwise keep writing into a terminal that is not listening. The
+session watches the input stream for the terminal's power signals: a `00` byte
+when the terminal loses power, and `7c 13 59 13 53 13 54` when it comes back.
+The sequences are empirical, not a documented power command; both are
+configurable.
+
+While paused, the session stops ticks, screensaver rotation, and carousel
+advances, and returns no output. On power-on it resets the parser, restarts the
+idle clock, and full-paints the current page (or the active screensaver page),
+preserving history, fields, values, focus, and pager offsets. A false off is
+recoverable: any later input wakes the session with a full repaint.
+
+The pause is not required to keep the connection or the UART alive. The ESP32's
+`writeByte()` does block when its TX FIFO is full, but the server paces below
+the serial rate, and the ESP32 drains at the configured baud even when the
+Minitel is off. The pause is mainly hygiene: it stops a long page paint from
+delaying the power-on bytes, and it stops carousels and the screensaver from
+advancing while nobody is looking. If you only want the rewake, use:
+
+```sh
+uv run python -m minitel.server --no-power-pause # ignore off; keep wake repaint
+uv run python -m minitel.server --power-on ""    # keep pause; disable rewake
+uv run python -m minitel.server --no-power       # disable both
+```
+
+`--power-off` and `--power-on` take hex byte sequences; an empty value disables
+that signal. `MinitelApp(..., power=PowerSignals(off=..., on=...))` provides the
+same configuration for another service, including `off=b""` for rewake-only.
+Pages need no hook: the mechanism is session-owned, like the screensaver.
 
 ## Adding pages
 

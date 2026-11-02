@@ -445,6 +445,26 @@ screensaver, or rotates it. `Session.tick()` remains the page-tick entry point.
 Input and ticks share one writer, so a page paint is never interleaved with a
 tick.
 
+## Terminal power pause
+
+The dongle keeps the TCP connection alive when the Minitel is switched off. The
+session detects the terminal's power-off and power-on signals and pauses the
+page: ticks, carousel advances, and screensaver rotation stop, and the session
+writes nothing. On power-on it resets input parsing, restarts the idle clock,
+and full-paints the current page or the active screensaver page. History,
+fields, values, focus, and pager offsets are preserved, so a half-typed form
+comes back exactly as it was.
+
+Pages need no hook and should not implement power handling. The mechanism is
+session-owned, like the screensaver. Do not assume a tick or a carousel advance
+ran while the terminal was off; the session simply did not schedule one.
+
+The byte sequences are empirical and configurable through `PowerSignals` (or
+the server's `--power-off`/`--power-on` hex options). The observed power-off
+byte is `00`; the observed power-on cluster is
+`7c 13 59 13 53 13 54`. If your unit sends something else, configure it rather
+than adding page code.
+
 ## Screensavers
 
 A screensaver is a session-owned display takeover. It is **not navigation**: the

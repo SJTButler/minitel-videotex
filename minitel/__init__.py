@@ -7,6 +7,7 @@ from .cache import ResourceCache, Snapshot
 from .http import HttpError, JsonResponse, get_json, get_json_response
 from .carousel import Carousel
 from .paging import Pager
+from .power import PowerSignals
 from .profiles import (
     M1,
     M1C,
@@ -40,6 +41,7 @@ __all__ = [
     "Page",
     "PageContext",
     "Pager",
+    "PowerSignals",
     "Registry",
     "ResourceCache",
     "Screen",

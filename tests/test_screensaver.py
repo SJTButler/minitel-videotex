@@ -2,6 +2,7 @@ import unittest
 
 from minitel import Carousel, M1, Page, Screen, Screensaver, page
 from minitel.pages import Registry
+from minitel.power import POWER_OFF, POWER_ON
 from minitel.session import Session
 
 ENVOI = bytes([0x13, 0x41])
@@ -176,6 +177,18 @@ class ScreensaverMechanismTests(unittest.TestCase):
         action = self.session.on_timeout()
         self.assertIn("SAVER B", action.screen.to_text())
         self.assertGreater(self.session.next_timeout(), 0.0)
+
+    def test_power_pause_suspends_and_resumes_the_screensaver(self):
+        self.session.activate_screensaver()
+        self.clock.advance(3.0)
+        self.session.feed(POWER_OFF)
+        self.assertTrue(self.session.screensaver_active)
+        self.assertIsNone(self.session.next_timeout())
+        self.clock.advance(100.0)
+        action = self.session.feed(POWER_ON)[0]
+        self.assertTrue(self.session.screensaver_active)
+        self.assertTrue(action.power)
+        self.assertIn("SAVER A", action.screen.to_text())
 
     def test_wake_discards_a_split_key_sequence(self):
         self.session.navigate("701")
