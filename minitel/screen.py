@@ -16,6 +16,51 @@ class Cell:
     size: int = codec.NORMAL
 
 
+SIZES = (
+    codec.NORMAL,
+    codec.DOUBLE_HEIGHT,
+    codec.DOUBLE_WIDTH,
+    codec.DOUBLE_SIZE,
+)
+
+
+def _check_size(size):
+    if size not in SIZES:
+        raise ValueError(f"unknown size {size!r}")
+
+
+def _span(width, height, size):
+    if size in (codec.DOUBLE_WIDTH, codec.DOUBLE_SIZE):
+        width *= 2
+    if size in (codec.DOUBLE_HEIGHT, codec.DOUBLE_SIZE):
+        height *= 2
+    return width, height
+
+
+def _check_cell(ch):
+    if not isinstance(ch, str) or len(ch) != 1:
+        raise ValueError(f"cell value must be one character, got {ch!r}")
+
+
+def _check_placement(row, col, width, height, size, what):
+    _check_size(size)
+    width, height = _span(width, height, size)
+    if not 0 <= row < codec.ROWS:
+        raise ValueError(f"row {row} outside 0..{codec.ROWS - 1}")
+    if not 0 <= col < codec.COLS:
+        raise ValueError(f"column {col} outside 0..{codec.COLS - 1}")
+    if col + width > codec.COLS:
+        raise ValueError(
+            f"{what} at row {row}, column {col} overflows the row "
+            f"({width} cells, size {size})"
+        )
+    if row + height > codec.ROWS:
+        raise ValueError(
+            f"{what} at row {row} overflows the screen "
+            f"({height} rows, size {size})"
+        )
+
+
 class Screen:
     def __init__(self):
         self.rows = [[Cell() for _ in range(codec.COLS)] for _ in range(codec.ROWS)]
@@ -32,27 +77,25 @@ class Screen:
         self.cursor_visible = True
 
     def put(self, row, col, ch, **attrs):
-        if not 0 <= row < codec.ROWS:
-            raise ValueError(f"row {row} outside 0..{codec.ROWS - 1}")
-        if not 0 <= col < codec.COLS:
-            raise ValueError(f"column {col} outside 0..{codec.COLS - 1}")
+        _check_cell(ch)
+        size = attrs.get("size", codec.NORMAL)
+        _check_placement(row, col, 1, 1, size, "cell")
         self.rows[row][col] = Cell(ch=ch, **attrs)
 
     def text(self, row, col, value, **attrs):
-        if not 0 <= row < codec.ROWS:
-            raise ValueError(f"row {row} outside 0..{codec.ROWS - 1}")
-        if not 0 <= col < codec.COLS:
-            raise ValueError(f"column {col} outside 0..{codec.COLS - 1}")
-        if col + len(value) > codec.COLS:
-            raise ValueError("text overflows the row")
+        if not isinstance(value, str):
+            raise TypeError(f"text value must be a string, got {type(value)!r}")
+        size = attrs.get("size", codec.NORMAL)
+        _check_placement(row, col, len(value), 1, size, "text")
         for i, ch in enumerate(value):
             self.rows[row][col + i] = Cell(ch=ch, **attrs)
 
     def fill(self, row, col, width, ch=" ", **attrs):
-        if not 0 <= row < codec.ROWS:
-            raise ValueError(f"row {row} outside 0..{codec.ROWS - 1}")
-        if width < 0 or col < 0 or col + width > codec.COLS:
-            raise ValueError("fill outside the row")
+        _check_cell(ch)
+        if width < 0:
+            raise ValueError(f"fill width must be non-negative, got {width}")
+        size = attrs.get("size", codec.NORMAL)
+        _check_placement(row, col, width, 1, size, "fill")
         for i in range(width):
             self.rows[row][col + i] = Cell(ch=ch, **attrs)
 

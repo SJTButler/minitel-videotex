@@ -48,6 +48,30 @@ class ScreenTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             s.put(0, 40, "x")
 
+    def test_double_width_uses_two_columns(self):
+        s = Screen()
+        s.text(1, 0, "X" * 20, size=codec.DOUBLE_WIDTH)
+        with self.assertRaises(ValueError):
+            s.text(1, 0, "X" * 21, size=codec.DOUBLE_WIDTH)
+
+    def test_double_height_needs_a_continuation_row(self):
+        s = Screen()
+        s.text(23, 0, "OK", size=codec.DOUBLE_HEIGHT)
+        with self.assertRaises(ValueError):
+            s.text(24, 0, "NO", size=codec.DOUBLE_HEIGHT)
+
+    def test_put_and_fill_require_one_character(self):
+        s = Screen()
+        with self.assertRaises(ValueError):
+            s.put(0, 0, "AB")
+        with self.assertRaises(ValueError):
+            s.fill(0, 0, 2, "AB")
+
+    def test_unknown_size_is_rejected(self):
+        s = Screen()
+        with self.assertRaises(ValueError):
+            s.text(0, 0, "X", size=99)
+
 
 if __name__ == "__main__":
     unittest.main()
