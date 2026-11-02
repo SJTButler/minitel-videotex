@@ -5,8 +5,8 @@ import pages
 
 from minitel import profiles
 from minitel.screen import Screen
-from minitel.server import missing_service_message
 from minitel.session import Session
+from run_server import missing_service_message
 from pages.layout import footer, page_input, status
 
 

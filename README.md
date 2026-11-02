@@ -21,12 +21,13 @@ minitel/       reusable, content-free library
   screensaver.py idle takeover, page sequence, carousel timing
   app.py       registry + profile + session + transport + services
   services.py  ServiceRegistry, ServiceSpec, @service
-  transport.py TCP and paced writes
+  transport.py TCP and connection-level pacing
   text.py      remote text sanitising, fit/wrap, domain, age
   paging.py    fixed-size paging arithmetic
   power.py     terminal power-off pause and power-on repaint
   cache.py     non-blocking cache with stale-on-error snapshots
   http.py      small synchronous JSON client
+run_server.py  example CLI wiring: pages + services + MinitelApp
 services/      background services, auto-discovered
   common/
     config.py    .env loader and shared env helpers
@@ -89,7 +90,7 @@ Requires Python 3.10+.
 
 ```sh
 uv sync
-uv run python -m minitel.server --port 3615
+uv run python run_server.py --port 3615
 ```
 
 The server listens on `0.0.0.0:3615`, sends the welcome page, and paces output
@@ -104,7 +105,7 @@ it serialises key echo with clock updates.
 To use the terminal's local echo instead:
 
 ```sh
-uv run python -m minitel.server --port 3615 --local-echo
+uv run python run_server.py --port 3615 --local-echo
 ```
 
 See `docs/authoring-pages.md` for the tradeoff.
@@ -165,8 +166,8 @@ tiny regions. Form focus re-renders and diffs, so `form_footer(s, ctx, fields)`
 can change its hints per field using `ctx.active_name`.
 
 The example service's layout helpers are in `pages/layout.py`. The application
-is wired in `minitel/server.py` with `MinitelApp`, so a different service can
-pass its own registry and page package without touching the library.
+is wired in `run_server.py` with `MinitelApp`, so a different service can pass
+its own registry and page package without touching the library.
 
 ## Live data and services
 
@@ -296,9 +297,9 @@ offset; any input wakes back to the same page. Idle means no input and no
 navigation, so ticking pages still fall asleep.
 
 ```sh
-uv run python -m minitel.server --screensaver clock
-uv run python -m minitel.server --screensaver bouncing_ball --screensaver-after 60
-uv run python -m minitel.server --screensaver off
+uv run python run_server.py --screensaver clock
+uv run python run_server.py --screensaver bouncing_ball --screensaver-after 60
+uv run python run_server.py --screensaver off
 ```
 
 `--screensaver` accepts `clock`, `test_card`, `bouncing_ball`, `carousel`,
@@ -350,9 +351,9 @@ delaying the power-on bytes, and it stops carousels and the screensaver from
 advancing while nobody is looking. If you only want the rewake, use:
 
 ```sh
-uv run python -m minitel.server --no-power-pause # ignore off; keep wake repaint
-uv run python -m minitel.server --power-on ""    # keep pause; disable rewake
-uv run python -m minitel.server --no-power       # disable both
+uv run python run_server.py --no-power-pause # ignore off; keep wake repaint
+uv run python run_server.py --power-on ""    # keep pause; disable rewake
+uv run python run_server.py --no-power       # disable both
 ```
 
 `--power-off` and `--power-on` take hex byte sequences; an empty value disables

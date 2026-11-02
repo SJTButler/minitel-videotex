@@ -831,7 +831,7 @@ For a visual check:
 
 ```sh
 cd home_minitel_server
-python3 -m minitel.server --port 43620 --cps 0
+python3 run_server.py --port 43620 --cps 0
 python3 tools/minitel_client.py --connect 127.0.0.1:43620
 ```
 
