@@ -88,8 +88,14 @@ class ServiceRegistry(Mapping):
             await self._call(service, "start")
 
     async def stop(self):
+        errors = []
         for service in reversed(tuple(self._services.values())):
-            await self._call(service, "stop")
+            try:
+                await self._call(service, "stop")
+            except Exception as exc:
+                errors.append(exc)
+        if errors:
+            raise errors[0]
 
     async def _call(self, service, name):
         hook = getattr(service, name, None)

@@ -77,6 +77,28 @@ class LifecycleTests(unittest.IsolatedAsyncioTestCase):
             ["one:start", "two:start", "two:stop", "one:stop"],
         )
 
+    async def test_stop_continues_after_a_failure_and_raises_the_first(self):
+        events = []
+
+        class Service:
+            def __init__(self, name, fail=False):
+                self.name = name
+                self.fail = fail
+
+            def stop(self):
+                events.append(f"{self.name}:stop")
+                if self.fail:
+                    raise RuntimeError(self.name)
+
+        registry = ServiceRegistry()
+        registry.register("one", Service("one"))
+        registry.register("two", Service("two", fail=True))
+
+        with self.assertRaises(RuntimeError):
+            await registry.stop()
+
+        self.assertEqual(events, ["two:stop", "one:stop"])
+
     async def test_async_hooks_and_missing_hooks(self):
         events = []
 
