@@ -5,12 +5,12 @@ import socket
 import time
 
 from . import transport
-from .power import PowerSignals
-from .profiles import M1
+from .data.services import ServiceRegistry
 from .render import render_screen
-from .screensaver import Screensaver
-from .services import ServiceRegistry
 from .session import Session
+from .session.screensaver import Screensaver
+from .terminal.power import PowerSignals
+from .terminal.profiles import M1
 
 
 class MinitelApp:

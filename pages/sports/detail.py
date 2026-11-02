@@ -1,8 +1,8 @@
 """Page 151: match detail."""
 
-from minitel import codec
-from minitel.pages import page
-from minitel.screen import Screen
+from minitel.protocol import codec
+from minitel.pagemodel import page
+from minitel.render import Screen
 from minitel.text import fit, wrap
 
 from ..common.layout import ACCENT, SECONDARY, WARNING, key_footer, status

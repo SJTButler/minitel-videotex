@@ -3,11 +3,11 @@
 import time
 from dataclasses import dataclass, replace
 
-from . import codec
-from .pages import Page, PageContext
-from .power import Power, PowerSignals, PowerWatcher
-from .render import render_diff, reset
-from .screen import Screen
+from ..pagemodel.model import Page, PageContext
+from ..protocol import codec
+from ..render.render import render_diff, reset
+from ..render.screen import Screen
+from ..terminal.power import Power, PowerSignals, PowerWatcher
 from .screensaver import Screensaver
 
 

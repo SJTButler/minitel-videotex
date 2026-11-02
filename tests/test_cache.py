@@ -1,6 +1,6 @@
 import unittest
 
-from minitel.cache import ResourceCache, Snapshot
+from minitel.data.cache import ResourceCache, Snapshot
 
 
 class Clock:

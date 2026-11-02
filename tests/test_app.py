@@ -3,11 +3,11 @@ import unittest
 import pages
 import services
 
-from minitel import codec
+from minitel.protocol import codec
 from minitel.app import MinitelApp
-from minitel.power import PowerSignals
-from minitel.profiles import M1
-from minitel.screen import Screen
+from minitel.terminal.power import PowerSignals
+from minitel.terminal.profiles import M1
+from minitel.render import Screen
 
 
 class FakeService:

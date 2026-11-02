@@ -7,8 +7,8 @@ import pages
 import services
 
 from minitel.app import MinitelApp
-from minitel.power import POWER_OFF, POWER_ON, PowerSignals
-from minitel.profiles import M1
+from minitel.terminal.power import POWER_OFF, POWER_ON, PowerSignals
+from minitel.terminal.profiles import M1
 
 
 def missing_service_message(missing):

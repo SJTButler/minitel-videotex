@@ -11,22 +11,23 @@ monochrome and currently parked.
 
 ```
 minitel/       reusable, content-free library
-  codec.py     bytes, attributes, input parser
-  profiles.py  M1/M2 capability profiles
-  screen.py    25x40 screen model
-  render.py    screen -> Videotex bytes
-  pages.py     Page, PageContext, Registry, @page
-  session.py   input, navigation, history, idle takeover
-  carousel.py  timed advance policy for a page sequence
-  screensaver.py idle takeover, page sequence, carousel timing
-  app.py       registry + profile + session + transport + services
-  services.py  ServiceRegistry, ServiceSpec, @service
-  transport.py TCP and connection-level pacing
-  text.py      remote text sanitising, fit/wrap, domain, age
-  paging.py    fixed-size paging arithmetic
-  power.py     terminal power-off pause and power-on repaint
-  cache.py     non-blocking cache with stale-on-error snapshots
-  http.py      small synchronous JSON client
+  protocol/codec.py    bytes, attributes, input parser
+  terminal/profiles.py M1/M2 capability profiles
+  terminal/power.py    terminal power-off pause and power-on repaint
+  render/screen.py     25x40 screen model
+  render/render.py     screen -> Videotex bytes
+  design/pager.py      fixed-size paging arithmetic
+  design/carousel.py   timed advance policy for a page sequence
+  design/field.py      declarative input field
+  pagemodel/model.py   Page, PageContext, Registry, @page
+  session/core.py      input, navigation, history, idle takeover
+  session/screensaver.py idle takeover, page sequence, carousel timing
+  data/cache.py        non-blocking cache with stale-on-error snapshots
+  data/http.py         small synchronous JSON client
+  data/services.py     ServiceRegistry, ServiceSpec, @service
+  app.py               registry + profile + session + transport + services
+  transport.py         TCP and connection-level pacing
+  text.py              remote text sanitising, fit/wrap, domain, age
 run_server.py  example CLI wiring: pages + services + MinitelApp
 services/      background services, auto-discovered
   common/
@@ -217,7 +218,7 @@ The news service is the worked example:
 
 - `services/news/service.py` owns the Hacker News URLs, field names, parsing, and
   the cached service. The pages only see `Story` and `Comment` objects.
-- `minitel/cache.py` starts at most one loader thread per key and never blocks
+- `minitel/data/cache.py` starts at most one loader thread per key and never blocks
   the render path. A stale value is kept when a refresh fails, so the terminal
   keeps showing the last good headlines with an `OFFLINE` notice.
 - Front-page data is cached for 300 seconds, comments for 1,800 seconds, and a
@@ -226,8 +227,8 @@ The news service is the worked example:
 - `minitel/text.py` strips HTML, unescapes entities, transliterates typographic
   punctuation and accents, drops emoji, and wraps to the 40-column screen. Every
   remote title, author, domain, and comment goes through it before `Screen.text`.
-- `minitel/paging.py` provides the `Pager` used by the four-story list.
-- `minitel/http.py` provides `get_json()` and `HttpError` for cache threads.
+- `minitel/design/pager.py` provides the `Pager` used by the four-story list.
+- `minitel/data/http.py` provides `get_json()` and `HttpError` for cache threads.
 - `pages/common/layout.py` exposes `BODY`, `ACCENT`, `SECONDARY`, and `WARNING`.
   The news pages use yellow story badges, cyan metadata, and magenta warnings;
   on the monochrome M1 these are grey levels.

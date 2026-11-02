@@ -2,22 +2,11 @@
 
 import importlib
 import pkgutil
-from dataclasses import dataclass
 
-from .carousel import Carousel
-from .paging import Pager
-from .screen import Screen
-
-
-@dataclass
-class InputField:
-    name: str
-    row: int
-    col: int
-    width: int
-    mask: str | None = None
-    value: str = ""
-    cursor: str = "visible"
+from ..design.carousel import Carousel
+from ..design.field import InputField
+from ..design.pager import Pager
+from ..render.screen import Screen
 
 
 CURSOR_MODES = ("visible", "hidden", "auto")

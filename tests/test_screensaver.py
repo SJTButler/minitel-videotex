@@ -1,8 +1,8 @@
 import unittest
 
 from minitel import Carousel, M1, Page, Screen, Screensaver, page
-from minitel.pages import Registry
-from minitel.power import POWER_OFF, POWER_ON
+from minitel.pagemodel import Registry
+from minitel.terminal.power import POWER_OFF, POWER_ON
 from minitel.session import Session
 
 ENVOI = bytes([0x13, 0x41])

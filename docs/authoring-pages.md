@@ -213,7 +213,7 @@ Use `codec.text` for accents and special characters. `Screen.text` accepts
 Unicode; the renderer encodes it through `codec.text` and raises on characters
 the Minitel cannot represent.
 
-For raw protocol work, `minitel.codec` exposes `pos`, `home`, `clear`, `fg`,
+For raw protocol work, `minitel.protocol.codec` exposes `pos`, `home`, `clear`, `fg`,
 `bg`, `inverse`, `flash`, `underline`, `size`, `repeat`, `mosaic`, `cursor`,
 and the input parser. Most pages should not need it beyond constants.
 
@@ -639,7 +639,7 @@ app = MinitelApp(
 A service package exports one decorated builder:
 
 ```python
-from minitel.services import service
+from minitel.data.services import service
 
 @service("weather", description="Open-Meteo current conditions")
 def build_weather_service():
@@ -668,14 +668,14 @@ presentation.
 
 The library pieces:
 
-- `minitel/cache.py` - `ResourceCache.get(key, loader)` returns a `Snapshot`
+- `minitel/data/cache.py` - `ResourceCache.get(key, loader)` returns a `Snapshot`
   immediately and starts at most one daemon loader per key. A `Snapshot` has
   `value`, `loaded_at`, `error`, `loading`, `has_value`, and `age()`. On a failed
   refresh the old value is kept and `error` is set. `load_now()` is synchronous
   and exists for tests and prewarming; `retry()` clears a failed-load backoff
   and triggers a fresh load. Inject `clock` and `thread_factory` for
   deterministic tests.
-- `minitel/http.py` - `get_json(url, headers=None, timeout=10.0)` raises
+- `minitel/data/http.py` - `get_json(url, headers=None, timeout=10.0)` raises
   `HttpError` with `status`, `body`, and `retry_after`.
   `get_json_response(...)` returns a `JsonResponse(payload, status, headers)`
   when a service needs response headers such as rate-limit counters.
@@ -684,7 +684,7 @@ The library pieces:
   quotes, emoji, and non-Latin scripts will crash the renderer if passed
   straight to `Screen.text`. Run every fetched title, author, domain, and
   comment through `sanitize` first.
-- `minitel/paging.py` - a frozen `Pager(total, page_size, offset)` with
+- `minitel/design/pager.py` - a frozen `Pager(total, page_size, offset)` with
   `clamp()`, `window()`, `next(wrap=True)`, `prev(wrap=True)`, and `label`.
 
 The news example is split along the same lines:
@@ -864,7 +864,7 @@ Give the model a small, concrete context:
 
 - this document,
 - `pages/home.py` and `pages/common/`,
-- `minitel/pages.py` and `minitel/screen.py`,
+- `minitel/pagemodel/` and `minitel/render/`,
 - the test command.
 
 A prompt that works well:
@@ -898,7 +898,7 @@ reusable behaviour in `minitel/`.
 The library boundaries are deliberate:
 
 - **New terminal profile**: add a `TerminalProfile` and a `by_type` mapping in
-  `minitel/profiles.py`.
+  `minitel/terminal/profiles.py`.
 - **New transport**: implement `serve`/`paced_write` in
   `minitel/transport.py`; `Session` does not know about sockets.
 - **Different application**: build a `Registry`, pass a fallback and guide page

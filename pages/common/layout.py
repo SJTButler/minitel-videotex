@@ -1,6 +1,6 @@
 """Shared page layout: palette, landmarks, status, and footers."""
 
-from minitel import codec
+from minitel.protocol import codec
 
 STATUS_MARGIN = 4
 FIELD_ROW = 20

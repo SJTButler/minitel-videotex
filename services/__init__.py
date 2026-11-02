@@ -1,6 +1,6 @@
 """Background services shared by pages and owned by the server."""
 
-from minitel.services import ServiceRegistry, ServiceSpec, service
+from minitel.data.services import ServiceRegistry, ServiceSpec, service
 
 
 def build_registry(package="services"):

@@ -4,7 +4,7 @@ import unittest
 from pathlib import Path
 
 import services
-from minitel.services import ServiceRegistry
+from minitel.data.services import ServiceRegistry
 
 
 class DiscoveryTests(unittest.TestCase):
@@ -35,7 +35,7 @@ class DiscoveryTests(unittest.TestCase):
             (package / "__init__.py").write_text("", encoding="utf-8")
             for name in ("one", "two"):
                 (package / f"{name}.py").write_text(
-                    "from minitel.services import service\n"
+                    "from minitel.data.services import service\n"
                     "@service('same')\n"
                     f"def build_{name}():\n"
                     "    return object()\n",

@@ -3,8 +3,8 @@ import unittest
 
 import pages
 
-from minitel import profiles
-from minitel.cache import Snapshot
+from minitel.terminal import profiles
+from minitel.data.cache import Snapshot
 from minitel.session import Session
 from services.weather import LOCATIONS, Weather
 

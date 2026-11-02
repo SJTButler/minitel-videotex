@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from urllib.parse import quote
 
-from minitel.http import get_json_response
+from minitel.data.http import get_json_response
 from minitel.text import sanitize
 
 from .config import DEFAULT_BASE_URL, DEFAULT_COMPETITIONS

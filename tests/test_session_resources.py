@@ -1,7 +1,7 @@
 import unittest
 
 from minitel import M1, Screen, page
-from minitel.pages import Registry
+from minitel.pagemodel import Registry
 from minitel.session import Session
 
 

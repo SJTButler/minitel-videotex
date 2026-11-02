@@ -1,7 +1,7 @@
 import unittest
 
 from minitel import Carousel, M1, Screen, Screensaver, page
-from minitel.pages import Registry
+from minitel.pagemodel import Registry
 from minitel.session import Session
 
 ANNULATION = bytes([0x13, 0x45])

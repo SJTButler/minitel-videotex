@@ -1,4 +1,4 @@
-from minitel.pages import Registry
+from minitel.pagemodel import Registry
 
 INITIAL = "100"
 GUIDE = "130"

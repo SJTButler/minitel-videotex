@@ -1,6 +1,6 @@
 import unittest
 
-from minitel.services import ServiceRegistry, ServiceSpec, service
+from minitel.data.services import ServiceRegistry, ServiceSpec, service
 
 
 class SpecTests(unittest.TestCase):

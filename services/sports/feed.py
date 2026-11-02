@@ -6,9 +6,9 @@ from contextlib import suppress
 from dataclasses import replace
 from datetime import datetime, timezone
 
-from minitel.cache import ResourceCache, Snapshot
-from minitel.http import HttpError
-from minitel.services import service
+from minitel.data.cache import ResourceCache, Snapshot
+from minitel.data.http import HttpError
+from minitel.data.services import service
 
 from .config import SportsConfig
 from .models import Alert, FeedSnapshot, MatchStatus

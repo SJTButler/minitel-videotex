@@ -3,9 +3,9 @@
 import time
 from dataclasses import dataclass
 
-from minitel.cache import ResourceCache
-from minitel.http import get_json
-from minitel.services import service
+from minitel.data.cache import ResourceCache
+from minitel.data.http import get_json
+from minitel.data.services import service
 from minitel.text import domain
 
 FRONT_PAGE_URL = (

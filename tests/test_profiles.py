@@ -1,6 +1,6 @@
 import unittest
 
-from minitel import profiles
+from minitel.terminal import profiles
 
 
 class ProfileTests(unittest.TestCase):

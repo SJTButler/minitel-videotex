@@ -2,13 +2,25 @@
 
 __version__ = "0.2.0"
 
-from . import cache, codec, http, paging, services, text
-from .cache import ResourceCache, Snapshot
-from .http import HttpError, JsonResponse, get_json, get_json_response
-from .carousel import Carousel
-from .paging import Pager
-from .power import PowerSignals
-from .profiles import (
+from . import text
+from .data import cache, http, services
+from .data.cache import ResourceCache, Snapshot
+from .data.http import HttpError, JsonResponse, get_json, get_json_response
+from .data.services import ServiceRegistry, ServiceSpec, service
+from .design import Carousel, InputField, Pager
+from .pagemodel import (
+    LINE_FIELD,
+    FunctionPage,
+    Page,
+    PageContext,
+    Registry,
+    page,
+)
+from .protocol import codec
+from .render import Cell, Screen, render_diff, render_screen
+from .session import Action, Screensaver, Session
+from .terminal.power import PowerSignals
+from .terminal.profiles import (
     M1,
     M1C,
     M2_COLOUR,
@@ -17,20 +29,6 @@ from .profiles import (
     by_type,
     cps,
 )
-from .screen import Cell, Screen
-from .render import render_diff, render_screen
-from .pages import (
-    LINE_FIELD,
-    FunctionPage,
-    InputField,
-    Page,
-    PageContext,
-    Registry,
-    page,
-)
-from .services import ServiceRegistry, ServiceSpec, service
-from .screensaver import Screensaver
-from .session import Action, Session
 from .app import MinitelApp
 
 __all__ = [
@@ -68,7 +66,6 @@ __all__ = [
     "get_json_response",
     "http",
     "page",
-    "paging",
     "render_diff",
     "render_screen",
     "service",

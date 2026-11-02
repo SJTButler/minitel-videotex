@@ -2,7 +2,7 @@ import importlib.util
 import unittest
 from pathlib import Path
 
-from minitel import codec
+from minitel.protocol import codec
 
 
 def load_client():

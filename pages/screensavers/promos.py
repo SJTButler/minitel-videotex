@@ -1,6 +1,6 @@
-from minitel import codec
-from minitel.pages import page
-from minitel.screen import Screen
+from minitel.protocol import codec
+from minitel.pagemodel import page
+from minitel.render import Screen
 
 
 def _promo(title, lines, prompt):

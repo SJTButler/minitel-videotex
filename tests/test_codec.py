@@ -1,7 +1,7 @@
 import unittest
 
-from minitel import codec
-from minitel.codec import (
+from minitel.protocol import codec
+from minitel.protocol.codec import (
     Control,
     Enter,
     Function,

@@ -5,7 +5,7 @@ from email.message import Message
 from unittest.mock import patch
 from urllib.error import HTTPError, URLError
 
-from minitel.http import HttpError, get_json, get_json_response
+from minitel.data.http import HttpError, get_json, get_json_response
 
 
 class Response:
@@ -34,7 +34,7 @@ class HttpTests(unittest.TestCase):
             seen["timeout"] = timeout
             return Response(json.dumps({"ok": True}).encode("utf-8"))
 
-        with patch("minitel.http.urlopen", fake_urlopen):
+        with patch("minitel.data.http.urlopen", fake_urlopen):
             result = get_json("https://example.test/data", timeout=3.0)
 
         self.assertEqual(result, {"ok": True})
@@ -47,7 +47,7 @@ class HttpTests(unittest.TestCase):
         headers["X-RequestsAvailable"] = "9"
 
         with patch(
-            "minitel.http.urlopen",
+            "minitel.data.http.urlopen",
             return_value=Response(
                 json.dumps({"ok": True}).encode("utf-8"), headers=headers
             ),
@@ -64,7 +64,7 @@ class HttpTests(unittest.TestCase):
             seen["header"] = request.get_header("X-test")
             return Response(b"{}")
 
-        with patch("minitel.http.urlopen", fake_urlopen):
+        with patch("minitel.data.http.urlopen", fake_urlopen):
             get_json("https://example.test/", headers={"X-Test": "yes"})
         self.assertEqual(seen["header"], "yes")
 
@@ -79,7 +79,7 @@ class HttpTests(unittest.TestCase):
             io.BytesIO(b"slow down"),
         )
 
-        with patch("minitel.http.urlopen", side_effect=error):
+        with patch("minitel.data.http.urlopen", side_effect=error):
             with self.assertRaises(HttpError) as caught:
                 get_json("https://example.test/")
 
@@ -88,14 +88,14 @@ class HttpTests(unittest.TestCase):
         self.assertEqual(caught.exception.body, b"slow down")
 
     def test_url_error(self):
-        with patch("minitel.http.urlopen", side_effect=URLError("no route")):
+        with patch("minitel.data.http.urlopen", side_effect=URLError("no route")):
             with self.assertRaises(HttpError) as caught:
                 get_json("https://example.test/")
         self.assertIsNone(caught.exception.status)
         self.assertIn("no route", caught.exception.message)
 
     def test_invalid_json(self):
-        with patch("minitel.http.urlopen", return_value=Response(b"not json")):
+        with patch("minitel.data.http.urlopen", return_value=Response(b"not json")):
             with self.assertRaises(HttpError) as caught:
                 get_json("https://example.test/")
         self.assertEqual(caught.exception.status, 200)

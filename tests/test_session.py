@@ -2,8 +2,10 @@ import unittest
 
 import pages
 
-from minitel import Registry, Screen, codec, page, profiles
-from minitel.power import POWER_OFF, POWER_ON, PowerSignals
+from minitel import Registry, Screen, page
+from minitel.protocol import codec
+from minitel.terminal import profiles
+from minitel.terminal.power import POWER_OFF, POWER_ON, PowerSignals
 from minitel.render import reset
 from minitel.session import Session
 

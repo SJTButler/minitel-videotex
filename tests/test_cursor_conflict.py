@@ -1,8 +1,8 @@
 import unittest
 
-from minitel.pages import Registry, page
-from minitel.profiles import M1
-from minitel.screen import Screen
+from minitel.pagemodel import Registry, page
+from minitel.terminal.profiles import M1
+from minitel.render import Screen
 from minitel.session import Session
 
 

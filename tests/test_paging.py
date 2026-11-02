@@ -1,6 +1,6 @@
 import unittest
 
-from minitel.paging import Pager
+from minitel.design import Pager
 
 
 class PagerTests(unittest.TestCase):

@@ -2,7 +2,7 @@
 
 from dataclasses import dataclass
 
-from . import codec
+from ..protocol import codec
 
 
 @dataclass

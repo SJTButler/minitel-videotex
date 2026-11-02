@@ -1,9 +1,9 @@
 import unittest
 from pathlib import Path
 
-from minitel.pages import LINE_FIELD, Registry, page
-from minitel.profiles import M1
-from minitel.screen import Screen
+from minitel.pagemodel import LINE_FIELD, Registry, page
+from minitel.terminal.profiles import M1
+from minitel.render import Screen
 from minitel.session import Session
 
 ENVOI = bytes([0x13, 0x41])

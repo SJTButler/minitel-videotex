@@ -25,7 +25,7 @@ for entry in (str(ROOT), str(TOOLS)):
     if entry not in sys.path:
         sys.path.insert(0, entry)
 
-from minitel import codec
+from minitel.protocol import codec
 from virtual_minitel import Decoder
 
 ROWS = codec.ROWS

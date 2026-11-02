@@ -10,7 +10,7 @@ from pages.common.service_status import (
     describe,
     describe_many,
 )
-from minitel.cache import Snapshot
+from minitel.data.cache import Snapshot
 from services.sports.models import FeedSnapshot
 
 

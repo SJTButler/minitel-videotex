@@ -2,7 +2,7 @@ import asyncio
 import unittest
 from datetime import datetime, timezone
 
-from minitel.http import HttpError
+from minitel.data.http import HttpError
 from services.sports.config import SportsConfig
 from services.sports.feed import SportsService
 from services.sports.models import Match, MatchStatus, StandingRow, Team

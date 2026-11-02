@@ -1,6 +1,6 @@
 import unittest
 
-from minitel.power import (
+from minitel.terminal.power import (
     POWER_OFF,
     POWER_ON,
     Power,

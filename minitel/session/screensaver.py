@@ -2,9 +2,9 @@
 
 from dataclasses import dataclass, field
 
-from .carousel import Carousel
-from .pages import Page
-from .paging import Pager
+from ..design.carousel import Carousel
+from ..design.pager import Pager
+from ..pagemodel.model import Page
 
 
 @dataclass(frozen=True)

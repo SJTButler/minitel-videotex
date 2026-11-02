@@ -3,9 +3,10 @@ import unittest
 
 import pages
 
-from minitel import codec, profiles
-from minitel.cache import Snapshot
-from minitel.render import render
+from minitel.protocol import codec
+from minitel.terminal import profiles
+from minitel.data.cache import Snapshot
+from minitel.render.render import render
 from minitel.session import Session
 from pages.common.layout import ACCENT, SECONDARY
 from services.news import Comment, Story

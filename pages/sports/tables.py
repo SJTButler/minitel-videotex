@@ -1,8 +1,8 @@
 """Page 153: league tables."""
 
-from minitel import codec
-from minitel.pages import page
-from minitel.screen import Screen
+from minitel.protocol import codec
+from minitel.pagemodel import page
+from minitel.render import Screen
 from minitel.text import fit, sanitize
 
 from ..common.layout import SECONDARY, WARNING, key_footer, status

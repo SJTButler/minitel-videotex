@@ -3,8 +3,8 @@ import unittest
 import pages
 import services
 
-from minitel.pages import FunctionPage, page
-from minitel.screen import Screen
+from minitel.pagemodel import FunctionPage, page
+from minitel.render import Screen
 
 
 class RequirementTests(unittest.TestCase):

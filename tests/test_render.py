@@ -3,9 +3,9 @@ import unittest
 from pathlib import Path
 
 import minitel
-from minitel import codec
-from minitel.render import render, render_diff
-from minitel.screen import Screen
+from minitel.protocol import codec
+from minitel.render.render import render, render_diff
+from minitel.render import Screen
 
 
 def load_virtual_minitel():
@@ -190,7 +190,9 @@ class DiffTests(unittest.TestCase):
 class PackageSurfaceTests(unittest.TestCase):
     def test_package_render_is_the_module_and_render_screen_is_the_function(self):
         self.assertTrue(hasattr(minitel.render, "render_diff"))
-        self.assertIs(minitel.render_screen, minitel.render.render)
+        self.assertIs(
+            minitel.render_screen, minitel.render.render.render_screen
+        )
 
 
 if __name__ == "__main__":

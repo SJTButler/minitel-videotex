@@ -4,8 +4,9 @@ from datetime import datetime, timezone
 
 import pages
 
-from minitel import codec, profiles
-from minitel.cache import Snapshot
+from minitel.protocol import codec
+from minitel.terminal import profiles
+from minitel.data.cache import Snapshot
 from minitel.session import Session
 from pages.sports._support.labels import competition_label
 from pages.sports._support.layout import kickoff_label

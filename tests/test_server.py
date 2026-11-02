@@ -3,8 +3,8 @@ from unittest.mock import Mock
 
 import pages
 
-from minitel import profiles
-from minitel.screen import Screen
+from minitel.terminal import profiles
+from minitel.render import Screen
 from minitel.session import Session
 from run_server import missing_service_message
 from pages.common.layout import footer, status

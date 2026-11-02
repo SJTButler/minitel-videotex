@@ -1,7 +1,7 @@
 import unittest
 
-from minitel.pages import Registry, page
-from minitel.screen import Screen
+from minitel.pagemodel import Registry, page
+from minitel.render import Screen
 
 
 @page("900", screensaver="group")

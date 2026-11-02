@@ -3,7 +3,7 @@ import unittest
 import pages
 
 from minitel.app import MinitelApp
-from minitel.screen import Screen
+from minitel.render import Screen
 from minitel.session import Action
 from minitel.transport import PacedWriter
 

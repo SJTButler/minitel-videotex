@@ -2,7 +2,7 @@ import json
 import unittest
 from pathlib import Path
 
-from minitel.http import JsonResponse
+from minitel.data.http import JsonResponse
 from services.sports.config import DEFAULT_COMPETITIONS
 from services.sports.models import MatchStatus
 from services.sports.source import (

@@ -3,7 +3,7 @@ from unittest.mock import patch
 
 import pages
 
-from minitel import profiles
+from minitel.terminal import profiles
 from minitel.session import Session
 from pages.guestbook._support.store import GuestbookStore
 

@@ -1,7 +1,7 @@
 import unittest
 
-from minitel import codec
-from minitel.screen import Screen
+from minitel.protocol import codec
+from minitel.render import Screen
 
 
 class ScreenTests(unittest.TestCase):

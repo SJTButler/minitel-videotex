@@ -2,7 +2,8 @@ import unittest
 
 import pages
 
-from minitel import Screen, page, profiles
+from minitel import Screen, page
+from minitel.terminal import profiles
 from minitel.session import Session
 
 SUITE = bytes([0x13, 0x48])

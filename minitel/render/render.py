@@ -1,6 +1,6 @@
 """Render a Screen to a Videotex byte stream."""
 
-from . import codec
+from ..protocol import codec
 from .screen import Cell
 
 DEFAULT_ATTRS = (codec.WHITE, codec.BLACK, False, False, False, codec.NORMAL)

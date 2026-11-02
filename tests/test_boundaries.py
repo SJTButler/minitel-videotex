@@ -7,6 +7,7 @@ from pages.news.directory import NEWS_SERVICES
 
 ROOT = Path(__file__).resolve().parents[1]
 COMMON = ROOT / "pages" / "common"
+DESIGN = ROOT / "minitel" / "design"
 MINITEL = ROOT / "minitel"
 
 TIMER_MODULES = {"asyncio", "sched", "threading"}
@@ -27,7 +28,9 @@ def imported_modules(path):
 
 class LibraryBoundaryTests(unittest.TestCase):
     def test_minitel_does_not_import_the_application(self):
-        for path in sorted(MINITEL.glob("*.py")):
+        for path in sorted(MINITEL.rglob("*.py")):
+            if "__pycache__" in path.parts:
+                continue
             for module in imported_modules(path):
                 self.assertFalse(
                     module == "pages" or module.startswith("pages."),
@@ -58,11 +61,21 @@ class LibraryBoundaryTests(unittest.TestCase):
                     f"{path} imports {module}",
                 )
                 self.assertFalse(
-                    module in {"minitel.pages", "minitel.session"},
+                    module in {"minitel.pagemodel", "minitel.session"},
                     f"{path} imports {module}",
                 )
                 self.assertNotIn(
                     module, TIMER_MODULES, f"{path} imports {module}"
+                )
+
+
+class DesignBoundaryTests(unittest.TestCase):
+    def test_design_imports_are_stdlib_only(self):
+        for path in sorted(DESIGN.glob("*.py")):
+            for module in imported_modules(path):
+                self.assertFalse(
+                    module.startswith(("minitel", "pages", "services")),
+                    f"{path} imports {module}",
                 )
 
 

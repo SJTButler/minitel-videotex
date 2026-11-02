@@ -2,9 +2,10 @@
 
 import time
 
-from minitel import codec, Carousel
-from minitel.pages import page
-from minitel.screen import Screen
+from minitel.design import Carousel
+from minitel.protocol import codec
+from minitel.pagemodel import page
+from minitel.render import Screen
 from minitel.text import age, fit, sanitize, wrap
 
 from ..common.layout import (
