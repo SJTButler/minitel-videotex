@@ -63,22 +63,44 @@ class MinitelApp:
             clock=self.clock,
         )
 
-    async def send(self, writer, screen, log):
+    async def send(self, pacer, screen, log):
         data = render(screen)
-        await transport.paced_write(writer, data, self.cps)
+        await pacer.write(data)
         log(f"SENT page ({len(data)} bytes)")
 
-    async def _apply_action(self, writer, action, log):
+    async def _apply_action(self, pacer, action, log):
         if action.power is not None:
             log("POWER off" if not action.power else "POWER on")
         if action.raw:
-            await transport.paced_write(writer, action.raw, self.cps)
+            await pacer.write(action.raw)
             if len(action.raw) > 4:
                 log(f"RAW {len(action.raw)} bytes")
         if action.page is not None:
             log(f"PAGE {action.page.number}")
         if action.screen is not None:
-            await self.send(writer, action.screen, log)
+            await self.send(pacer, action.screen, log)
+
+    async def _apply_actions(self, pacer, actions, log):
+        pending = bytearray()
+        for action in actions:
+            if (
+                action.raw
+                and action.screen is None
+                and action.page is None
+                and action.power is None
+            ):
+                pending.extend(action.raw)
+                continue
+            if pending:
+                await pacer.write(bytes(pending))
+                if len(pending) > 4:
+                    log(f"RAW {len(pending)} bytes")
+                pending.clear()
+            await self._apply_action(pacer, action, log)
+        if pending:
+            await pacer.write(bytes(pending))
+            if len(pending) > 4:
+                log(f"RAW {len(pending)} bytes")
 
     async def handle(self, reader, writer):
         peer = writer.get_extra_info("peername")
@@ -93,11 +115,12 @@ class MinitelApp:
         log(f"profile {self.profile.name}, cps={self.cps}, echo={self.echo}")
 
         session = self.new_session()
+        pacer = transport.PacedWriter(writer, self.cps)
         try:
             echo = session.echo_override()
-            await transport.paced_write(writer, echo, self.cps)
+            await pacer.write(echo)
             log(f"ECHO local {'off' if self.echo else 'on'}")
-            await self.send(writer, session.start(), log)
+            await self.send(pacer, session.start(), log)
             while True:
                 interval = session.next_timeout()
                 if interval is None:
@@ -106,13 +129,12 @@ class MinitelApp:
                     try:
                         data = await asyncio.wait_for(reader.read(64), timeout=interval)
                     except asyncio.TimeoutError:
-                        await self._apply_action(writer, session.on_timeout(), log)
+                        await self._apply_action(pacer, session.on_timeout(), log)
                         continue
                 if not data:
                     break
                 log("RX " + " ".join(f"{b:02X}" for b in data))
-                for action in session.feed(data):
-                    await self._apply_action(writer, action, log)
+                await self._apply_actions(pacer, session.feed(data), log)
         except (ConnectionResetError, BrokenPipeError):
             pass
         finally:
