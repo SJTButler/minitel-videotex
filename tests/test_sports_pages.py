@@ -346,6 +346,19 @@ class TablesPageTests(unittest.TestCase):
         )
         return Snapshot(value=rows, loaded_at=time.monotonic())
 
+    def many_standings(self, count=12):
+        rows = tuple(
+            StandingRow(
+                index + 1,
+                Team(100 + index, f"TEAM {index + 1:02d}", f"T{index + 1:02d}"),
+                10,
+                0,
+                20 - index,
+            )
+            for index in range(count)
+        )
+        return Snapshot(value=rows, loaded_at=time.monotonic())
+
     def test_table_rows_and_league_change(self):
         service = FakeSports(
             loaded_snapshot([]), standings={"PL": self.standings()}
@@ -369,6 +382,22 @@ class TablesPageTests(unittest.TestCase):
 
         session = make_session(None, initial="153")
         self.assertIn("SPORTS FEED NOT CONFIGURED", session.screen.to_text())
+
+    def test_error_clears_when_the_pager_moves(self):
+        service = FakeSports(
+            loaded_snapshot([]),
+            standings={"PL": self.many_standings()},
+        )
+        session = make_session(service, initial="153")
+        self.assertIn("153 1/2", session.screen.to_text().splitlines()[0])
+
+        session.feed(b"99" + ENVOI)
+        self.assertIn("NO LEAGUE 99.", session.screen.to_text())
+
+        session.feed(SUITE)
+        text = session.screen.to_text()
+        self.assertIn("153 2/2", text.splitlines()[0])
+        self.assertNotIn("NO LEAGUE 99.", text)
 
 
 class StatusPageTests(unittest.TestCase):

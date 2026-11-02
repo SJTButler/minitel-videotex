@@ -52,6 +52,12 @@ def tables_screen(ctx):
     rows = _rows(feed, code, standings)
     reset = ctx.state.pop("sports_table_reset", False)
     pager = ctx.set_pager(len(rows), PAGE_SIZE, offset=0 if reset else None)
+    ctx.state["sports_table_offset"] = pager.offset
+    if (
+        ctx.state.get("sports_error")
+        and ctx.state.get("sports_error_offset") != pager.offset
+    ):
+        clear_error(ctx)
 
     s = Screen()
     status(s, f"153 {pager.label}" if pager.total else "153")
@@ -111,6 +117,7 @@ def submit_tables(ctx, line):
     value = line.strip()
     feed = service(ctx)
     competitions = _competitions(feed)
+    offset = ctx.state.get("sports_table_offset", 0)
     if value.isdigit() and competitions:
         number = int(value)
         if 1 <= number <= len(competitions):
@@ -122,7 +129,7 @@ def submit_tables(ctx, line):
         set_error(
             ctx,
             fit(f"NO LEAGUE {number}.", codec.COLS),
-            0,
+            offset,
         )
         ctx.values["input"] = ""
         return TABLES_PAGE
@@ -134,7 +141,7 @@ def submit_tables(ctx, line):
     set_error(
         ctx,
         fit(f"NO LEAGUE {sanitize(value)}.", codec.COLS),
-        0,
+        offset,
     )
     ctx.values["input"] = ""
     return TABLES_PAGE
