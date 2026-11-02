@@ -7,15 +7,15 @@ from minitel.pages import page
 from minitel.screen import Screen
 from minitel.text import age, fit, sanitize, wrap
 
-from ..layout import (
+from ..common.layout import (
     ACCENT,
     SECONDARY,
     WARNING,
     key_footer,
-    page_input,
     status,
-    updated_label,
 )
+from ..common.service_status import updated_label
+from ..common.widgets import page_input
 
 NEWS_PAGE = "111"
 STORY_PAGE = "112"

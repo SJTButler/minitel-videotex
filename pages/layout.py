@@ -1,78 +1,39 @@
-"""Shared layout helpers for the example service."""
+"""Compatibility re-exports for the shared presentation helpers.
 
-import time
+New page code should import from ``pages.common.layout``,
+``pages.common.widgets``, and ``pages.common.service_status``.
+"""
 
-from minitel import codec
+from .common.layout import (
+    ACCENT,
+    BODY,
+    FIELD_COL,
+    FIELD_ROW,
+    FIELD_WIDTH,
+    SECONDARY,
+    STATUS_MARGIN,
+    WARNING,
+    footer,
+    key_footer,
+    status,
+)
+from .common.service_status import updated_label
+from .common.widgets import form_footer, line_field, page_input
 
-STATUS_MARGIN = 4
-FIELD_ROW = 20
-FIELD_COL = 6
-FIELD_WIDTH = 10
-
-BODY = codec.WHITE
-ACCENT = codec.YELLOW
-SECONDARY = codec.CYAN
-WARNING = codec.MAGENTA
-
-
-def updated_label(snapshot):
-    age = snapshot.age()
-    if age is None:
-        return ""
-    try:
-        return time.strftime("%H:%M", time.localtime(time.time() - age))
-    except (OSError, OverflowError, ValueError):
-        return "--:--"
-
-
-def status(screen, page):
-    boundary = codec.COLS - STATUS_MARGIN
-    page_text = f"{page:>8}"
-    line_width = boundary + 1
-    title_width = max(0, line_width - len(page_text))
-    line = (f"{'3615 KILO':<{title_width}}" + page_text)[:line_width]
-    screen.fill(0, 0, codec.COLS, " ", inverse=True)
-    screen.text(0, 0, line, inverse=True)
-
-
-def key_footer(screen, hints, row=22):
-    if isinstance(hints, str):
-        line = hints
-    else:
-        line = "  ".join(hints)
-    screen.text(row, 0, line[:codec.COLS])
-
-
-def footer(screen):
-    key_footer(screen, ("SOMMAIRE=HOME", "RETOUR=BACK"))
-
-
-def form_footer(screen, ctx, fields):
-    names = [name for name, _ in fields]
-    active = ctx.active_name if ctx.active_name in names else (names[0] if names else None)
-    index = names.index(active) if active in names else 0
-    next_label = fields[index + 1][1] if index + 1 < len(fields) else "(END)"
-    prev_label = fields[index - 1][1] if index > 0 else "BACK"
-    screen.text(
-        22, 0, f"SUITE: {next_label}  RETOUR: {prev_label}"[:40]
-    )
-    screen.text(23, 0, "ENVOI: SUBMIT  SOMMAIRE: HOME")
-
-
-def line_field(screen, ctx, name, row, col, width, *, label=None,
-               label_col=0, value="", cursor="visible"):
-    if label:
-        screen.text(row, label_col, label)
-    screen.field(row, col, width)
-    current = ctx.values.get(name, value)
-    if current:
-        screen.text(row, col, current[:width], inverse=True)
-    return ctx.add_field(
-        name, row, col, width, value=value, cursor=cursor
-    )
-
-
-def page_input(screen, ctx, *, cursor="visible"):
-    screen.text(FIELD_ROW, 0, "PAGE:")
-    screen.field(FIELD_ROW, FIELD_COL, FIELD_WIDTH)
-    ctx.set_input(FIELD_ROW, FIELD_COL, FIELD_WIDTH, cursor=cursor)
+__all__ = [
+    "ACCENT",
+    "BODY",
+    "FIELD_COL",
+    "FIELD_ROW",
+    "FIELD_WIDTH",
+    "SECONDARY",
+    "STATUS_MARGIN",
+    "WARNING",
+    "footer",
+    "form_footer",
+    "key_footer",
+    "line_field",
+    "page_input",
+    "status",
+    "updated_label",
+]

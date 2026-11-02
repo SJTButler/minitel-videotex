@@ -7,14 +7,14 @@ from minitel.pages import page
 from minitel.screen import Screen
 from minitel.text import fit, sanitize
 
-from ..layout import (
+from ..common.layout import (
     ACCENT,
     SECONDARY,
     WARNING,
     key_footer,
-    page_input,
     status,
 )
+from ..common.widgets import page_input
 from .common import clear_error, configured, service, set_error, snapshot
 from .layout import (
     clock_label,

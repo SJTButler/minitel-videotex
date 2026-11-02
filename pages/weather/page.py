@@ -4,7 +4,9 @@ from minitel import codec
 from minitel.pages import page
 from minitel.screen import Screen
 
-from ..layout import SECONDARY, WARNING, footer, page_input, status, updated_label
+from ..common.layout import SECONDARY, WARNING, footer, status
+from ..common.service_status import updated_label
+from ..common.widgets import page_input
 
 
 def _temperature(value):

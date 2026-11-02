@@ -5,7 +5,9 @@ from minitel.pages import page
 from minitel.screen import Screen
 from minitel.text import fit, sanitize
 
-from ..layout import SECONDARY, WARNING, key_footer, page_input, status, updated_label
+from ..common.layout import SECONDARY, WARNING, key_footer, status
+from ..common.service_status import updated_label
+from ..common.widgets import page_input
 from .common import clear_error, configured, service, set_error
 from .live import LIVE_PAGE
 from .layout import table_header, table_row

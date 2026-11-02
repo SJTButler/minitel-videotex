@@ -4,7 +4,8 @@ from minitel import codec
 from minitel.pages import page
 from minitel.screen import Screen
 
-from .layout import SECONDARY, footer, page_input, status
+from .common.layout import SECONDARY, footer, status
+from .common.widgets import page_input
 
 PAGE_SIZE = 15
 FLAG_LEGEND = "* SAVER D DYN F FORM T TRANS N NO-SLEEP"

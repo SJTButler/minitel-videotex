@@ -6,16 +6,16 @@ from minitel import codec
 from minitel.pages import page
 from minitel.screen import Screen
 
-from ..layout import (
+from ..common.layout import (
     ACCENT,
+    FIELD_ROW,
     SECONDARY,
     WARNING,
-    FIELD_ROW,
     key_footer,
-    page_input,
     status,
-    updated_label,
 )
+from ..common.service_status import updated_label
+from ..common.widgets import page_input
 
 
 @dataclass(frozen=True)

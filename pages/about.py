@@ -2,7 +2,8 @@ from minitel import codec
 from minitel.pages import page
 from minitel.screen import Screen
 
-from .layout import footer, page_input, status
+from .common.layout import footer, status
+from .common.widgets import page_input
 
 
 @page("130", title="ABOUT", aliases=("3",))
