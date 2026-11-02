@@ -10,11 +10,10 @@ from ..common.layout import (
     ACCENT,
     FIELD_ROW,
     SECONDARY,
-    WARNING,
     key_footer,
     status,
 )
-from ..common.service_status import updated_label
+from ..common.service_status import describe
 from ..common.widgets import page_input
 
 
@@ -31,29 +30,6 @@ NEWS_SERVICES = (
 )
 
 
-def status_colour(text):
-    if text.startswith(("NOT CONFIGURED", "UNAVAILABLE", "OFFLINE")):
-        return WARNING
-    return SECONDARY
-
-
-def service_status(service):
-    if service is None:
-        return "NOT CONFIGURED"
-    snapshot = service.front_page()
-    if snapshot.loading and not snapshot.has_value:
-        return "LOADING"
-    if snapshot.error and not snapshot.has_value:
-        return "UNAVAILABLE"
-    if snapshot.error and snapshot.has_value:
-        return "OFFLINE - CACHED"
-    if snapshot.has_value:
-        if not snapshot.value:
-            return "NO HEADLINES"
-        return "UPDATED " + updated_label(snapshot)
-    return "LOADING"
-
-
 def directory_screen(ctx):
     s = Screen()
     status(s, "PAGE 110")
@@ -66,10 +42,21 @@ def directory_screen(ctx):
             break
         s.text(row, 0, f"{entry.number} ", fg=ACCENT, inverse=True)
         s.text(row, 3, entry.label[:codec.COLS - 3])
-        status_text = service_status(ctx.services.get(entry.service))
+        service = ctx.services.get(entry.service)
+        snapshot = service.front_page() if service is not None else None
+        page_status = describe(
+            snapshot,
+            empty=bool(snapshot and snapshot.has_value and not snapshot.value),
+            missing_text="NOT CONFIGURED",
+            loading_text="LOADING",
+            unavailable_text="UNAVAILABLE",
+            empty_text="NO HEADLINES",
+            stale_prefix="OFFLINE - CACHED",
+            stale_time=False,
+        )
         s.text(
-            row + 1, 2, status_text[:codec.COLS - 2],
-            fg=status_colour(status_text), underline=True,
+            row + 1, 2, page_status.text[:codec.COLS - 2],
+            fg=page_status.colour, underline=True,
         )
 
     page_input(s, ctx, cursor="auto")

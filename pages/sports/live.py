@@ -14,6 +14,7 @@ from ..common.layout import (
     key_footer,
     status,
 )
+from ..common.service_status import ServiceState, classify, colour_for
 from ..common.widgets import page_input
 from .common import clear_error, configured, service, set_error, snapshot
 from .layout import (
@@ -177,18 +178,23 @@ def _header(feed, feed_snapshot, page):
     )
 
 
+def _state(feed, feed_snapshot):
+    if not configured(feed):
+        return ServiceState.MISSING
+    return classify(feed_snapshot)
+
+
 def _header_colour(feed, feed_snapshot):
-    if not configured(feed) or feed_snapshot.error:
-        return WARNING
-    return SECONDARY
+    return colour_for(_state(feed, feed_snapshot))
 
 
 def _empty_lines(feed, feed_snapshot):
-    if not configured(feed):
+    state = _state(feed, feed_snapshot)
+    if state is ServiceState.MISSING:
         return ["SPORTS FEED NOT CONFIGURED", "SET FOOTBALL_API_KEY."]
-    if feed_snapshot.error and not feed_snapshot.has_value:
+    if state is ServiceState.UNAVAILABLE:
         return ["SCORES UNAVAILABLE.", "CHECK CONNECTION. RETRYING."]
-    if not feed_snapshot.has_value:
+    if state is ServiceState.LOADING:
         return ["LOADING MATCHES..."]
     return ["NO MATCHES TODAY.", "CHECK BACK ON MATCHDAY."]
 
@@ -197,13 +203,14 @@ def _hint(ctx, feed, feed_snapshot, window):
     error = ctx.state.get("sports_error")
     if error:
         return error
-    if not configured(feed):
+    state = _state(feed, feed_snapshot)
+    if state is ServiceState.MISSING:
         return "SET FOOTBALL_API_KEY."
-    if feed_snapshot.error and feed_snapshot.matches:
+    if state is ServiceState.STALE and feed_snapshot.matches:
         return "DATA STALE. RETRYING."
-    if feed_snapshot.error and not feed_snapshot.has_value:
+    if state is ServiceState.UNAVAILABLE:
         return "SCORES UNAVAILABLE. RETRYING."
-    if not feed_snapshot.has_value:
+    if state is ServiceState.LOADING:
         return "LOADING MATCHES..."
     if not window:
         return "NO MATCHES TODAY."

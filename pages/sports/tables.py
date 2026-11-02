@@ -6,7 +6,7 @@ from minitel.screen import Screen
 from minitel.text import fit, sanitize
 
 from ..common.layout import SECONDARY, WARNING, key_footer, status
-from ..common.service_status import updated_label
+from ..common.service_status import ServiceState, classify, updated_label
 from ..common.widgets import page_input
 from .common import clear_error, configured, service, set_error
 from .live import LIVE_PAGE
@@ -28,15 +28,24 @@ def _selected(ctx, feed):
     return code if code in competitions else competitions[0]
 
 
-def _header(feed, code, standings):
+def _state(feed, standings):
     if not configured(feed):
+        return ServiceState.MISSING
+    if standings is None:
+        return ServiceState.LOADING
+    return classify(standings)
+
+
+def _header(feed, code, standings):
+    state = _state(feed, standings)
+    if state is ServiceState.MISSING:
         return "SPORTS FEED NOT CONFIGURED"
     name = feed.competition_name(code)
-    if standings is None:
+    if state is ServiceState.LOADING:
         return f"{name}  LOADING TABLE..."
-    if standings.error and not standings.has_value:
+    if state is ServiceState.UNAVAILABLE:
         return f"{name}  TABLE UNAVAILABLE."
-    if standings.error:
+    if state is ServiceState.STALE:
         return f"{name}  OFFLINE {updated_label(standings)}".strip()
     return f"{name}  UPDATED {updated_label(standings)}".strip()
 
@@ -65,11 +74,7 @@ def tables_screen(ctx):
     status(s, f"153 {pager.label}" if pager.total else "153")
     s.text(1, 0, "TABLES", inverse=True, size=codec.DOUBLE_WIDTH)
     header = _header(feed, code, standings)
-    warning = (
-        not configured(feed)
-        or standings is None
-        or bool(standings.error)
-    )
+    warning = _state(feed, standings) is not ServiceState.READY
     s.text(
         2,
         0,

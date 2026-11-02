@@ -5,7 +5,7 @@ from minitel.pages import page
 from minitel.screen import Screen
 
 from ..common.layout import SECONDARY, WARNING, footer, status
-from ..common.service_status import updated_label
+from ..common.service_status import describe_many
 from ..common.widgets import page_input
 
 
@@ -34,30 +34,13 @@ def _row(location, snapshot):
     return f"{location.name:<10}  --  LOADING..."
 
 
-def _status_text(snapshots):
-    if not snapshots:
-        return "NO WEATHER LOCATIONS"
-    values = [s for _, s in snapshots if s.has_value and s.value is not None]
-    errors = [s for _, s in snapshots if s.error is not None]
-    if values:
-        latest = max(values, key=lambda s: s.loaded_at or 0)
-        label = "UPDATED " + updated_label(latest)
-        if errors:
-            label = "OFFLINE - CACHED " + updated_label(latest)
-        return label
-    if any(s.loading for _, s in snapshots):
-        return "LOADING WEATHER..."
-    if errors:
-        return "WEATHER UNAVAILABLE"
-    return "LOADING WEATHER..."
-
-
-def _status_colour(text):
-    if text.startswith(
-        ("NOT CONFIGURED", "UNAVAILABLE", "OFFLINE", "NO WEATHER")
-    ):
-        return WARNING
-    return SECONDARY
+def _status(snapshots):
+    return describe_many(
+        (snapshot for _, snapshot in snapshots),
+        missing_text="NO WEATHER LOCATIONS",
+        loading_text="LOADING WEATHER...",
+        unavailable_text="WEATHER UNAVAILABLE",
+    )
 
 
 def weather_screen(ctx):
@@ -77,7 +60,9 @@ def weather_screen(ctx):
     service = ctx.services.get("weather")
     if service is None:
         s.text(5, 0, "WEATHER SERVICE NOT CONFIGURED", fg=WARNING)
-        status_text = "WEATHER NOT CONFIGURED"
+        page_status = describe_many(
+            (), missing_text="WEATHER NOT CONFIGURED"
+        )
     else:
         snapshots = [
             (location, service.weather(location))
@@ -85,12 +70,12 @@ def weather_screen(ctx):
         ]
         for index, (location, snapshot) in enumerate(snapshots[:4]):
             s.text(5 + index, 0, _row(location, snapshot)[:codec.COLS])
-        status_text = _status_text(snapshots)
+        page_status = _status(snapshots)
 
     s.rule(10, 0, codec.COLS, "-")
     s.text(11, 0, "LOW/HIGH = TODAY'S FORECAST", fg=SECONDARY)
     s.text(12, 0, "SOURCE: OPEN-METEO", fg=SECONDARY)
-    s.text(13, 0, status_text[:codec.COLS], fg=_status_colour(status_text))
+    s.text(13, 0, page_status.text[:codec.COLS], fg=page_status.colour)
     page_input(s, ctx)
     footer(s)
     return s

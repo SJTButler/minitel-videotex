@@ -14,7 +14,7 @@ from ..common.layout import (
     key_footer,
     status,
 )
-from ..common.service_status import updated_label
+from ..common.service_status import ServiceState, classify, describe
 from ..common.widgets import page_input
 
 NEWS_PAGE = "111"
@@ -49,16 +49,15 @@ def _set_error(ctx, message, offset):
     ctx.state["news_error_offset"] = offset
 
 
-def _header(snapshot):
-    if snapshot is None:
-        return "NEWS UNAVAILABLE."
-    if not snapshot.has_value:
-        if snapshot.error:
-            return "NEWS UNAVAILABLE."
-        return "FETCHING HACKER NEWS"
-    if snapshot.error:
-        return f"FRONT PAGE  OFFLINE {updated_label(snapshot)}".strip()
-    return f"FRONT PAGE  UPDATED {updated_label(snapshot)}"
+def _status(snapshot):
+    return describe(
+        snapshot,
+        missing_text="NEWS UNAVAILABLE.",
+        loading_text="FETCHING HACKER NEWS",
+        unavailable_text="NEWS UNAVAILABLE.",
+        stale_prefix="FRONT PAGE  OFFLINE",
+        updated_prefix="FRONT PAGE  UPDATED",
+    )
 
 
 def _stats(story):
@@ -82,22 +81,26 @@ def _draw_metadata(s, row, story):
         s.text(row, 2, stats, fg=ACCENT, underline=True)
 
 
-def _header_colour(snapshot):
-    if snapshot is None or snapshot.error:
-        return WARNING
-    return SECONDARY
+def _state(snapshot):
+    empty = bool(snapshot and snapshot.has_value and not snapshot.value)
+    return classify(snapshot, empty=empty)
 
 
 def _hint_colour(ctx, snapshot):
-    if ctx.state.get("news_error") or snapshot is None or snapshot.error:
+    if ctx.state.get("news_error"):
         return WARNING
-    return SECONDARY
+    return _status(snapshot).colour
 
 
 def _empty_lines(snapshot):
-    if snapshot is None or snapshot.error:
+    state = _state(snapshot)
+    if state in (
+        ServiceState.MISSING,
+        ServiceState.UNAVAILABLE,
+        ServiceState.STALE,
+    ):
         return ["CHECK CONNECTION, THEN", "RETRYING AUTOMATICALLY."]
-    if snapshot.loading or not snapshot.has_value:
+    if state is ServiceState.LOADING:
         return ["LOADING NEWS..."]
     return ["NO HEADLINES RIGHT NOW."]
 
@@ -106,14 +109,15 @@ def _hint(ctx, snapshot, stories):
     error = ctx.state.get("news_error")
     if error:
         return error
-    if snapshot is None:
+    state = _state(snapshot)
+    if state is ServiceState.MISSING:
         return "NEWS UNAVAILABLE."
-    if snapshot.error and stories:
+    if state is ServiceState.STALE and stories:
         return "OFFLINE. 1-4 + ENVOI"
     if not stories:
-        if snapshot.error:
+        if state in (ServiceState.UNAVAILABLE, ServiceState.STALE):
             return "CHECK CONNECTION, THEN"
-        if snapshot.has_value and not snapshot.loading:
+        if state in (ServiceState.READY, ServiceState.EMPTY) and not snapshot.loading:
             return "NO HEADLINES RIGHT NOW."
         return "LOADING NEWS..."
     return "TYPE 1-4, THEN ENVOI"
@@ -136,11 +140,12 @@ def list_screen(ctx):
         _clear_error(ctx)
 
     s = Screen()
+    page_status = _status(snapshot)
     status(s, f"111 {pager.label}" if pager.total else "111")
     s.text(1, 0, "HACKER NEWS", inverse=True, size=codec.DOUBLE_WIDTH)
     s.text(
-        2, 0, fit(_header(snapshot), codec.COLS),
-        fg=_header_colour(snapshot),
+        2, 0, fit(page_status.text, codec.COLS),
+        fg=page_status.colour,
     )
 
     window = pager.window(stories)
@@ -159,9 +164,8 @@ def list_screen(ctx):
         _draw_metadata(s, row + 2, story)
 
     if not window:
-        colour = _header_colour(snapshot)
         for index, line in enumerate(_empty_lines(snapshot)):
-            s.text(3 + index, 0, fit(line, codec.COLS), fg=colour)
+            s.text(3 + index, 0, fit(line, codec.COLS), fg=page_status.colour)
 
     s.text(
         18, 0, fit(_hint(ctx, snapshot, stories), codec.COLS),
