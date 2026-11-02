@@ -1,10 +1,48 @@
 [project]
 name = "minitel-videotex"
-version = "0.2.0"
-description = "Minitel 1/2 Videotex library and example page service"
+version = "0.3.0"
+description = "Minitel 1 Videotex library for building 40x25 retro services"
 readme = "README.md"
 requires-python = ">=3.10"
+authors = [{ name = "The minitel-videotex contributors" }]
+license = { text = "MIT" }
+keywords = ["minitel", "videotex", "teletext", "retro", "terminal"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+    "Topic :: Terminals",
+]
 dependencies = []
 
+
+[project.urls]
+Homepage = "https://github.com/SJTButler/minitel-videotex"
+Repository = "https://github.com/SJTButler/minitel-videotex"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
 [tool.uv]
-package = false
+package = true
+
+[tool.hatch.build.targets.wheel]
+packages = ["minitel"]
+
+[tool.hatch.build]
+exclude = [
+    "/.env",
+    "/.env.*",
+    "/.venv",
+    "/build",
+    "/dist",
+    "/guestbook.sqlite3",
+    "/**/__pycache__",
+]

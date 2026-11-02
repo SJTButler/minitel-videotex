@@ -95,9 +95,13 @@ no runtime dependencies.
 uv sync
 ```
 
-`pyproject.toml` uses `[tool.uv] package = false` while the example service
-lives in the repository. Building and publishing the library as a package is a
-separate step.
+`pyproject.toml` builds the installable `minitel-videotex` library from
+`minitel/`; the example server, pages, services, tools, and tests stay in the
+source repository. There are no runtime dependencies.
+
+```sh
+python -m unittest discover -s tests -v
+```
 
 ## Quick start
 
@@ -415,5 +419,9 @@ map; `Ctrl+Q` quits.
   DRCS, and 80-column mixed mode are not implemented.
 - Prestel is a design reference, not a wire profile.
 
-This repository is the public code level. Hardware notes, research, vendored
-repositories, and personal setup live in the private outer workspace.
+Hardware notes, research, vendored repositories, and personal setup live
+outside this repository.
+
+## License
+
+MIT. See [LICENSE](LICENSE).
