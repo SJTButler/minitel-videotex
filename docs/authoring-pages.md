@@ -122,7 +122,7 @@ Every `render`, `on_submit`, `on_form`, and `on_key` receives a
 
 | Member | Meaning |
 |---|---|
-| `ctx.profile` | the terminal profile (`M1`, `M2_MONO`, ...) |
+| `ctx.profile` | the active terminal profile; the server currently runs `M1` |
 | `ctx.registry` | the `Registry` |
 | `ctx.line` | the active field's value |
 | `ctx.last_key` | the last submitted line (used by the not-found page) |

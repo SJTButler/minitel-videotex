@@ -1,11 +1,13 @@
 # Minitel Videotex library
 
-A small Python library and example service for Minitel 1/2 terminals. It speaks
+A small Python library and example service for Minitel 1 terminals. It speaks
 Minitel-native Videotex (CEPT Profile 2) and borrows Prestel's page model:
 numbered pages, a status line, an input field, history, and a guide page.
 
-The Minitel 1 is the primary target. The M2 profiles are present, but the M2 is
-monochrome and currently parked.
+The Minitel 1 is the active and only supported runtime profile: 40x25, 1200
+baud, grey palette. The M2 profile models are reserved for future capability
+work; detection, per-session speed, colour, DRCS, and 80-column mixed mode are
+not wired.
 
 ## Layout
 
@@ -407,9 +409,10 @@ map; `Ctrl+Q` quits.
 
 ## Scope
 
-- M1: 40 columns, 1200 baud, monochrome, 7E1; the active target.
-- M2: profiles and 9600/color/DRCS/80-column capability modelling exist, but
-  the M2 is not currently connected.
+- M1: 40 columns, 1200 baud, monochrome, 7E1; the active and only supported
+  runtime profile.
+- M2: `TerminalProfile` presets are reserved models; detection, speed, colour,
+  DRCS, and 80-column mixed mode are not implemented.
 - Prestel is a design reference, not a wire profile.
 
 This repository is the public code level. Hardware notes, research, vendored
