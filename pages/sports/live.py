@@ -14,9 +14,10 @@ from ..common.layout import (
     key_footer,
     status,
 )
+from ..common.messages import MessageLatch
 from ..common.service_status import ServiceState, classify, colour_for
 from ..common.widgets import page_input
-from .common import clear_error, configured, service, set_error, snapshot
+from .common import configured, service, snapshot
 from .layout import (
     clock_label,
     kickoff_label,
@@ -200,7 +201,7 @@ def _empty_lines(feed, feed_snapshot):
 
 
 def _hint(ctx, feed, feed_snapshot, window):
-    error = ctx.state.get("sports_error")
+    error = MessageLatch(ctx).text()
     if error:
         return error
     state = _state(feed, feed_snapshot)
@@ -252,12 +253,7 @@ def live_screen(ctx):
     pager = _score_pager(ctx, pages)
     page = _current_page(pager, pages)
     window = page.matches if page is not None else ()
-
-    if (
-        ctx.state.get("sports_error")
-        and ctx.state.get("sports_error_offset") != pager.offset
-    ):
-        clear_error(ctx)
+    MessageLatch(ctx).clear_if_moved(pager.offset)
 
     s = Screen()
     status(s, f"150 {pager.label}" if pager.total else "150")
@@ -313,7 +309,7 @@ def live_screen(ctx):
     waning = (
         not configured(feed)
         or feed_snapshot.error
-        or ctx.state.get("sports_error")
+        or MessageLatch(ctx).get()
     )
     s.text(
         19,
@@ -338,23 +334,23 @@ def submit_live(ctx, line):
     pager = _score_pager(ctx, pages)
     page = _current_page(pager, pages)
     window = page.matches if page is not None else ()
+    latch = MessageLatch(ctx)
 
     if value.isdigit() and 1 <= int(value) <= MAX_MATCHES:
         number = int(value)
         if number <= len(window):
             ctx.state["sports_match_id"] = window[number - 1].id
-            clear_error(ctx)
+            latch.clear()
             return DETAIL_PAGE
-        set_error(ctx, f"NO MATCH {number}.", pager.offset)
+        latch.set(f"NO MATCH {number}.", pager.offset)
         ctx.clear_input()
         return LIVE_PAGE
 
     if ctx.page_for(value) is not None:
-        clear_error(ctx)
+        latch.clear()
         return None
 
-    set_error(
-        ctx,
+    latch.set(
         fit(f"NO MATCH {sanitize(value)}.", codec.COLS),
         pager.offset,
     )

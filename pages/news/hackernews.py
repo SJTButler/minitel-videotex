@@ -14,6 +14,7 @@ from ..common.layout import (
     key_footer,
     status,
 )
+from ..common.messages import MessageLatch
 from ..common.service_status import ServiceState, classify, describe
 from ..common.widgets import page_input
 
@@ -37,16 +38,6 @@ def _stories(snapshot):
     if snapshot is None or not snapshot.has_value or not snapshot.value:
         return []
     return list(snapshot.value)
-
-
-def _clear_error(ctx):
-    ctx.state.pop("news_error", None)
-    ctx.state.pop("news_error_offset", None)
-
-
-def _set_error(ctx, message, offset):
-    ctx.state["news_error"] = message
-    ctx.state["news_error_offset"] = offset
 
 
 def _status(snapshot):
@@ -87,7 +78,7 @@ def _state(snapshot):
 
 
 def _hint_colour(ctx, snapshot):
-    if ctx.state.get("news_error"):
+    if MessageLatch(ctx).get():
         return WARNING
     return _status(snapshot).colour
 
@@ -106,7 +97,7 @@ def _empty_lines(snapshot):
 
 
 def _hint(ctx, snapshot, stories):
-    error = ctx.state.get("news_error")
+    error = MessageLatch(ctx).text()
     if error:
         return error
     state = _state(snapshot)
@@ -133,11 +124,7 @@ def list_screen(ctx):
     snapshot = _snapshot(ctx)
     stories = _stories(snapshot)
     pager = _list_pager(ctx, stories)
-    if (
-        ctx.state.get("news_error")
-        and ctx.state.get("news_error_offset") != pager.offset
-    ):
-        _clear_error(ctx)
+    MessageLatch(ctx).clear_if_moved(pager.offset)
 
     s = Screen()
     page_status = _status(snapshot)
@@ -183,23 +170,23 @@ def submit_list(ctx, line):
     stories = _stories(snapshot)
     pager = _list_pager(ctx, stories)
     window = pager.window(stories)
+    latch = MessageLatch(ctx)
 
     if value.isdigit() and len(value) == 1 and int(value) != 0:
         number = int(value)
         if number <= PAGE_SIZE and number <= len(window):
             ctx.state["news_story"] = window[number - 1]
-            _clear_error(ctx)
+            latch.clear()
             return STORY_PAGE
-        _set_error(ctx, f"NO STORY {number}.", pager.offset)
+        latch.set(f"NO STORY {number}.", pager.offset)
         ctx.clear_input()
         return NEWS_PAGE
 
     if ctx.page_for(value) is not None:
-        _clear_error(ctx)
+        latch.clear()
         return None
 
-    _set_error(
-        ctx,
+    latch.set(
         fit(f"NO STORY {sanitize(value)}.", codec.COLS),
         pager.offset,
     )

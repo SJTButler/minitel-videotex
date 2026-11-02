@@ -6,9 +6,10 @@ from minitel.screen import Screen
 from minitel.text import fit, sanitize
 
 from ..common.layout import SECONDARY, WARNING, key_footer, status
+from ..common.messages import MessageLatch
 from ..common.service_status import ServiceState, classify, updated_label
 from ..common.widgets import page_input
-from .common import clear_error, configured, service, set_error
+from .common import configured, service
 from .live import LIVE_PAGE
 from .layout import table_header, table_row
 
@@ -64,11 +65,7 @@ def tables_screen(ctx):
     reset = ctx.state.pop("sports_table_reset", False)
     pager = ctx.set_pager(len(rows), PAGE_SIZE, offset=0 if reset else None)
     ctx.state["sports_table_offset"] = pager.offset
-    if (
-        ctx.state.get("sports_error")
-        and ctx.state.get("sports_error_offset") != pager.offset
-    ):
-        clear_error(ctx)
+    MessageLatch(ctx).clear_if_moved(pager.offset)
 
     s = Screen()
     status(s, f"153 {pager.label}" if pager.total else "153")
@@ -100,7 +97,7 @@ def tables_screen(ctx):
             s.text(4 + index, 0, fit(line, codec.COLS), fg=WARNING)
 
     competitions = _competitions(feed)
-    error = ctx.state.get("sports_error")
+    error = MessageLatch(ctx).text()
     if error:
         hint = error
     elif competitions:
@@ -125,16 +122,16 @@ def submit_tables(ctx, line):
     feed = service(ctx)
     competitions = _competitions(feed)
     offset = ctx.state.get("sports_table_offset", 0)
+    latch = MessageLatch(ctx)
     if value.isdigit() and competitions:
         number = int(value)
         if 1 <= number <= len(competitions):
             ctx.state["sports_table_code"] = competitions[number - 1]
             ctx.state["sports_table_reset"] = True
-            clear_error(ctx)
+            latch.clear()
             ctx.clear_input()
             return TABLES_PAGE
-        set_error(
-            ctx,
+        latch.set(
             fit(f"NO LEAGUE {number}.", codec.COLS),
             offset,
         )
@@ -142,11 +139,10 @@ def submit_tables(ctx, line):
         return TABLES_PAGE
 
     if ctx.page_for(value) is not None:
-        clear_error(ctx)
+        latch.clear()
         return None
 
-    set_error(
-        ctx,
+    latch.set(
         fit(f"NO LEAGUE {sanitize(value)}.", codec.COLS),
         offset,
     )

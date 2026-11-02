@@ -4,6 +4,7 @@ from minitel.screen import Screen
 
 from . import store as guestbook_store
 from ..common.layout import status
+from ..common.messages import MessageLatch
 from ..common.widgets import form_footer, line_field
 
 GUESTBOOK_PAGE = "140"
@@ -22,24 +23,25 @@ def _store(ctx):
 def submit_form(ctx, values):
     handle = values.get("handle", "").strip()
     message = values.get("message", "").strip()
+    latch = MessageLatch(ctx)
 
     if not handle:
-        ctx.state["guestbook_error"] = "HANDLE REQUIRED"
+        latch.set("HANDLE REQUIRED")
         ctx.focus("handle")
         return GUESTBOOK_PAGE
     if not message:
-        ctx.state["guestbook_error"] = "MESSAGE REQUIRED"
+        latch.set("MESSAGE REQUIRED")
         ctx.focus("message")
         return GUESTBOOK_PAGE
 
     try:
         _store(ctx).add(handle, message)
     except ValueError:
-        ctx.state["guestbook_error"] = "MESSAGE REQUIRED"
+        latch.set("MESSAGE REQUIRED")
         ctx.focus("message")
         return GUESTBOOK_PAGE
 
-    ctx.state.pop("guestbook_error", None)
+    latch.clear()
     ctx.values.clear()
     ctx.focus("handle")
     return GUESTBOOK_PAGE
@@ -69,7 +71,7 @@ def guestbook(ctx):
     line_field(s, ctx, "handle", 14, 9, 16, label="HANDLE:")
     line_field(s, ctx, "message", 16, 9, 30, label="MESSAGE:")
 
-    error = ctx.state.get("guestbook_error", "")
+    error = MessageLatch(ctx).text() or ""
     if error:
         s.text(18, 0, error)
 

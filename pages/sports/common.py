@@ -25,13 +25,3 @@ def find_match(feed_snapshot, match_id):
         if match.id == match_id:
             return match
     return None
-
-
-def clear_error(ctx):
-    ctx.state.pop("sports_error", None)
-    ctx.state.pop("sports_error_offset", None)
-
-
-def set_error(ctx, message, offset=0):
-    ctx.state["sports_error"] = message
-    ctx.state["sports_error_offset"] = offset
