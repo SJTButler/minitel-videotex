@@ -246,6 +246,11 @@ class Session:
             raise TypeError(
                 f"page {self.current.number!r} returned {type(screen)!r}, expected Screen"
             )
+        if self.current.form and ctx.fields and ctx.pager is not None:
+            raise ValueError(
+                f"page {self.current.number!r} cannot declare both form fields "
+                "and a pager"
+            )
         self._adopt_pager(ctx.pager, ctx.pager_carousel)
         self.fields = ctx.fields
         names = [field.name for field in self.fields]

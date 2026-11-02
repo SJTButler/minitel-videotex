@@ -85,6 +85,11 @@ class PageContext:
         )
 
     def set_pager(self, total, page_size, *, offset=None, carousel=None):
+        if self.page.form and self.fields:
+            raise ValueError(
+                f"page {self.page.number!r} cannot declare both form fields "
+                "and a pager"
+            )
         if carousel is not None and not isinstance(carousel, Carousel):
             raise TypeError("carousel must be a Carousel or None")
         if offset is None:
@@ -244,10 +249,10 @@ class Registry:
         self._by_key = {}
 
     def add(self, page: Page):
+        if any(existing is page for existing in self._pages):
+            return page
         for key in (page.number, *page.aliases):
             existing = self._by_key.get(key)
-            if existing is page:
-                continue
             if existing is not None:
                 raise ValueError(
                     f"page key {key!r} already registered by {existing.title!r}"
@@ -283,7 +288,7 @@ class Registry:
             if isinstance(name, str) and name:
                 groups.setdefault(name, []).append(page)
         return {
-            name: tuple(groups[name])
+            name: tuple(sorted(groups[name], key=lambda page: page.number))
             for name in sorted(
                 groups,
                 key=lambda name: min(page.number for page in groups[name]),
