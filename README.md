@@ -157,7 +157,7 @@ def hello(ctx):
 A page returns a `Screen`; `ctx.set_input(row, col, width)` tells the session
 where the cursor and input line belong. `PageContext` also provides
 `ctx.line`, `ctx.input_value`, `ctx.clear_input()`, `ctx.last_key`, `ctx.state`,
-`ctx.profile`, `ctx.registry`, `ctx.services`, `ctx.service(name)`,
+`ctx.profile`, `ctx.registry`, `ctx.service(name)` (declared services only),
 `ctx.add_resource(resource)`, and `ctx.set_pager(total, page_size)`.
 
 For a multi-field form, register fields with `ctx.add_field(...)`, set
@@ -202,8 +202,9 @@ Pages declare their dependencies:
 ```
 
 The server refuses to start if a required service key is missing. Pages reach
-services through `ctx.services` or `ctx.service("sports")`. `services/` is app
-infrastructure; `minitel/` remains content-free; `pages/` remains presentation.
+declared services through `ctx.service("sports")`; undeclared keys raise
+`KeyError`. `services/` is app infrastructure; `minitel/` remains content-free;
+`pages/` remains presentation.
 
 The news service is the worked example:
 

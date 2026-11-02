@@ -26,7 +26,7 @@ LINE_FIELD = "input"
 
 class PageContext:
     def __init__(self, session, page, registry):
-        self.session = session
+        self._session = session
         self.page = page
         self.registry = registry
         self.fields = []
@@ -37,33 +37,33 @@ class PageContext:
 
     @property
     def line(self):
-        return self.session.line
+        return self._session.line
 
     @property
     def profile(self):
-        return self.session.profile
+        return self._session.profile
 
     @property
     def last_key(self):
-        return self.session.last_key
+        return self._session.last_key
 
     @property
     def state(self):
-        return self.session.state
-
-    @property
-    def services(self):
-        return self.session.services
+        return self._session.state
 
     def service(self, name, default=None):
-        return self.services.get(name, default)
+        if name not in self.page.requires:
+            raise KeyError(
+                f"page {self.page.number!r} does not declare service {name!r}"
+            )
+        return self._session.services.get(name, default)
 
     def add_resource(self, resource):
-        return self.session.add_resource(resource)
+        return self._session.add_resource(resource)
 
     @property
     def active_name(self):
-        return self.session.requested_focus or self.session.active_name
+        return self._session.requested_focus or self._session.active_name
 
     def add_field(self, name, row, col, width, *, mask=None, value="",
                   cursor="visible"):
@@ -101,11 +101,11 @@ class PageContext:
         if carousel is not None and not isinstance(carousel, Carousel):
             raise TypeError("carousel must be a Carousel or None")
         if offset is None:
-            current = self.session.pager
+            current = self._session.pager
             if current is not None:
                 offset = current.offset
             else:
-                stored = self.session.pagers.get(self.page.number)
+                stored = self._session.pagers.get(self.page.number)
                 offset = stored.offset if stored is not None else 0
         self.pager = Pager(total, page_size, offset).clamp()
         self.pager_carousel = carousel
@@ -113,22 +113,22 @@ class PageContext:
 
     @property
     def screensaver(self):
-        return self.session.screensaver
+        return self._session.screensaver
 
     @property
     def idle_elapsed(self):
-        return self.session.idle_elapsed
+        return self._session.idle_elapsed
 
     def set_screensaver(self, pages, *, after=120.0, hold=20.0, wrap=True):
-        return self.session.set_screensaver(
+        return self._session.set_screensaver(
             pages, after=after, hold=hold, wrap=wrap
         )
 
     def disable_screensaver(self):
-        return self.session.disable_screensaver()
+        return self._session.disable_screensaver()
 
     def start_screensaver(self, index=0):
-        return self.session.request_screensaver(index)
+        return self._session.request_screensaver(index)
 
     def field(self, name):
         for field in self.fields:
@@ -137,7 +137,7 @@ class PageContext:
         return None
 
     def focus(self, name):
-        self.session.requested_focus = name
+        self._session.requested_focus = name
 
     def page_for(self, key):
         return self.registry.get(key)

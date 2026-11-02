@@ -24,7 +24,7 @@ PAGE_SIZE = 4
 
 
 def _service(ctx):
-    return ctx.services.get("hackernews")
+    return ctx.service("hackernews")
 
 
 def _snapshot(ctx):

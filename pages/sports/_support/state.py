@@ -4,7 +4,7 @@ from services.sports.models import FeedSnapshot
 
 
 def service(ctx):
-    return ctx.services.get("sports")
+    return ctx.service("sports")
 
 
 def snapshot(ctx):

@@ -42,7 +42,7 @@ def directory_screen(ctx):
             break
         s.text(row, 0, f"{entry.number} ", fg=ACCENT, inverse=True)
         s.text(row, 3, entry.label[:codec.COLS - 3])
-        service = ctx.services.get(entry.service)
+        service = ctx.service(entry.service)
         snapshot = service.front_page() if service is not None else None
         page_status = describe(
             snapshot,

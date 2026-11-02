@@ -122,14 +122,12 @@ Every `render`, `on_submit`, `on_form`, and `on_key` receives a
 
 | Member | Meaning |
 |---|---|
-| `ctx.session` | the live `Session` |
 | `ctx.profile` | the terminal profile (`M1`, `M2_MONO`, ...) |
 | `ctx.registry` | the `Registry` |
 | `ctx.line` | the active field's value |
 | `ctx.last_key` | the last submitted line (used by the not-found page) |
 | `ctx.state` | a per-session dict for page state |
-| `ctx.services` | the process-wide injected services |
-| `ctx.service(name, default=None)` | look up one service |
+| `ctx.service(name, default=None)` | look up a service declared in `requires` |
 | `ctx.add_resource(resource)` | register a per-session object to close on disconnect |
 | `ctx.active_name` | the active field name, including a pending focus |
 | `ctx.values` | all field values for the current page |
@@ -662,9 +660,11 @@ Pages declare their dependencies:
 ```
 
 The server validates the full page/service graph before listening. Pages read
-services with `ctx.services` or `ctx.service("sports")`; they never construct a
-service or import its provider module. `minitel/` stays content-free;
-`services/` owns background data and lifecycle; `pages/` owns presentation.
+declared services with `ctx.service("sports")`; an undeclared key raises
+`KeyError` instead of silently reaching into the process-wide service mapping.
+Pages never construct a service or import its provider module. `minitel/` stays
+content-free; `services/` owns background data and lifecycle; `pages/` owns
+presentation.
 
 The library pieces:
 
@@ -903,7 +903,7 @@ The library boundaries are deliberate:
   `minitel/transport.py`; `Session` does not know about sockets.
 - **Different application**: build a `Registry`, pass a fallback and guide page
   to `MinitelApp`, and choose a page package (not necessarily `pages/`).
-- **Background services**: injection, `ctx.services`, and `start()`/`stop()`
+- **Background services**: injection, `ctx.service`, and `start()`/`stop()`
   hooks are implemented. The news source is the reference for a cached live
   feed. A shared scheduler, a multi-user hub, and push updates are still future
   work above `Session`.

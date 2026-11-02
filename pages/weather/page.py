@@ -58,7 +58,7 @@ def weather_screen(ctx):
         underline=True,
     )
 
-    service = ctx.services.get("weather")
+    service = ctx.service("weather")
     if service is None:
         s.text(5, 0, "WEATHER SERVICE NOT CONFIGURED", fg=WARNING)
         page_status = describe_many(
