@@ -2,6 +2,7 @@ import importlib.util
 import unittest
 from pathlib import Path
 
+import minitel
 from minitel import codec
 from minitel.render import render, render_diff
 from minitel.screen import Screen
@@ -184,6 +185,12 @@ class DiffTests(unittest.TestCase):
 
         decoded = apply_diff(old, render_diff(old, new))
         self.assertTrue(decoded.text().splitlines()[0].startswith("PAGE 110"))
+
+
+class PackageSurfaceTests(unittest.TestCase):
+    def test_package_render_is_the_module_and_render_screen_is_the_function(self):
+        self.assertTrue(hasattr(minitel.render, "render_diff"))
+        self.assertIs(minitel.render_screen, minitel.render.render)
 
 
 if __name__ == "__main__":

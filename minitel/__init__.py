@@ -18,7 +18,7 @@ from .profiles import (
     cps,
 )
 from .screen import Cell, Screen
-from .render import render, render_diff
+from .render import render_diff, render_screen
 from .pages import FunctionPage, InputField, Page, PageContext, Registry, page
 from .services import ServiceRegistry, ServiceSpec, service
 from .screensaver import Screensaver
@@ -60,8 +60,8 @@ __all__ = [
     "http",
     "page",
     "paging",
-    "render",
     "render_diff",
+    "render_screen",
     "service",
     "services",
     "text",

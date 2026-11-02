@@ -7,7 +7,7 @@ import time
 from . import transport
 from .power import PowerSignals
 from .profiles import M1
-from .render import render
+from .render import render_screen
 from .screensaver import Screensaver
 from .services import ServiceRegistry
 from .session import Session
@@ -64,7 +64,7 @@ class MinitelApp:
         )
 
     async def send(self, pacer, screen, log):
-        data = render(screen)
+        data = render_screen(screen)
         await pacer.write(data)
         log(f"SENT page ({len(data)} bytes)")
 

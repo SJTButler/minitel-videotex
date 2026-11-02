@@ -168,3 +168,6 @@ def render_diff(old, new):
     if cursor_cell.size != codec.NORMAL:
         out += codec.size(cursor_cell.size)
     return bytes(out)
+
+
+render_screen = render
