@@ -7,6 +7,8 @@ from minitel.text import fit
 
 from services.sports.models import MatchStatus
 
+from ..common.clock import clock_text
+
 try:
     from zoneinfo import ZoneInfo
 
@@ -39,7 +41,7 @@ def clock_label(timestamp):
     if timestamp is None:
         return "--:--:--"
     try:
-        return time.strftime("%H:%M:%S", time.localtime(timestamp))
+        return clock_text(time.localtime(timestamp))
     except (OSError, OverflowError, ValueError):
         return "--:--:--"
 

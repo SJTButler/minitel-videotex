@@ -1,17 +1,14 @@
-import time
-
 from minitel import codec
 from minitel.pages import page
 from minitel.screen import Screen
 
+from .common.clock import clock_text
 from .common.layout import footer, status
 from .common.widgets import page_input
 
 CLOCK_ROW = 3
 CLOCK_COL = 24
 
-def clock_text():
-    return time.strftime("%H:%M:%S")
 
 def clock_tick(ctx):
     return codec.pos(CLOCK_ROW, CLOCK_COL + 6) + codec.text(clock_text())

@@ -5,6 +5,7 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import Protocol
 
+from .clock import clock_hm
 from .layout import SECONDARY, WARNING
 
 
@@ -40,7 +41,7 @@ def updated_label(snapshot):
     if age is None:
         return ""
     try:
-        return time.strftime("%H:%M", time.localtime(time.time() - age))
+        return clock_hm(time.localtime(time.time() - age))
     except (OSError, OverflowError, ValueError):
         return "--:--"
 

@@ -1,8 +1,8 @@
-import time
-
 from minitel import codec
 from minitel.pages import page
 from minitel.screen import Screen
+
+from ..common.clock import clock_hm, date_text
 
 
 @page("901", title="TEST CARD", back_page="190", screensaver="test_card")
@@ -28,6 +28,6 @@ def mire(ctx):
 
     s.text(13, 0, "PROFILE: " + ctx.profile.name.upper())
     s.text(14, 0, f"MAX: {ctx.profile.max_speed} BPS")
-    s.text(15, 0, time.strftime("DATE: %d/%m/%Y  TIME: %H:%M"))
+    s.text(15, 0, f"DATE: {date_text()}  TIME: {clock_hm()}")
     s.text(23, 0, "PRESS ANY KEY")
     return s
