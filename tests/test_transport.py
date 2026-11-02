@@ -51,6 +51,32 @@ class PacedWriterTests(unittest.IsolatedAsyncioTestCase):
         self.assertAlmostEqual(clock.sleeps[0], 0.1)
         self.assertEqual(writer.writes, [b"ABCD", b"E"])
 
+    async def test_partial_budget_only_waits_for_the_missing_tokens(self):
+        clock = FakeClock()
+        writer = FakeWriter()
+        pacer = PacedWriter(
+            writer, cps=10, burst=4, clock=clock, sleep=clock.sleep
+        )
+
+        await pacer.write(b"ABC")
+        await pacer.write(b"DEFG")
+
+        self.assertAlmostEqual(clock.sleeps[0], 0.3)
+        self.assertEqual(writer.writes, [b"ABC", b"DEFG"])
+
+    async def test_page_after_echo_does_not_stall(self):
+        clock = FakeClock()
+        writer = FakeWriter()
+        pacer = PacedWriter(
+            writer, cps=100, burst=32, clock=clock, sleep=clock.sleep
+        )
+
+        await pacer.write(b"ABCDE")
+        await pacer.write(b"X" * 32)
+
+        self.assertAlmostEqual(clock.sleeps[0], 0.05)
+        self.assertEqual(writer.writes[-1], b"X" * 32)
+
     async def test_idle_time_refills_but_is_capped(self):
         clock = FakeClock()
         writer = FakeWriter()

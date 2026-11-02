@@ -21,6 +21,7 @@ class PacedWriter:
         self._sleep = sleep or asyncio.sleep
         self._tokens = float(self.burst)
         self._updated = self._clock()
+        self._chunk = min(CHUNK, self.burst)
 
     async def write(self, data):
         if not data:
@@ -29,14 +30,14 @@ class PacedWriter:
             self.writer.write(data)
             await self.writer.drain()
             return
-        for start in range(0, len(data), CHUNK):
-            chunk = data[start:start + CHUNK]
+        for start in range(0, len(data), self._chunk):
+            chunk = data[start:start + self._chunk]
             await self._spend(len(chunk))
             self.writer.write(chunk)
             await self.writer.drain()
 
     async def _spend(self, amount):
-        while amount > 0:
+        while True:
             now = self._clock()
             elapsed = now - self._updated
             if elapsed > 0:
@@ -48,7 +49,6 @@ class PacedWriter:
                 self._tokens -= amount
                 return
             missing = amount - self._tokens
-            self._tokens = 0.0
             await self._sleep(missing / self.cps)
 
 
