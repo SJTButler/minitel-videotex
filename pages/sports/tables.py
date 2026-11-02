@@ -124,14 +124,14 @@ def submit_tables(ctx, line):
             ctx.state["sports_table_code"] = competitions[number - 1]
             ctx.state["sports_table_reset"] = True
             clear_error(ctx)
-            ctx.values["input"] = ""
+            ctx.clear_input()
             return TABLES_PAGE
         set_error(
             ctx,
             fit(f"NO LEAGUE {number}.", codec.COLS),
             offset,
         )
-        ctx.values["input"] = ""
+        ctx.clear_input()
         return TABLES_PAGE
 
     if ctx.page_for(value) is not None:
@@ -143,7 +143,7 @@ def submit_tables(ctx, line):
         fit(f"NO LEAGUE {sanitize(value)}.", codec.COLS),
         offset,
     )
-    ctx.values["input"] = ""
+    ctx.clear_input()
     return TABLES_PAGE
 
 

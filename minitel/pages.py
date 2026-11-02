@@ -21,6 +21,7 @@ class InputField:
 
 
 CURSOR_MODES = ("visible", "hidden", "auto")
+LINE_FIELD = "input"
 
 
 class PageContext:
@@ -77,10 +78,17 @@ class PageContext:
         self.values.setdefault(name, value)
         return field
 
+    @property
+    def input_value(self):
+        return self.values.get(LINE_FIELD, "")
+
+    def clear_input(self):
+        self.values[LINE_FIELD] = ""
+
     def set_input(self, row, col, width, *, mask=None, value="",
                   cursor="visible"):
         return self.add_field(
-            "input", row, col, width,
+            LINE_FIELD, row, col, width,
             mask=mask, value=value, cursor=cursor,
         )
 

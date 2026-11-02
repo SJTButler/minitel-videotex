@@ -64,7 +64,7 @@ def _cycle_delay(ctx):
 
 def screensaver_submit(ctx, line):
     line = line.strip()
-    ctx.values.clear()
+    ctx.clear_input()
     choices = _choices(ctx)[:8]
     if line.isdigit() and 1 <= int(line) <= len(choices):
         _choose(ctx, choices[int(line) - 1][1])

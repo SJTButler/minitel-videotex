@@ -19,7 +19,15 @@ from .profiles import (
 )
 from .screen import Cell, Screen
 from .render import render_diff, render_screen
-from .pages import FunctionPage, InputField, Page, PageContext, Registry, page
+from .pages import (
+    LINE_FIELD,
+    FunctionPage,
+    InputField,
+    Page,
+    PageContext,
+    Registry,
+    page,
+)
 from .services import ServiceRegistry, ServiceSpec, service
 from .screensaver import Screensaver
 from .session import Action, Session
@@ -37,6 +45,7 @@ __all__ = [
     "HttpError",
     "InputField",
     "JsonResponse",
+    "LINE_FIELD",
     "MinitelApp",
     "Page",
     "PageContext",

@@ -339,7 +339,7 @@ def submit_live(ctx, line):
             clear_error(ctx)
             return DETAIL_PAGE
         set_error(ctx, f"NO MATCH {number}.", pager.offset)
-        ctx.values["input"] = ""
+        ctx.clear_input()
         return LIVE_PAGE
 
     if ctx.page_for(value) is not None:
@@ -351,7 +351,7 @@ def submit_live(ctx, line):
         fit(f"NO MATCH {sanitize(value)}.", codec.COLS),
         pager.offset,
     )
-    ctx.values["input"] = ""
+    ctx.clear_input()
     return LIVE_PAGE
 
 

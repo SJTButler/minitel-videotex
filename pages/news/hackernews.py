@@ -187,7 +187,7 @@ def submit_list(ctx, line):
             _clear_error(ctx)
             return STORY_PAGE
         _set_error(ctx, f"NO STORY {number}.", pager.offset)
-        ctx.values["input"] = ""
+        ctx.clear_input()
         return NEWS_PAGE
 
     if ctx.page_for(value) is not None:
@@ -199,7 +199,7 @@ def submit_list(ctx, line):
         fit(f"NO STORY {sanitize(value)}.", codec.COLS),
         pager.offset,
     )
-    ctx.values["input"] = ""
+    ctx.clear_input()
     return NEWS_PAGE
 
 
