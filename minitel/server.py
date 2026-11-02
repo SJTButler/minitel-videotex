@@ -45,8 +45,16 @@ def main():
     )
     ap.add_argument(
         "--echo",
+        dest="echo",
         action="store_true",
-        help="echo typed characters from the server (local echo off)",
+        default=True,
+        help="echo typed characters from the server (default; local echo off)",
+    )
+    ap.add_argument(
+        "--local-echo",
+        dest="echo",
+        action="store_false",
+        help="use the terminal's local echo; the server does not echo",
     )
     ap.add_argument(
         "--screensaver",

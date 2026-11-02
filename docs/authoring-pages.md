@@ -336,25 +336,23 @@ from pages.layout import form_footer, line_field, status
 
 Two models:
 
-- **Local echo** (default): the terminal displays keys as they are pressed; the
-  server only updates its line buffer. Instant, zero setup, fewer bytes. But a
-  tick can move the cursor while the terminal echoes a key, so on a tick page a
-  keypress during the tick can land at the clock. Fine for static pages.
-- **Server echo**: the server writes each key at the input cursor. Run with
-  `--echo` and the terminal's local echo off. The app serialises ticks and key
-  echo, so a character always lands at the field. Recommended for tick pages
-  and forms.
+- **Server echo** (default): the server sends local echo off, writes each key at
+  the input cursor, and serialises ticks with key echo. A character always lands
+  at the field. Recommended for tick pages and forms.
+- **Local echo**: the terminal displays keys as it is pressed; the server only
+  updates its line buffer. Instant, fewer bytes, but a tick can move the cursor
+  while the terminal echoes a key, so on a tick page a keypress during the tick
+  can land at the clock. Fine for static pages. Run with `--local-echo`.
 
-To switch:
+The server asserts the terminal's echo mode itself: server echo sends local echo
+off, and `--local-echo` sends local echo on. It does this on every new connection
+and again on power-on, so a Minitel power cycle no longer leaves the terminal in
+the wrong mode. The dongle's own `Echo` preference is only the initial/pre-
+connect state; the server's echo contract wins for the session.
 
-1. disable local echo in the terminal/dongle settings;
-2. start with `uv run python -m minitel.server --port 3615 --echo`;
-3. type. Double characters mean local echo is still on. If keys stop reaching
-   the server, that setting controlled the key path rather than local echo;
-   revert it and keep local echo.
-
-The example defaults to local echo because it requires no terminal setting
-change.
+If keys stop reaching the server after the override, the terminal's switch
+matrix is the wrong one for this path; report the unit rather than adding page
+code.
 
 ## Pagination
 
@@ -425,9 +423,9 @@ def dynamic(ctx):
 - `cursor="hidden"` is also available if a page should never show a cursor.
   `cursor="visible"` with a moving tick will blink or jump: `COF`/`CON` resets
   the terminal’s blink phase, and the tick cannot sync to it.
-- Local echo still lands in the inverse field while the cursor is hidden. If
-  the terminal’s local echo is off, use `--echo`; the server sends the same
-  cursor commands.
+- Local echo still lands in the inverse field while the cursor is hidden. With
+  the default server echo, the server sends the same cursor commands;
+  `--local-echo` keeps terminal echo instead.
 - The initial `render` must draw the same region at the same position, so the
   first tick overwrites the same cells.
 - A full page is ~240 bytes (~1.8 s at 1200). A small region is ~15 bytes
@@ -838,8 +836,9 @@ python3 tools/minitel_client.py --connect 127.0.0.1:43620
 ```
 
 The interactive client renders the live session and sends real Minitel keys.
-Use `--no-local-echo` when the server runs with `--echo`; otherwise characters
-are doubled. `F9` shows the key map, and `Ctrl+Q` quits.
+The server defaults to server echo, so start the client with `--no-local-echo`
+to match; if the server runs with `--local-echo`, the client default matches.
+`F9` shows the key map, and `Ctrl+Q` quits.
 
 For a one-shot capture or a replayable plain grid:
 

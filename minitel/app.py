@@ -15,7 +15,7 @@ from .session import Session
 
 class MinitelApp:
     def __init__(self, registry, *, profile=M1, initial="100", fallback=None,
-                 guide=None, cps=None, echo=False, log=None, services=None,
+                 guide=None, cps=None, echo=True, log=None, services=None,
                  screensaver=None, screensaver_after=120.0,
                  screensaver_hold=20.0, power=None, clock=None):
         self.registry = registry
@@ -94,6 +94,9 @@ class MinitelApp:
 
         session = self.new_session()
         try:
+            echo = session.echo_override()
+            await transport.paced_write(writer, echo, self.cps)
+            log(f"ECHO local {'off' if self.echo else 'on'}")
             await self.send(writer, session.start(), log)
             while True:
                 interval = session.next_timeout()

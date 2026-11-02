@@ -34,6 +34,9 @@ DOUBLE_HEIGHT = 1
 DOUBLE_WIDTH = 2
 DOUBLE_SIZE = 3
 
+ECHO_ON = bytes([ESC, 0x3B, 0x61, 0x5A, 0x51])
+ECHO_OFF = bytes([ESC, 0x3B, 0x60, 0x5A, 0x51])
+
 ROWS = 25
 COLS = 40
 
@@ -194,6 +197,16 @@ def mosaic(value):
 
 def cursor(on=True):
     return bytes([CON if on else COF])
+
+
+def echo_mode(local=True):
+    """Select local keyboard echo or route it away from the screen.
+
+    The Minitel echo command is a PRO3 aiguillage frame:
+    ``ESC ; <on/off> <modem> <keyboard>``. ``local=True`` turns screen echo
+    on; ``local=False`` turns it off so the server can echo.
+    """
+    return ECHO_ON if local else ECHO_OFF
 
 
 @dataclass(frozen=True)

@@ -353,6 +353,24 @@ class SessionTests(unittest.TestCase):
         session.navigate("500")
         self.assertEqual(session.history, [])
 
+    def test_echo_override_follows_the_server_echo_setting(self):
+        self.assertEqual(self.session.echo_override(), codec.echo_mode(True))
+        echoed = Session(
+            self.registry,
+            profiles.M1,
+            initial=pages.INITIAL,
+            fallback=self.registry.get(pages.NOT_FOUND),
+            echo=True,
+        )
+        echoed.start()
+        self.assertEqual(echoed.echo_override(), codec.echo_mode(False))
+
+    def test_power_on_reasserts_the_echo_mode_before_repainting(self):
+        self.feed(POWER_OFF)
+        action = self.feed(POWER_ON)[0]
+        self.assertTrue(action.raw.startswith(codec.echo_mode(True)))
+        self.assertIsNotNone(action.screen)
+
     def test_power_off_pauses_output_and_timers(self):
         self.feed(b"AB")
         actions = self.feed(POWER_OFF)

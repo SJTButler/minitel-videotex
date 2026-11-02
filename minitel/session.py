@@ -89,6 +89,10 @@ class Session:
         if field is not None:
             self.values[field.name] = value
 
+    def echo_override(self):
+        """Assert the terminal's local echo mode for this session."""
+        return codec.echo_mode(not self.echo)
+
     def _touch(self):
         now = self.clock()
         self.last_activity = now
@@ -450,6 +454,7 @@ class Session:
             action = self._render_screensaver()
         else:
             action = Action(screen=self.render())
+        action.raw = self.echo_override() + action.raw
         action.power = True
         return action
 

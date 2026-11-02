@@ -3,6 +3,7 @@ import unittest
 import pages
 import services
 
+from minitel import codec
 from minitel.app import MinitelApp
 from minitel.power import PowerSignals
 from minitel.profiles import M1
@@ -68,6 +69,19 @@ class AppTests(unittest.IsolatedAsyncioTestCase):
         app = MinitelApp(self.registry)
         self.assertIsNone(app.new_session().screensaver)
 
+    def test_server_echo_is_the_default(self):
+        app = MinitelApp(self.registry)
+        self.assertTrue(app.echo)
+        session = app.new_session()
+        self.assertTrue(session.echo)
+        self.assertEqual(session.echo_override(), codec.echo_mode(False))
+
+    def test_local_echo_can_be_selected(self):
+        app = MinitelApp(self.registry, echo=False)
+        session = app.new_session()
+        self.assertFalse(session.echo)
+        self.assertEqual(session.echo_override(), codec.echo_mode(True))
+
     def test_power_signals_propagate_to_sessions(self):
         signals = PowerSignals(off=b"\x01", on=b"\x02")
         app = MinitelApp(self.registry, power=signals)
@@ -100,6 +114,9 @@ class AppTests(unittest.IsolatedAsyncioTestCase):
         class FakeSession:
             def start(self):
                 return Screen()
+
+            def echo_override(self):
+                return b""
 
             def next_timeout(self):
                 return None
@@ -136,6 +153,40 @@ class AppTests(unittest.IsolatedAsyncioTestCase):
         await app.handle(Reader(), Writer())
 
         self.assertEqual(closed, [True])
+
+    async def test_handle_asserts_the_local_echo_mode_before_the_first_page(self):
+        writes = []
+
+        class Reader:
+            async def read(self, size):
+                return b""
+
+        class Writer:
+            def get_extra_info(self, name):
+                return None
+
+            def write(self, data):
+                writes.append(data)
+
+            async def drain(self):
+                pass
+
+            def close(self):
+                pass
+
+            async def wait_closed(self):
+                pass
+
+        app = MinitelApp(
+            self.registry,
+            echo=True,
+            cps=0,
+            log=lambda peer, message: None,
+        )
+        await app.handle(Reader(), Writer())
+
+        self.assertEqual(writes[0], codec.echo_mode(False))
+        self.assertGreater(len(writes[1]), 0)
 
     async def test_sync_hooks_are_supported(self):
         events = []

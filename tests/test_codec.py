@@ -61,6 +61,14 @@ class AttributeTests(unittest.TestCase):
         self.assertEqual(codec.size(codec.DOUBLE_SIZE), b"\x1b\x4f")
 
 
+class EchoModeTests(unittest.TestCase):
+    def test_local_echo_on(self):
+        self.assertEqual(codec.echo_mode(True), b"\x1b\x3b\x61\x5a\x51")
+
+    def test_local_echo_off(self):
+        self.assertEqual(codec.echo_mode(False), b"\x1b\x3b\x60\x5a\x51")
+
+
 class TextTests(unittest.TestCase):
     def test_ascii(self):
         self.assertEqual(codec.text("HELLO"), b"HELLO")

@@ -96,15 +96,18 @@ The server listens on `0.0.0.0:3615`, sends the welcome page, and paces output
 at 1200/9 chars per second for the M1. Point the dongle's Telnet preset at the
 server's LAN address and port.
 
-If the terminal's local echo is off:
+Server-side echo is the default: the server echoes keys and asserts local echo
+off on connect and again after a power-on, so you do not need to change the
+dongle/terminal setting first. It is recommended for dynamic/tick pages because
+it serialises key echo with clock updates.
+
+To use the terminal's local echo instead:
 
 ```sh
-uv run python -m minitel.server --port 3615 --echo
+uv run python -m minitel.server --port 3615 --local-echo
 ```
 
-Server echo is recommended for dynamic/tick pages: it serialises key echo with
-clock updates. Disable local echo first, otherwise characters are doubled. See
-`docs/authoring-pages.md` for the tradeoff.
+See `docs/authoring-pages.md` for the tradeoff.
 
 `--cps 0` disables pacing for a local test.
 
@@ -114,9 +117,10 @@ To drive the server from this machine instead of a real terminal:
 uv run python tools/minitel_client.py --connect 127.0.0.1:3615
 ```
 
-The client uses local echo by default, matching the server default. If the
-server runs with `--echo`, start the client with `--no-local-echo` to avoid
-doubled characters. Use `--cps 0` on the server for an immediate local paint.
+The client uses local echo by default. Because the server now defaults to
+server echo, start the client with `--no-local-echo` to avoid doubled
+characters. If the server runs with `--local-echo`, the client default matches.
+Use `--cps 0` on the server for an immediate local paint.
 
 ## Tests
 
