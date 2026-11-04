@@ -14,6 +14,7 @@ BASE_URL = "https://api.open-meteo.com/v1/forecast"
 class Location:
     key: str
     name: str
+    code: str
     latitude: float
     longitude: float
 
@@ -28,10 +29,10 @@ class Weather:
 
 
 LOCATIONS = (
-    Location("london", "LONDON", 51.5072, -0.1276),
-    Location("paris", "PARIS", 48.8566, 2.3522),
-    Location("lyon", "LYON", 45.7640, 4.8357),
-    Location("marseille", "MARSEILLE", 43.2965, 5.3698),
+    Location("london", "LONDON", "LON", 51.5072, -0.1276),
+    Location("paris", "PARIS", "PAR", 48.8566, 2.3522),
+    Location("lyon", "LYON", "LYO", 45.7640, 4.8357),
+    Location("marseille", "MARSEILLE", "MAR", 43.2965, 5.3698),
 )
 
 def _as_float(value):

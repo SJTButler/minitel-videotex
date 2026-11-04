@@ -63,9 +63,9 @@ The decorator form is the shortest:
 ```python
 @page(number, title="", aliases=(), on_submit=None, on_key=None,
       on_tick=None, tick_interval=None, form=False, on_form=None,
-      transient=False, back_page=None, screensaver=None,
-      no_screensaver=False, scroll=False, requires=(), extensions=False,
-      **meta)
+      transient=False, back_page=None, extension_back_page=None,
+      screensaver=None, no_screensaver=False, scroll=False, requires=(),
+      extensions=False, **meta)
 def render(ctx):
     return Screen()
 ```
@@ -101,6 +101,9 @@ def render(ctx):
   [Scrolling text pages](#scrolling-text-pages).
 - `extensions=True` lets the page be addressed as `number#token`, such as
   `120#PAR`; see [Page extension codes](#page-extension-codes).
+- `extension_back_page="120"` sets the logical `RETOUR` parent for extension
+  routes. The default `None` follows history; the base page is not
+  automatically the parent.
 - `meta` is free-form; useful for a custom app.
 
 For stateful or larger pages, subclass `Page`:
@@ -869,7 +872,7 @@ Keep page numbers stable and descriptive. The example scheme is:
 | `110` | news service directory |
 | `111` | Hacker News headline list |
 | `112` | story detail |
-| `120` | weather: current conditions and today's forecast |
+| `120` | weather: current conditions, forecast, and `120#CODE` city detail |
 | `130` | about / guide |
 | `140` | guestbook |
 | `150` | live scores (`5` on the home menu) |
@@ -917,9 +920,12 @@ The registry parses the route; pages never split `#` themselves.
 - `ctx.page.number` is the full key (`120#PAR`). History, pager memory, and
   page-message keys use the full key, so extension routes have their own
   remembered cursor and messages.
-- `RETOUR` follows history like any other page. Direct entry from home returns
-  home; if you reached `120#PAR` from `120`, it returns to `120`. The base page
-  is not automatically the extension route's parent.
+- `RETOUR` follows history by default. Direct entry from home returns home; if
+  you reached `120#PAR` from `120`, it returns to `120`. A page can declare
+  `extension_back_page="120"` to make the summary a logical parent: direct
+  `120#PAR` then returns to `120`, and the next `RETOUR` follows history. The
+  base page is not automatically the extension route's parent.
+  Page 120 uses this for `120#PAR` city detail.
 - An alias resolves to the canonical base: `5#PL` addresses `150#PL`.
 - Extension routes are not registered pages. `Registry.all()`, the page
   directory, screensaver groups, and startup requirement validation list base

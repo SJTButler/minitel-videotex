@@ -146,6 +146,7 @@ class Page:
     form = False
     transient = False
     back_page = None
+    extension_back_page = None
     screensaver = None
     no_screensaver = False
     scroll = False
@@ -174,8 +175,9 @@ class FunctionPage(Page):
     def __init__(self, number, render, *, title="", aliases=(), on_submit=None,
                  on_key=None, on_tick=None, tick_interval=None, form=False,
                  on_form=None, transient=False, back_page=None,
-                 screensaver=None, no_screensaver=False, scroll=False,
-                 requires=(), extensions=False, meta=None):
+                 extension_back_page=None, screensaver=None,
+                 no_screensaver=False, scroll=False, requires=(),
+                 extensions=False, meta=None):
         if screensaver is not None and (
             not isinstance(screensaver, str) or not screensaver
         ):
@@ -192,6 +194,7 @@ class FunctionPage(Page):
         self.aliases = tuple(aliases)
         self.requires = requires
         self.back_page = back_page
+        self.extension_back_page = extension_back_page
         self.screensaver = screensaver or None
         self.no_screensaver = bool(no_screensaver)
         self.scroll = bool(scroll)
@@ -233,7 +236,8 @@ class ExtensionPage(Page):
         self.number = f"{base.number}#{token}"
         self.title = base.title
         self.aliases = ()
-        self.back_page = None
+        self.back_page = base.extension_back_page
+        self.extension_back_page = base.extension_back_page
         self.requires = base.requires
         self.form = base.form
         self.transient = base.transient
@@ -261,9 +265,9 @@ class ExtensionPage(Page):
 
 def page(number, *, title="", aliases=(), on_submit=None, on_key=None,
          on_tick=None, tick_interval=None, form=False, on_form=None,
-         transient=False, back_page=None, screensaver=None,
-         no_screensaver=False, scroll=False, requires=(), extensions=False,
-         **meta):
+         transient=False, back_page=None, extension_back_page=None,
+         screensaver=None, no_screensaver=False, scroll=False, requires=(),
+         extensions=False, **meta):
     def decorator(fn):
         return FunctionPage(
             number,
@@ -278,6 +282,7 @@ def page(number, *, title="", aliases=(), on_submit=None, on_key=None,
             on_form=on_form,
             transient=transient,
             back_page=back_page,
+            extension_back_page=extension_back_page,
             screensaver=screensaver,
             no_screensaver=no_screensaver,
             scroll=scroll,

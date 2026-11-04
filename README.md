@@ -58,7 +58,7 @@ pages/         example site, auto-discovered
     directory.py page 110, the news service directory
     hackernews.py pages 111/112, headlines and story detail
   weather/
-    page.py      page 120, current conditions and today's forecast
+    page.py      page 120, current conditions, forecast, and 120#CODE city detail
     _support/
       labels.py  condition labels
   sports/
@@ -259,6 +259,9 @@ The weather page is the second cached service:
   condition, and today's low/high. It shows `LOADING`, `UNAVAILABLE`, or
   `OFFLINE - CACHED` from the snapshots and ticks every 30 seconds to pick up a
   background load.
+- `120#CODE` opens city detail (`120#PAR`, `120#LYO`, and so on). The page
+  declares `extension_back_page="120"`, so direct entry returns to the summary
+  first, then history. Short city codes live on `Location.code`.
 - The page credits `OPEN-METEO`. The source is keyless and uses only the
   standard library, like the news source.
 - On `111`, `ctx.set_pager(...)` registers a session-owned cursor. `SUITE`

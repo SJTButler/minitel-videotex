@@ -71,6 +71,24 @@ def aliased(ctx):
     return s
 
 
+@page("680", title="BASE PARENT", extensions=True,
+      extension_back_page="640")
+def base_parent(ctx):
+    s = Screen()
+    s.text(0, 0, ctx.extension or "BPINDEX")
+    ctx.set_input(20, 6, 10)
+    return s
+
+
+@page("681", title="OTHER PARENT", extensions=True,
+      extension_back_page="660")
+def other_parent(ctx):
+    s = Screen()
+    s.text(0, 0, ctx.extension or "OPINDEX")
+    ctx.set_input(20, 6, 10)
+    return s
+
+
 def make_registry():
     registry = Registry()
     registry.add(ext)
@@ -78,6 +96,8 @@ def make_registry():
     registry.add(parent)
     registry.add(transient)
     registry.add(aliased)
+    registry.add(base_parent)
+    registry.add(other_parent)
     return registry
 
 
@@ -92,6 +112,11 @@ class ExtensionRegistryTests(unittest.TestCase):
         self.assertIs(route.base, ext)
         self.assertEqual(route.extension, "1")
         self.assertEqual(route.number, "650#1")
+
+    def test_declared_extension_parent_is_used_by_the_route(self):
+        self.assertEqual(self.registry.get("680#1").back_page, "640")
+        self.assertEqual(self.registry.get("681#1").back_page, "660")
+        self.assertIsNone(self.registry.get("650#1").back_page)
 
     def test_base_page_is_unchanged(self):
         self.assertIs(self.registry.get("650"), ext)
@@ -159,6 +184,7 @@ class ExtensionDelegationTests(unittest.TestCase):
             title="FORM",
             aliases=("67",),
             back_page="640",
+            extension_back_page="640",
             requires=("svc",),
             form=True,
             on_form=on_form,
@@ -173,7 +199,8 @@ class ExtensionDelegationTests(unittest.TestCase):
         self.assertEqual(route.number, "670#A")
         self.assertEqual(route.title, "FORM")
         self.assertEqual(route.aliases, ())
-        self.assertIsNone(route.back_page)
+        self.assertEqual(route.back_page, "640")
+        self.assertEqual(route.extension_back_page, "640")
         self.assertEqual(route.requires, ("svc",))
         self.assertTrue(route.form)
         self.assertTrue(route.transient)
@@ -220,6 +247,25 @@ class ExtensionSessionTests(unittest.TestCase):
         self.session.navigate("650#1")
         self.session.feed(RETOUR)
         self.assertEqual(self.session.current.number, "650")
+
+    def test_declared_extension_parent_is_used_for_direct_entry(self):
+        self.session.navigate("681#1")
+        self.session.feed(RETOUR)
+        self.assertEqual(self.session.current.number, "660")
+
+        self.session.feed(RETOUR)
+        self.assertEqual(self.session.current.number, "640")
+
+    def test_entering_from_the_declared_parent_pops_history(self):
+        self.session.navigate("660")
+        self.session.navigate("681#1")
+        self.session.feed(RETOUR)
+        self.assertEqual(self.session.current.number, "660")
+
+    def test_declared_base_parent_is_used(self):
+        self.session.navigate("680#1")
+        self.session.feed(RETOUR)
+        self.assertEqual(self.session.current.number, "640")
 
     def test_same_extension_route_does_not_duplicate_history(self):
         self.session.navigate("650#1")
