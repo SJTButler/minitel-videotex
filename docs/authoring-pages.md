@@ -64,7 +64,8 @@ The decorator form is the shortest:
 @page(number, title="", aliases=(), on_submit=None, on_key=None,
       on_tick=None, tick_interval=None, form=False, on_form=None,
       transient=False, back_page=None, screensaver=None,
-      no_screensaver=False, scroll=False, requires=(), **meta)
+      no_screensaver=False, scroll=False, requires=(), extensions=False,
+      **meta)
 def render(ctx):
     return Screen()
 ```
@@ -98,6 +99,8 @@ def render(ctx):
   complete `Screen` from `render`/`on_tick`; the session owns the mode and the
   renderer turns a one-row shift into `LF` plus a small repaint. See
   [Scrolling text pages](#scrolling-text-pages).
+- `extensions=True` lets the page be addressed as `number#token`, such as
+  `120#PAR`; see [Page extension codes](#page-extension-codes).
 - `meta` is free-form; useful for a custom app.
 
 For stateful or larger pages, subclass `Page`:
@@ -129,6 +132,7 @@ Every `render`, `on_submit`, `on_form`, and `on_key` receives a
 |---|---|
 | `ctx.profile` | the active terminal profile; the server currently runs `M1` |
 | `ctx.registry` | the `Registry` |
+| `ctx.extension` | the route token for `number#token`, or `None` on the base page |
 | `ctx.line` | the active field's value |
 | `ctx.last_key` | the last submitted line (used by the not-found page) |
 | `ctx.state` | a per-session dict for page state |
@@ -880,6 +884,57 @@ Keep page numbers stable and descriptive. The example scheme is:
 | `903` | BOUNCING BALL screensaver |
 | `910`-`912` | CAROUSEL promo frames |
 | `__not_found__` | fallback |
+
+## Page extension codes
+
+A page can expose sub-addresses by declaring `extensions=True`:
+
+```python
+@page("160", title="DEX", extensions=True)
+def dex(ctx):
+    token = ctx.extension          # None on 160, "1" on 160#1
+    ...
+```
+
+The registry parses the route; pages never split `#` themselves.
+
+- Syntax is `base#token`, for example `120#PAR`, `153#PL`, or `160#151`.
+  The league tables page is the current reference: `153#PL` selects the
+  configured `PL` competition.
+- The base must be a registered page number or alias and must declare
+  `extensions=True`. Otherwise the key is not found.
+- A token is 1-6 uppercase ASCII alphanumerics after normalisation. Input is
+  case-insensitive: `120#par` becomes `120#PAR`.
+- `#` is the canonical separator. `£` is accepted as an input alias because the
+  Videotex glyph for byte `0x23` may be `£`; both become `#` internally.
+- Empty tokens, multiple separators, spaces, and non-alphanumeric characters
+  are invalid routes.
+- The page validates the token's meaning. An unknown token is a page-level
+  message (`NO CITY: XYZ`), not the generic not-found page.
+- `ctx.extension` is `None` on the base page and the canonical token on an
+  extension route. It is available in `render`, `on_submit`, `on_form`,
+  `on_key`, and `on_tick`.
+- `ctx.page.number` is the full key (`120#PAR`). History, pager memory, and
+  page-message keys use the full key, so extension routes have their own
+  remembered cursor and messages.
+- `RETOUR` follows history like any other page. Direct entry from home returns
+  home; if you reached `120#PAR` from `120`, it returns to `120`. The base page
+  is not automatically the extension route's parent.
+- An alias resolves to the canonical base: `5#PL` addresses `150#PL`.
+- Extension routes are not registered pages. `Registry.all()`, the page
+  directory, screensaver groups, and startup requirement validation list base
+  pages only.
+- Do not declare `extensions=True` on screensaver pages in the current version.
+- Keep the existing one-cursor rule. An extension that selects a pager or form
+  cursor must not fight `SUITE`/`RETOUR`; stable single-view routes such as
+  `120#PAR` are the simplest first use.
+
+To test a route without a socket:
+
+```python
+session.navigate("120#PAR")
+assert session.current.number == "120#PAR"
+```
 
 ## Testing a page
 

@@ -18,10 +18,10 @@ class NavigationMixin:
         page = self.resolve_page(value)
         if page is None:
             page = self.fallback
-        if page is not self.current:
+        if page.number != self.current.number:
             if push:
                 if self.current.transient:
-                    if self.history and self.history[-1] is page:
+                    if self.history and self.history[-1].number == page.number:
                         self.history.pop()
                 else:
                     self.history.append(self.current)

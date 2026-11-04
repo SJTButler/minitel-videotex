@@ -11,6 +11,8 @@ from ..render.screen import Screen
 
 CURSOR_MODES = ("visible", "hidden", "auto")
 LINE_FIELD = "input"
+EXTENSION_SEPARATORS = ("#", "£")
+MAX_EXTENSION_LENGTH = 6
 
 
 class PageContext:
@@ -31,6 +33,10 @@ class PageContext:
     @property
     def profile(self):
         return self._session.profile
+
+    @property
+    def extension(self):
+        return getattr(self.page, "extension", None)
 
     @property
     def last_key(self):
@@ -146,6 +152,7 @@ class Page:
     tick_interval = None
     on_form = None
     requires = ()
+    extensions = False
 
     def render(self, ctx: PageContext) -> Screen:
         raise NotImplementedError
@@ -168,7 +175,7 @@ class FunctionPage(Page):
                  on_key=None, on_tick=None, tick_interval=None, form=False,
                  on_form=None, transient=False, back_page=None,
                  screensaver=None, no_screensaver=False, scroll=False,
-                 requires=(), meta=None):
+                 requires=(), extensions=False, meta=None):
         if screensaver is not None and (
             not isinstance(screensaver, str) or not screensaver
         ):
@@ -188,6 +195,7 @@ class FunctionPage(Page):
         self.screensaver = screensaver or None
         self.no_screensaver = bool(no_screensaver)
         self.scroll = bool(scroll)
+        self.extensions = bool(extensions)
         self._on_submit = on_submit
         self._on_key = on_key
         self._on_tick = on_tick
@@ -216,10 +224,46 @@ class FunctionPage(Page):
         return None
 
 
+class ExtensionPage(Page):
+    """A base page addressed with an extension token."""
+
+    def __init__(self, base, token):
+        self.base = base
+        self.extension = token
+        self.number = f"{base.number}#{token}"
+        self.title = base.title
+        self.aliases = ()
+        self.back_page = None
+        self.requires = base.requires
+        self.form = base.form
+        self.transient = base.transient
+        self.tick_interval = base.tick_interval
+        self.no_screensaver = base.no_screensaver
+        self.scroll = base.scroll
+        self.on_form = base.on_form
+        self.meta = {
+            **(getattr(base, "meta", {}) or {}),
+            "extension": token,
+        }
+
+    def render(self, ctx):
+        return self.base.render(ctx)
+
+    def on_submit(self, ctx, line):
+        return self.base.on_submit(ctx, line)
+
+    def on_key(self, ctx, key):
+        return self.base.on_key(ctx, key)
+
+    def on_tick(self, ctx):
+        return self.base.on_tick(ctx)
+
+
 def page(number, *, title="", aliases=(), on_submit=None, on_key=None,
          on_tick=None, tick_interval=None, form=False, on_form=None,
          transient=False, back_page=None, screensaver=None,
-         no_screensaver=False, scroll=False, requires=(), **meta):
+         no_screensaver=False, scroll=False, requires=(), extensions=False,
+         **meta):
     def decorator(fn):
         return FunctionPage(
             number,
@@ -238,9 +282,25 @@ def page(number, *, title="", aliases=(), on_submit=None, on_key=None,
             no_screensaver=no_screensaver,
             scroll=scroll,
             requires=requires,
+            extensions=extensions,
             meta=meta,
         )
     return decorator
+
+
+def split_extension(key):
+    """Return ``(base, token)`` for a valid extension route, else ``None``."""
+    key = key.strip()
+    for separator in EXTENSION_SEPARATORS[1:]:
+        key = key.replace(separator, EXTENSION_SEPARATORS[0])
+    if key.count(EXTENSION_SEPARATORS[0]) != 1:
+        return None
+    base, token = key.split(EXTENSION_SEPARATORS[0])
+    if not base or not token or len(token) > MAX_EXTENSION_LENGTH:
+        return None
+    if not token.isascii() or not token.isalnum():
+        return None
+    return base, token.upper()
 
 
 class Registry:
@@ -252,6 +312,13 @@ class Registry:
         if any(existing is page for existing in self._pages):
             return page
         for key in (page.number, *page.aliases):
+            if any(
+                separator in key for separator in EXTENSION_SEPARATORS
+            ):
+                raise ValueError(
+                    f"page key {key!r} must not contain an extension "
+                    "separator"
+                )
             existing = self._by_key.get(key)
             if existing is not None:
                 raise ValueError(
@@ -263,7 +330,18 @@ class Registry:
         return page
 
     def get(self, key):
-        return self._by_key.get(key.strip())
+        key = str(key).strip()
+        page = self._by_key.get(key)
+        if page is not None:
+            return page
+        route = split_extension(key)
+        if route is None:
+            return None
+        base_key, token = route
+        base = self._by_key.get(base_key)
+        if base is None or not base.extensions:
+            return None
+        return ExtensionPage(base, token)
 
     def resolve(self, key):
         page = self.get(key)

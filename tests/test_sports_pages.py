@@ -357,9 +357,17 @@ class TablesPageTests(unittest.TestCase):
         )
         return Snapshot(value=rows, loaded_at=time.monotonic())
 
+    def pd_standings(self):
+        rows = (
+            StandingRow(1, Team(1, "REAL MADRID", "RMA"), 10, 13, 25),
+            StandingRow(2, Team(2, "BARCELONA FC", "BAR"), 10, 13, 23),
+        )
+        return Snapshot(value=rows, loaded_at=time.monotonic())
+
     def test_table_rows_and_league_change(self):
         service = FakeSports(
-            loaded_snapshot([]), standings={"PL": self.standings()}
+            loaded_snapshot([]),
+            standings={"PL": self.standings(), "PD": self.pd_standings()},
         )
         session = make_session(service, initial="153")
         text = session.screen.to_text().splitlines()
@@ -370,8 +378,73 @@ class TablesPageTests(unittest.TestCase):
         self.assertIn("1-5 = LEAGUE", text[15])
 
         session.feed(b"2" + ENVOI)
+        self.assertEqual(session.current.number, "153#PD")
         self.assertEqual(session.state["sports_table_code"], "PD")
+        self.assertIn("LA LIGA", session.screen.to_text())
+        self.assertIn("REAL MADRID", session.screen.to_text())
         self.assertIn("PD", service.standings_calls[-1])
+
+    def test_extension_route_selects_league(self):
+        service = FakeSports(
+            loaded_snapshot([]),
+            standings={"PL": self.standings(), "PD": self.pd_standings()},
+        )
+        session = make_session(service, initial="153#PD")
+
+        self.assertEqual(session.current.number, "153#PD")
+        self.assertEqual(session.state["sports_table_code"], "PD")
+        self.assertEqual(service.standings_calls[-1], "PD")
+        text = session.screen.to_text()
+        self.assertIn("LA LIGA", text)
+        self.assertIn("REAL MADRID", text)
+        self.assertIn("153#PD", text.splitlines()[0])
+
+    def test_direct_extension_retour_goes_home(self):
+        service = FakeSports(
+            loaded_snapshot([]), standings={"PL": self.standings()}
+        )
+        session = make_session(service, initial="153#PL")
+
+        session.feed(RETOUR)
+        self.assertEqual(session.current.number, pages.INITIAL)
+
+    def test_selected_extension_retour_returns_to_tables(self):
+        service = FakeSports(
+            loaded_snapshot([]),
+            standings={"PL": self.standings(), "PD": self.pd_standings()},
+        )
+        session = make_session(service, initial="153")
+
+        session.feed(b"2" + ENVOI)
+        self.assertEqual(session.current.number, "153#PD")
+
+        session.feed(RETOUR)
+        self.assertEqual(session.current.number, "153")
+
+    def test_invalid_extension_shows_message_and_can_recover(self):
+        service = FakeSports(
+            loaded_snapshot([]), standings={"PL": self.standings()}
+        )
+        session = make_session(service, initial="153#ZZZ")
+
+        self.assertEqual(session.current.number, "153#ZZZ")
+        self.assertIn("NO LEAGUE ZZZ.", session.screen.to_text())
+
+        session.feed(b"1" + ENVOI)
+        self.assertEqual(session.current.number, "153#PL")
+        self.assertIn("PREMIER LEAGUE", session.screen.to_text())
+
+    def test_extension_route_survives_pager_moves(self):
+        service = FakeSports(
+            loaded_snapshot([]),
+            standings={"PL": self.many_standings()},
+        )
+        session = make_session(service, initial="153#PL")
+        self.assertIn("153#PL 1/2", session.screen.to_text().splitlines()[0])
+
+        session.feed(SUITE)
+        self.assertEqual(session.current.number, "153#PL")
+        self.assertIn("153#PL 2/2", session.screen.to_text().splitlines()[0])
 
     def test_loading_and_missing(self):
         service = FakeSports(loaded_snapshot([]))
