@@ -1,4 +1,4 @@
-"""Page 150: live scores by league, grouped by kickoff time."""
+"""Page 150: live scores or next fixtures by league."""
 
 from dataclasses import dataclass
 
@@ -24,6 +24,7 @@ from ._support.layout import (
     clock_label,
     kickoff_label,
     match_sort_key,
+    matchday_label,
     minute_label,
     score_label,
 )
@@ -176,6 +177,11 @@ def _header(feed, feed_snapshot, page):
         return "SCORES UNAVAILABLE."
     if not feed_snapshot.has_value:
         return "LOADING MATCHES..."
+    if feed_snapshot.upcoming:
+        return fit(
+            f"NEXT MATCHDAY {matchday_label(feed_snapshot.match_date)}",
+            codec.COLS,
+        )
     if page is None:
         return "NO MATCHES TODAY."
     name = competition_label(page.code)
@@ -280,7 +286,8 @@ def live_screen(ctx):
     if pager.total:
         status_label += f" {pager.label}"
     status(s, status_label)
-    title = f"LIVE SCORES - {page.code}" if page is not None else "LIVE SCORES"
+    prefix = "NEXT FIXTURES" if feed_snapshot.upcoming else "LIVE SCORES"
+    title = f"{prefix} - {page.code}" if page is not None else prefix
     if page is not None and page.count > 1:
         title += f" {page.number}/{page.count}"
     s.text(
@@ -325,8 +332,11 @@ def live_screen(ctx):
         for index, alert in enumerate(alerts):
             s.text(17 + index, 0, fit(alert_text(alert), codec.COLS))
     else:
-        live = any(match.is_live for match in feed_snapshot.matches)
-        note = "WATCHING FOR GOALS" if live else "WAITING FOR KICKOFF"
+        if feed_snapshot.upcoming:
+            note = "NEXT MATCHDAY"
+        else:
+            live = any(match.is_live for match in feed_snapshot.matches)
+            note = "WATCHING FOR GOALS" if live else "WAITING FOR KICKOFF"
         s.text(17, 0, note, fg=SECONDARY)
 
     waning = (

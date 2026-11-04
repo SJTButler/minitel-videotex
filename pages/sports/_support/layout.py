@@ -1,7 +1,7 @@
 """Formatting helpers shared by the sports pages."""
 
 import time
-from datetime import timezone
+from datetime import date, timezone
 
 from minitel.text import fit
 
@@ -35,6 +35,14 @@ def kickoff_label(value):
 def day_label(value):
     local = local_time(value)
     return local.strftime("%a %d %b").upper() if local else "--- -- ---"
+
+
+def matchday_label(value):
+    try:
+        day = date.fromisoformat(str(value))
+    except (TypeError, ValueError):
+        return "--- -- ---"
+    return day.strftime("%a %d %b").upper()
 
 
 def clock_label(timestamp):

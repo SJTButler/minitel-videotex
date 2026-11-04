@@ -93,11 +93,18 @@ def _parse_utc(value):
     return parsed.astimezone(timezone.utc)
 
 
-def local_today():
-    now = datetime.now(timezone.utc)
+def local_date(value):
+    if value is None:
+        return None
+    if value.tzinfo is None:
+        value = value.replace(tzinfo=timezone.utc)
     if LOCAL_ZONE is not None:
-        now = now.astimezone(LOCAL_ZONE)
-    return now.date().isoformat()
+        value = value.astimezone(LOCAL_ZONE)
+    return value.date().isoformat()
+
+
+def local_today():
+    return local_date(datetime.now(timezone.utc))
 
 
 def _team_short(raw, name):
@@ -317,13 +324,7 @@ class FootballDataSource:
             url, headers=headers, timeout=self.timeout
         )
 
-    def fetch_day(self, date=None):
-        day = date or local_today()
-        codes = quote(",".join(self.competitions), safe=",")
-        url = (
-            f"{self.base_url}/matches?date={quote(str(day))}"
-            f"&competitions={codes}"
-        )
+    def _fetch_matches(self, url):
         response = self._get(url, unfold_goals=True)
         quota_remaining, quota_reset = _quota(response.headers)
         return FetchResult(
@@ -332,6 +333,23 @@ class FootballDataSource:
             quota_reset=quota_reset,
             goals_available=goals_available(response.payload),
         )
+
+    def fetch_day(self, date=None):
+        day = date or local_today()
+        codes = quote(",".join(self.competitions), safe=",")
+        url = (
+            f"{self.base_url}/matches?date={quote(str(day))}"
+            f"&competitions={codes}"
+        )
+        return self._fetch_matches(url)
+
+    def fetch_range(self, start, end):
+        codes = quote(",".join(self.competitions), safe=",")
+        url = (
+            f"{self.base_url}/matches?dateFrom={quote(str(start))}"
+            f"&dateTo={quote(str(end))}&competitions={codes}"
+        )
+        return self._fetch_matches(url)
 
     def fetch_standings(self, code):
         url = f"{self.base_url}/competitions/{quote(str(code))}/standings"

@@ -37,15 +37,31 @@ def match(match_id=1, status=MatchStatus.LIVE, home_goals=1,
 
 
 class FakeSource:
-    def __init__(self, results):
+    def __init__(self, results, range_results=None):
         self.results = list(results)
+        self.range_results = list(range_results or [])
         self.calls = 0
+        self.range_calls = 0
+        self.range_dates = []
         self.standings_calls = 0
         self.standings_value = ()
 
     def fetch_day(self, date):
         self.calls += 1
         result = self.results[min(self.calls - 1, len(self.results) - 1)]
+        if isinstance(result, Exception):
+            raise result
+        return result
+
+    def fetch_range(self, start, end):
+        self.range_calls += 1
+        self.range_dates.append((start, end))
+        if self.range_results:
+            result = self.range_results[
+                min(self.range_calls - 1, len(self.range_results) - 1)
+            ]
+        else:
+            result = FetchResult(())
         if isinstance(result, Exception):
             raise result
         return result
@@ -63,6 +79,7 @@ def service(source, **kwargs):
         idle_interval=1800.0,
         retry_delay=30.0,
     )
+    kwargs.setdefault("today", lambda: "2026-11-01")
     return SportsService(
         config=config,
         source=source,
@@ -84,6 +101,133 @@ class FeedTests(unittest.TestCase):
         self.assertEqual(len(snapshot.matches), 1)
         self.assertEqual(snapshot.alerts, ())
         self.assertEqual(feed.poll_delay(), 60.0)
+
+    def test_empty_today_falls_back_to_next_matchday(self):
+        source = FakeSource(
+            [FetchResult(())],
+            range_results=[
+                FetchResult((
+                    match(
+                        match_id=3,
+                        status=MatchStatus.SCHEDULED,
+                        home_goals=None,
+                        away_goals=None,
+                        minute=None,
+                        kickoff=datetime(
+                            2026, 11, 3, 15, 0, tzinfo=timezone.utc
+                        ),
+                    ),
+                    match(
+                        match_id=2,
+                        status=MatchStatus.SCHEDULED,
+                        home_goals=None,
+                        away_goals=None,
+                        minute=None,
+                        kickoff=datetime(
+                            2026, 11, 2, 15, 0, tzinfo=timezone.utc
+                        ),
+                    ),
+                    match(
+                        match_id=4,
+                        status=MatchStatus.SCHEDULED,
+                        home_goals=None,
+                        away_goals=None,
+                        minute=None,
+                        kickoff=datetime(
+                            2026, 11, 3, 20, 0, tzinfo=timezone.utc
+                        ),
+                    ),
+                )),
+            ],
+        )
+        feed = service(source)
+        asyncio.run(feed.refresh_once())
+
+        snapshot = feed.snapshot()
+        self.assertTrue(snapshot.upcoming)
+        self.assertEqual(snapshot.match_date, "2026-11-02")
+        self.assertEqual([item.id for item in snapshot.matches], [2])
+        self.assertEqual(source.range_calls, 1)
+        self.assertEqual(
+            source.range_dates[0], ("2026-11-02", "2026-11-12")
+        )
+
+    def test_fallback_searches_a_second_window(self):
+        source = FakeSource(
+            [FetchResult(())],
+            range_results=[
+                FetchResult(()),
+                FetchResult((
+                    match(
+                        match_id=5,
+                        status=MatchStatus.SCHEDULED,
+                        home_goals=None,
+                        away_goals=None,
+                        minute=None,
+                        kickoff=datetime(
+                            2026, 11, 15, 15, 0, tzinfo=timezone.utc
+                        ),
+                    ),
+                )),
+            ],
+        )
+        feed = service(source)
+        asyncio.run(feed.refresh_once())
+
+        snapshot = feed.snapshot()
+        self.assertTrue(snapshot.upcoming)
+        self.assertEqual(snapshot.match_date, "2026-11-15")
+        self.assertEqual(source.range_calls, 2)
+        self.assertEqual(
+            source.range_dates,
+            [
+                ("2026-11-02", "2026-11-12"),
+                ("2026-11-12", "2026-11-22"),
+            ],
+        )
+
+    def test_match_day_does_not_fetch_upcoming_range(self):
+        source = FakeSource([FetchResult((match(),))])
+        feed = service(source)
+        asyncio.run(feed.refresh_once())
+
+        snapshot = feed.snapshot()
+        self.assertFalse(snapshot.upcoming)
+        self.assertEqual(snapshot.match_date, "2026-11-01")
+        self.assertEqual(source.range_calls, 0)
+
+    def test_no_upcoming_matchday_keeps_empty_snapshot(self):
+        source = FakeSource(
+            [FetchResult(())], range_results=[FetchResult(())]
+        )
+        feed = service(source)
+        asyncio.run(feed.refresh_once())
+
+        snapshot = feed.snapshot()
+        self.assertFalse(snapshot.upcoming)
+        self.assertEqual(snapshot.matches, ())
+        self.assertEqual(snapshot.match_date, "2026-11-01")
+        self.assertEqual(source.range_calls, 2)
+
+    def test_low_quota_skips_upcoming_range(self):
+        source = FakeSource([FetchResult((), quota_remaining=1)])
+        feed = service(source)
+        asyncio.run(feed.refresh_once())
+
+        self.assertEqual(source.range_calls, 0)
+        self.assertFalse(feed.snapshot().upcoming)
+
+    def test_upcoming_fetch_error_marks_feed_unavailable(self):
+        source = FakeSource(
+            [FetchResult(())],
+            range_results=[HttpError("https://example.test/", status=429)],
+        )
+        feed = service(source)
+        asyncio.run(feed.refresh_once())
+
+        snapshot = feed.snapshot()
+        self.assertIn("HTTP 429", snapshot.error)
+        self.assertFalse(snapshot.has_value)
 
     def test_goal_alert_and_dedupe(self):
         source = FakeSource([

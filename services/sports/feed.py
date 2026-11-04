@@ -4,7 +4,7 @@ import asyncio
 import time
 from contextlib import suppress
 from dataclasses import replace
-from datetime import datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 
 from minitel.data.cache import ResourceCache, Snapshot
 from minitel.data.http import HttpError
@@ -12,10 +12,35 @@ from minitel.data.services import service
 
 from .config import SportsConfig
 from .models import Alert, FeedSnapshot, MatchStatus
-from .source import FootballDataSource, local_today
+from .source import (
+    FetchResult,
+    FootballDataSource,
+    local_date,
+    local_today,
+)
 
 ALERT_LIMIT = 20
 SOON_WINDOW = 6 * 3600
+UPCOMING_WINDOW_DAYS = 10
+UPCOMING_WINDOWS = 2
+
+
+def _date_plus(value, days):
+    return (date.fromisoformat(value) + timedelta(days=days)).isoformat()
+
+
+def _next_matchday(matches, today):
+    future = []
+    for match in matches:
+        match_date = local_date(match.kickoff)
+        if match_date is not None and match_date > today:
+            future.append((match_date, match))
+    if not future:
+        return None, ()
+    next_date = min(match_date for match_date, _ in future)
+    return next_date, tuple(
+        match for match_date, match in future if match_date == next_date
+    )
 
 
 def _error_text(exc):
@@ -30,7 +55,8 @@ def _error_text(exc):
 
 class SportsService:
     def __init__(self, config=None, source=None, clock=time.monotonic,
-                 wall_clock=time.time, thread_factory=None):
+                 wall_clock=time.time, today=local_today,
+                 thread_factory=None):
         self.config = config or SportsConfig.from_env()
         self.source = source
         if self.source is None and self.config.configured:
@@ -42,6 +68,7 @@ class SportsService:
             )
         self.clock = clock
         self.wall_clock = wall_clock
+        self.today = today
         self._snapshot = FeedSnapshot(loading=self.configured)
         self._alerts = []
         self._task = None
@@ -101,14 +128,43 @@ class SportsService:
         if not self.configured:
             return self.config.idle_interval
         self._snapshot = replace(self._snapshot, loading=True)
+        today = self.today()
         try:
             result = await asyncio.to_thread(
-                self.source.fetch_day, local_today()
+                self.source.fetch_day, today
             )
+            matches = tuple(result.value)
+            match_date = today
+            upcoming = False
+            if not matches and (
+                result.quota_remaining is None
+                or result.quota_remaining > 1
+            ):
+                cursor = _date_plus(today, 1)
+                for _ in range(UPCOMING_WINDOWS):
+                    end = _date_plus(cursor, UPCOMING_WINDOW_DAYS)
+                    upcoming_result = await asyncio.to_thread(
+                        self.source.fetch_range, cursor, end
+                    )
+                    next_date, next_matches = _next_matchday(
+                        upcoming_result.value, today
+                    )
+                    if next_date is not None:
+                        matches = next_matches
+                        match_date = next_date
+                        upcoming = True
+                        result = FetchResult(
+                            matches,
+                            quota_remaining=upcoming_result.quota_remaining,
+                            quota_reset=upcoming_result.quota_reset,
+                            goals_available=upcoming_result.goals_available,
+                        )
+                        break
+                    cursor = end
         except Exception as exc:
             self._fail(exc)
             return self._retry_delay(exc)
-        self._apply(result)
+        self._apply(result, match_date=match_date, upcoming=upcoming)
         return self.poll_delay()
 
     def _fail(self, exc):
@@ -124,10 +180,13 @@ class SportsService:
             delay = max(delay, float(exc.retry_after))
         return min(delay, 900.0)
 
-    def _apply(self, result):
+    def _apply(self, result, *, match_date=None, upcoming=False):
         matches = tuple(result.value)
         now = datetime.now(timezone.utc)
-        self._detect_alerts(matches, now)
+        if upcoming or match_date != self._snapshot.match_date:
+            self._alerts = []
+        else:
+            self._detect_alerts(matches, now)
         self._snapshot = FeedSnapshot(
             matches=matches,
             alerts=tuple(self._alerts),
@@ -138,6 +197,8 @@ class SportsService:
             quota_remaining=result.quota_remaining,
             quota_reset=result.quota_reset,
             goals_available=result.goals_available,
+            match_date=match_date,
+            upcoming=upcoming,
         )
 
     def _detect_alerts(self, matches, now):

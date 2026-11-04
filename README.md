@@ -62,7 +62,8 @@ pages/         example site, auto-discovered
     _support/
       labels.py  condition labels
   sports/
-    live.py      page 150, league pages, kickoff groups, vidiprinter
+    live.py      page 150, league pages, kickoff groups, vidiprinter,
+                 next-matchday fallback
     detail.py    page 151, match detail
     tables.py    page 153, league tables
     status.py    page 154, feed status

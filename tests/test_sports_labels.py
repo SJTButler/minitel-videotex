@@ -2,6 +2,7 @@ import unittest
 from datetime import datetime, timezone
 
 from pages.sports._support.labels import alert_text, competition_label
+from pages.sports._support.layout import matchday_label
 from services.sports.models import Alert
 
 NOW = datetime(2026, 11, 1, 15, 0, tzinfo=timezone.utc)
@@ -12,6 +13,10 @@ class SportsLabelTests(unittest.TestCase):
         self.assertEqual(competition_label("PL"), "PREMIER LEAGUE")
         self.assertEqual(competition_label("pl"), "PREMIER LEAGUE")
         self.assertEqual(competition_label("XYZ"), "XYZ")
+
+    def test_matchday_label(self):
+        self.assertEqual(matchday_label("2026-11-08"), "SUN 08 NOV")
+        self.assertEqual(matchday_label(None), "--- -- ---")
 
     def test_alert_text(self):
         self.assertEqual(

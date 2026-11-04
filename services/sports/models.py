@@ -104,6 +104,8 @@ class FeedSnapshot:
     quota_remaining: int | None = None
     quota_reset: int | None = None
     goals_available: bool | None = None
+    match_date: str | None = None
+    upcoming: bool = False
 
     @property
     def has_value(self):

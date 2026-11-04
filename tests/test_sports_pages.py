@@ -28,7 +28,8 @@ SUITE = bytes([0x13, 0x48])
 KICKOFF = datetime(2026, 11, 1, 15, 0, tzinfo=timezone.utc)
 
 
-def loaded_snapshot(matches, alerts=(), error=None, goals_available=None):
+def loaded_snapshot(matches, alerts=(), error=None, goals_available=None,
+                    match_date=None, upcoming=False):
     return FeedSnapshot(
         matches=tuple(matches),
         alerts=tuple(alerts),
@@ -36,6 +37,8 @@ def loaded_snapshot(matches, alerts=(), error=None, goals_available=None):
         updated_at=time.time(),
         error=error,
         goals_available=goals_available,
+        match_date=match_date,
+        upcoming=upcoming,
     )
 
 
@@ -146,6 +149,32 @@ class LivePageTests(unittest.TestCase):
         self.assertIn("TYPE 1-10, THEN ENVOI", text[19])
         self.assertTrue(text[22].startswith("SUITE=NEXT"))
         self.assertIn("153=TABLES", text[23])
+
+    def test_next_fixtures_fallback(self):
+        kickoff = datetime(2026, 11, 8, 15, 0, tzinfo=timezone.utc)
+        matches = [
+            make_match(
+                index=1, code="PL", status=MatchStatus.SCHEDULED,
+                home_goals=None, away_goals=None, minute=None,
+                kickoff=kickoff,
+            ),
+            make_match(
+                index=2, code="PD", status=MatchStatus.SCHEDULED,
+                home_goals=None, away_goals=None, minute=None,
+                kickoff=kickoff,
+            ),
+        ]
+        session = make_session(FakeSports(loaded_snapshot(
+            matches, match_date="2026-11-08", upcoming=True
+        )))
+        text = session.screen.to_text().splitlines()
+
+        self.assertIn("NEXT FIXTURES", text[1])
+        self.assertIn("NEXT MATCHDAY SUN 08 NOV", text[2])
+        self.assertIn("NEXT MATCHDAY", text[17])
+
+        session.feed(b"1" + ENVOI)
+        self.assertEqual(session.current.number, "151")
 
     def test_select_match_opens_detail(self):
         session = make_session(FakeSports(loaded_snapshot([ars_che()])))

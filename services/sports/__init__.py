@@ -11,7 +11,7 @@ from .models import (
     StandingRow,
     Team,
 )
-from .source import FootballDataSource, local_today
+from .source import FootballDataSource, local_date, local_today
 
 __all__ = [
     "Alert",
@@ -25,5 +25,6 @@ __all__ = [
     "StandingRow",
     "Team",
     "build_sports_service",
+    "local_date",
     "local_today",
 ]

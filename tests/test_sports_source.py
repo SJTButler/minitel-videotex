@@ -166,6 +166,26 @@ class SourceRequestTests(unittest.TestCase):
         self.assertEqual(result.quota_reset, 42)
         self.assertEqual(len(result.value), 2)
 
+    def test_range_request(self):
+        seen = {}
+        payload = fixture("football_matches.json")
+
+        def fake_get_json(url, headers=None, timeout=None):
+            seen["url"] = url
+            return JsonResponse(payload, status=200)
+
+        source = FootballDataSource(
+            "secret-token",
+            competitions=("PL", "PD"),
+            get_json_response=fake_get_json,
+        )
+        result = source.fetch_range("2026-11-02", "2026-11-16")
+
+        self.assertIn("/matches?dateFrom=2026-11-02", seen["url"])
+        self.assertIn("dateTo=2026-11-16", seen["url"])
+        self.assertIn("competitions=PL,PD", seen["url"])
+        self.assertEqual(len(result.value), 2)
+
     def test_documented_quota_alias(self):
         def fake_get_json(url, headers=None, timeout=None):
             return JsonResponse(
