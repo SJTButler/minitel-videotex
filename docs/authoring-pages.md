@@ -103,7 +103,9 @@ def render(ctx):
   `120#PAR`; see [Page extension codes](#page-extension-codes).
 - `extension_back_page="120"` sets the logical `RETOUR` parent for extension
   routes. The default `None` follows history; the base page is not
-  automatically the parent.
+  automatically the parent. Use it only for a genuine summary/detail pair;
+  sibling pages such as `153` and `150` should leave it unset and follow
+  history.
 - `meta` is free-form; useful for a custom app.
 
 For stateful or larger pages, subclass `Page`:
