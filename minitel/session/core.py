@@ -36,6 +36,7 @@ class Session(NavigationMixin, EditingMixin, IdleMixin, PowerMixin):
         self.state = {}
         self.history = []
         self.current = registry.resolve(initial)
+        self._extension_pending = False
         self.fields = []
         self.values = {}
         self.active = 0
@@ -156,6 +157,7 @@ class Session(NavigationMixin, EditingMixin, IdleMixin, PowerMixin):
         self.parser = self._new_parser()
         self.power = self._new_power()
         self.screensaver_active = False
+        self._extension_pending = False
         self._touch()
         return self.render()
 
@@ -173,6 +175,7 @@ class Session(NavigationMixin, EditingMixin, IdleMixin, PowerMixin):
         self.scroll_mode = bool(self.current.scroll)
         ctx = PageContext(self, self.current, self.registry)
         screen = self.current.render(ctx)
+        self._extension_pending = False
         if not isinstance(screen, Screen):
             raise TypeError(
                 f"page {self.current.number!r} returned {type(screen)!r}, expected Screen"

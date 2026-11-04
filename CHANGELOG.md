@@ -6,6 +6,11 @@
   SHAKESPEARE` scrolling-text screensaver, including scroll-aware rendering,
   screensaver wake filtering, virtual terminal support, and the 39-column
   scrolling layout.
+- Added page extension codes (`page#token`) for direct links to sub-views:
+  `153#PL` league tables, `120#PAR` weather city detail, and `150#PL` live
+  scores league selection.
+- Sports live scores fall back to the next matchday with fixtures when today
+  has no matches; the page shows `NEXT FIXTURES` with the date.
 
 ## 0.3.0 - 2026-11-02
 

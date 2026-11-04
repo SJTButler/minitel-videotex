@@ -189,6 +189,67 @@ class LivePageTests(unittest.TestCase):
             "LIVE SCORES - PL",
         )
 
+    def test_extension_route_selects_league(self):
+        matches = [
+            make_match(index=1, code="PL"),
+            make_match(index=2, code="PD"),
+        ]
+        session = make_session(
+            FakeSports(loaded_snapshot(matches)), initial="150#PD"
+        )
+
+        self.assertEqual(session.current.number, "150#PD")
+        text = session.screen.to_text().splitlines()
+        self.assertEqual(text[1].strip(), "LIVE SCORES - PD")
+        self.assertIn("150#PD", text[0])
+
+    def test_extension_route_does_not_snap_on_suite_or_tick(self):
+        matches = [
+            make_match(index=1, code="PL"),
+            make_match(index=2, code="PD"),
+            make_match(index=3, code="BL1"),
+        ]
+        session = make_session(
+            FakeSports(loaded_snapshot(matches)), initial="150#PL"
+        )
+        self.assertEqual(
+            session.screen.to_text().splitlines()[1].strip(),
+            "LIVE SCORES - PL",
+        )
+
+        session.feed(SUITE)
+        self.assertEqual(session.current.number, "150#PL")
+        text = session.screen.to_text().splitlines()
+        self.assertEqual(text[1].strip(), "LIVE SCORES - PD")
+        self.assertIn("150#PD", text[0])
+
+        session.tick()
+        self.assertIn("LIVE SCORES - PD", session.screen.to_text())
+
+    def test_extension_route_detail_back_restores_the_route(self):
+        matches = [
+            make_match(index=1, code="PL"),
+            make_match(index=2, code="PD"),
+        ]
+        session = make_session(
+            FakeSports(loaded_snapshot(matches)), initial="150#PL"
+        )
+        session.feed(SUITE)
+        session.feed(b"1" + ENVOI)
+        self.assertEqual(session.current.number, "151")
+
+        session.feed(RETOUR)
+        self.assertEqual(session.current.number, "150#PL")
+        self.assertIn("LIVE SCORES - PD", session.screen.to_text())
+
+    def test_invalid_extension_shows_message(self):
+        session = make_session(
+            FakeSports(loaded_snapshot([ars_che()])), initial="150#ZZZ"
+        )
+
+        self.assertEqual(session.current.number, "150#ZZZ")
+        self.assertIn("NO LEAGUE ZZZ.", session.screen.to_text())
+
     def test_carousel_advances_between_leagues(self):
         matches = [
             make_match(index=1, code="PL"),

@@ -1,6 +1,6 @@
 """Session navigation and history."""
 
-from ..pagemodel.model import Page, PageContext
+from ..pagemodel.model import ExtensionPage, Page, PageContext
 from .action import Action
 
 
@@ -26,6 +26,7 @@ class NavigationMixin:
                 else:
                     self.history.append(self.current)
             self._reset_page()
+            self._extension_pending = isinstance(page, ExtensionPage)
         self.current = page
         return Action(screen=self.render(), page=page)
 
@@ -50,12 +51,14 @@ class NavigationMixin:
 
     def _back_or_parent(self):
         target = self.resolve_page(self.current.back_page)
-        if (
-            target is not None
-            and target.number != self.current.number
-            and (not self.history or self.history[-1].number != target.number)
-        ):
-            return self.navigate(target, push=False)
+        if target is not None and target.number != self.current.number:
+            history_top = self.history[-1] if self.history else None
+            at_parent = history_top is not None and (
+                history_top.number == target.number
+                or getattr(history_top, "base", None) is target
+            )
+            if not at_parent:
+                return self.navigate(target, push=False)
         return self.back()
 
     def back(self):
@@ -66,6 +69,7 @@ class NavigationMixin:
         else:
             self.current = self.registry.resolve(self.initial)
         self._reset_page()
+        self._extension_pending = False
         return Action(screen=self.render(), page=self.current)
 
     def home(self):
@@ -74,4 +78,5 @@ class NavigationMixin:
         self.history.clear()
         self.current = self.registry.resolve(self.initial)
         self._reset_page()
+        self._extension_pending = False
         return Action(screen=self.render(), page=self.current)

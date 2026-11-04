@@ -89,6 +89,32 @@ def other_parent(ctx):
     return s
 
 
+@page("690", title="EXT PARENT", extensions=True, back_page="640")
+def ext_parent(ctx):
+    s = Screen()
+    s.text(0, 0, ctx.extension or "EPINDEX")
+    ctx.set_input(20, 6, 10)
+    return s
+
+
+@page("691", title="DETAIL", back_page="690")
+def detail(ctx):
+    s = Screen()
+    s.text(0, 0, "DETAIL")
+    ctx.set_input(20, 6, 10)
+    return s
+
+
+@page("692", title="TAKER", extensions=True)
+def taker(ctx):
+    token = ctx.take_extension()
+    ctx.state["taken"] = token
+    s = Screen()
+    s.text(0, 0, token or "NONE")
+    ctx.set_input(20, 6, 10)
+    return s
+
+
 def make_registry():
     registry = Registry()
     registry.add(ext)
@@ -98,6 +124,9 @@ def make_registry():
     registry.add(aliased)
     registry.add(base_parent)
     registry.add(other_parent)
+    registry.add(ext_parent)
+    registry.add(detail)
+    registry.add(taker)
     return registry
 
 
@@ -266,6 +295,28 @@ class ExtensionSessionTests(unittest.TestCase):
         self.session.navigate("680#1")
         self.session.feed(RETOUR)
         self.assertEqual(self.session.current.number, "640")
+
+    def test_detail_retour_restores_the_extension_route(self):
+        self.session.navigate("690#A")
+        self.session.navigate("691")
+
+        self.session.feed(RETOUR)
+        self.assertEqual(self.session.current.number, "690#A")
+
+    def test_take_extension_returns_once(self):
+        self.session.navigate("692#A")
+        self.assertEqual(self.session.state["taken"], "A")
+
+        self.session.refresh()
+        self.assertIsNone(self.session.state["taken"])
+
+    def test_take_extension_is_not_reapplied_on_back(self):
+        self.session.navigate("692#A")
+        self.session.navigate("640")
+
+        self.session.feed(RETOUR)
+        self.assertEqual(self.session.current.number, "692#A")
+        self.assertIsNone(self.session.state["taken"])
 
     def test_same_extension_route_does_not_duplicate_history(self):
         self.session.navigate("650#1")

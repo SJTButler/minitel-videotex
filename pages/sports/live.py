@@ -139,11 +139,29 @@ def _pages(feed, matches):
 
 
 def _score_pager(ctx, pages):
-    return ctx.set_pager(
+    token = ctx.take_extension()
+    offset = None
+    if token:
+        offset = next(
+            (
+                index
+                for index, page in enumerate(pages)
+                if page.code == token
+            ),
+            None,
+        )
+    pager = ctx.set_pager(
         len(pages),
         1,
+        offset=offset,
         carousel=Carousel(hold=30.0, wrap=True),
     )
+    if token and offset is None:
+        MessageLatch(ctx).set(
+            fit(f"NO LEAGUE {token}.", codec.COLS),
+            pager.offset,
+        )
+    return pager
 
 
 def _current_page(pager, pages):
@@ -252,7 +270,16 @@ def live_screen(ctx):
     MessageLatch(ctx).clear_if_moved(pager.offset)
 
     s = Screen()
-    status(s, f"150 {pager.label}" if pager.total else "150")
+    status_label = "150"
+    if ctx.extension:
+        status_label = (
+            f"150#{page.code}"
+            if page is not None
+            else f"150#{ctx.extension}"
+        )
+    if pager.total:
+        status_label += f" {pager.label}"
+    status(s, status_label)
     title = f"LIVE SCORES - {page.code}" if page is not None else "LIVE SCORES"
     if page is not None and page.count > 1:
         title += f" {page.number}/{page.count}"
@@ -363,6 +390,7 @@ def submit_live(ctx, line):
     on_submit=submit_live,
     on_tick=live_screen,
     no_screensaver=True,
+    extensions=True,
 )
 def live_scores(ctx):
     return live_screen(ctx)

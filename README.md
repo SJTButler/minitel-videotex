@@ -300,6 +300,13 @@ shell. The key is never logged or rendered.
   kickoff times as section headers, and two match columns under each time.
   `SUITE` moves through league pages, a 30-second `Carousel` rotates them while
   idle, and numeric selection opens match detail.
+- `150#PL` opens the Premier League window directly. `take_extension()` applies
+  the league once on entry, so `SUITE` and ticks keep the chosen window.
+- If today has no matches, the feed searches the next 20 days in 10-day
+  windows (the provider's range limit) and shows the earliest matchday with
+  fixtures across the configured leagues. The page becomes
+  `NEXT FIXTURES - <league>` and the header shows the date. The extra requests
+  are skipped when the quota is nearly exhausted.
 - `services/sports/source.py` owns the football-data.org URLs, field names, status
   mapping, team abbreviations, and parsing. Pages only see `Match`, `Team`,
   `Goal`, and `StandingRow`.

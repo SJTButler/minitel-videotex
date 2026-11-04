@@ -877,9 +877,9 @@ Keep page numbers stable and descriptive. The example scheme is:
 | `120` | weather: current conditions, forecast, and `120#CODE` city detail |
 | `130` | about / guide |
 | `140` | guestbook |
-| `150` | live scores (`5` on the home menu) |
+| `150` | live scores or next fixtures (`5`), `150#CODE` league direct entry; `151` match detail |
 | `151` | match detail |
-| `153` | league tables |
+| `153` | league tables, `153#CODE` direct entry |
 | `154` | feed status |
 | `190` | screensaver selector (`7` on the home menu) |
 | `199` | hidden developer page directory; not linked from home |
@@ -919,6 +919,11 @@ The registry parses the route; pages never split `#` themselves.
 - `ctx.extension` is `None` on the base page and the canonical token on an
   extension route. It is available in `render`, `on_submit`, `on_form`,
   `on_key`, and `on_tick`.
+- `ctx.take_extension()` returns the token once after navigation to the route,
+  then `None`. Use it when the token selects a session cursor or one-shot
+  state; use `ctx.extension` every render for a stable view. History restore
+  does not reapply the token, so returning from a detail page keeps the
+  remembered cursor. `150#PL` uses this; `120#PAR` does not need it.
 - `ctx.page.number` is the full key (`120#PAR`). History, pager memory, and
   page-message keys use the full key, so extension routes have their own
   remembered cursor and messages.
@@ -934,8 +939,8 @@ The registry parses the route; pages never split `#` themselves.
   pages only.
 - Do not declare `extensions=True` on screensaver pages in the current version.
 - Keep the existing one-cursor rule. An extension that selects a pager or form
-  cursor must not fight `SUITE`/`RETOUR`; stable single-view routes such as
-  `120#PAR` are the simplest first use.
+  cursor uses `take_extension()` so `SUITE`/`RETOUR` are not fought on every
+  render; stable single-view routes read `ctx.extension`.
 
 To test a route without a socket:
 

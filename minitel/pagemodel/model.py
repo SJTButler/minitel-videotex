@@ -38,6 +38,14 @@ class PageContext:
     def extension(self):
         return getattr(self.page, "extension", None)
 
+    def take_extension(self):
+        """Return the route token once after navigation, else ``None``."""
+        token = getattr(self.page, "extension", None)
+        if token is None or not self._session._extension_pending:
+            return None
+        self._session._extension_pending = False
+        return token
+
     @property
     def last_key(self):
         return self._session.last_key
