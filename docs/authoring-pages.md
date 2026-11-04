@@ -64,7 +64,7 @@ The decorator form is the shortest:
 @page(number, title="", aliases=(), on_submit=None, on_key=None,
       on_tick=None, tick_interval=None, form=False, on_form=None,
       transient=False, back_page=None, screensaver=None,
-      no_screensaver=False, requires=(), **meta)
+      no_screensaver=False, scroll=False, requires=(), **meta)
 def render(ctx):
     return Screen()
 ```
@@ -93,6 +93,11 @@ def render(ctx):
   repeatedly repaint the main content on idle, such as a carousel; a page that
   only updates one region should leave the screensaver enabled to prevent
   burn-in. See [Content carousels](#content-carousels).
+- `scroll=True` lets the page use the terminal's hardware scroll mode
+  ("mode rouleau"). Rows 1-24 scroll; row 0 is fixed. The page must return a
+  complete `Screen` from `render`/`on_tick`; the session owns the mode and the
+  renderer turns a one-row shift into `LF` plus a small repaint. See
+  [Scrolling text pages](#scrolling-text-pages).
 - `meta` is free-form; useful for a custom app.
 
 For stateful or larger pages, subclass `Page`:
@@ -450,6 +455,63 @@ screensaver, or rotates it. `Session.tick()` remains the page-tick entry point.
 Input and ticks share one writer, so a page paint is never interleaved with a
 tick.
 
+## Scrolling text pages
+
+A page can use the Minitel's hardware scroll mode ("mode rouleau") by declaring
+`scroll=True`. This is for full-screen, append-only text such as a teletype
+screensaver, a vidiprinter, or a chat log.
+
+```python
+@page("902", title="SHAKESPEARE", screensaver="scroll",
+      tick_interval=0.5, on_tick=scroll_tick, back_page="190",
+      scroll=True)
+def shakespeare(ctx):
+    return screen(ctx)
+```
+
+- **The hardware scrolls rows 1-24. Row 0 never scrolls.** A normal page can
+  keep the status bar in row 0 with `status(s, ...)`; it stays put without being
+  reprinted. A screensaver scroll page follows the other screensavers instead:
+  a plain black row 0 with a short title, not the inverse status bar.
+- **Only row 0 is fixed.** A header or footer below row 0 scrolls with the
+  content. To keep one fixed, repaint it after each scroll. A two-row footer
+  costs roughly 0.3-0.9 s per new line at 133 cps; four rows cost roughly
+  0.6-1.5 s. Use row 0 for the most important static information and keep any
+  fixed footer small.
+- **Keep scrolling rows within columns 1-39.** A row that reaches column 40
+  can take the terminal's overflow path on the bottom row and add an extra
+  scroll, which shows as a blank line between lines. This is the terminal's
+  overflow, not a second `LF` from the server: the scroll diff still sends one
+  `LF` per tick. The 2026-11-04 M1 probe confirmed a 40-column row scrolls
+  immediately and a 39-column row does not. The `902` page wraps its text at 39
+  columns. Row 0 is outside the scroll and may use all 40 columns.
+- Return a complete `Screen` from `render` and `on_tick`. When the new screen is
+  the old screen shifted by one or more rows, the session emits the terminal
+  `LF`/`VT` and repaints only the new rows. Otherwise the normal changed-row
+  diff applies.
+- Do not send `LF`, `VT`, or the scroll-mode command from a page. `minitel/`
+  owns the mode and the renderer chooses the bytes. Pages must not emit raw
+  protocol bytes.
+- Use `tick_interval` for a scrolling page. There is no page-local timer; the
+  session owns the deadline, and the normal screensaver/power/carousel rules
+  apply.
+- Do not register input fields on a screensaver scroll page. A real user key
+  wakes the screensaver as usual; the scroll's `LF`, protocol/status frames, and
+  line-ending echoes do not. A normal scroll page can have a field, but the
+  field line will scroll unless it is repainted or kept empty while other
+  content arrives.
+- Keep row 0 static during the scroll; if its content changes, the renderer
+  paints it separately and the scroll fast path still applies to rows 1-24.
+- The first full paint of a long text is a normal full-page paint (~7 s at
+  133 cps for 24 dense lines). Later ticks are cheap: one line is about
+  40 bytes plus `LF`. Choose a tick interval above the per-line cost.
+
+The `902` Shakespeare screensaver is the reference. It bundles a public-domain
+text under `pages/screensavers/_support/texts/`, wraps it to 39 columns, and
+advances one line per tick using `ctx.state`. It uses the screensaver-style
+black row 0 (`3615 KILO / SHAKESPEARE`) and loops after a short four-line blank
+gap.
+
 ## Terminal power pause
 
 The dongle keeps the TCP connection alive when the Minitel is switched off. The
@@ -474,8 +536,11 @@ than adding page code.
 
 A screensaver is a session-owned display takeover. It is **not navigation**: the
 current page, history, field values, focus, and pager offset are preserved, and
-any input wakes back to the page the user was on. The first input chunk is
-discarded so a stray `ENVOI` cannot navigate or type into the restored page.
+any user key wakes back to the page the user was on. The first user-input chunk
+is discarded so a stray `ENVOI` cannot navigate or type into the restored page.
+Protocol/status frames, identification frames, and line-ending echoes (`LF`,
+`CRLF`, `LFCR`) do not wake the screensaver and do not reset its idle timer.
+This matters for scrolling pages: their `LF` is display output, not input.
 
 `MinitelApp` configures the default for every new session:
 
@@ -536,8 +601,9 @@ ctx.disable_screensaver()
 `ctx.start_screensaver()` is a request, not a return value: the session applies
 it after the handler finishes, so return a page key normally. The selector page
 `190` (`7` on the home menu) is the reference implementation. It lets the user
-choose `900` CLOCK, `901` TEST CARD, `903` BOUNCING BALL, or `910`-`912`
-CAROUSEL, cycle the auto delay, and activate the current choice with `0`.
+choose `900` CLOCK, `901` TEST CARD, `902` SHAKESPEARE, `903` BOUNCING
+BALL, or `910`-`912` CAROUSEL, cycle the auto delay, and activate the current
+choice with `0`.
 
 Rules for screensaver pages:
 
@@ -810,6 +876,7 @@ Keep page numbers stable and descriptive. The example scheme is:
 | `199` | hidden developer page directory; not linked from home |
 | `900` | CLOCK screensaver |
 | `901` | TEST CARD screensaver |
+| `902` | SHAKESPEARE scrolling text screensaver |
 | `903` | BOUNCING BALL screensaver |
 | `910`-`912` | CAROUSEL promo frames |
 | `__not_found__` | fallback |
@@ -929,6 +996,8 @@ The library boundaries are deliberate:
 - Test on the M1 and with the virtual Minitel.
 - Screensaver pages draw the full screen, hide the cursor, and keep motion
   sparse; do not give them a `PAGE:` field.
+- Scrolling text pages declare `scroll=True`; row 0 is the only fixed chrome.
+  Return a full `Screen` and let the session emit the scroll bytes.
 - Content carousels are declared on the pager, not implemented with page-local
   timers. Pages that repeatedly repaint the main content on idle through a
   carousel may set `no_screensaver=True`; region-only updates should leave the

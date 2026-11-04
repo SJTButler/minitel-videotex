@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+- Added native Minitel scroll mode (`@page(..., scroll=True)`) and the `902
+  SHAKESPEARE` scrolling-text screensaver, including scroll-aware rendering,
+  screensaver wake filtering, virtual terminal support, and the 39-column
+  scrolling layout.
+
 ## 0.3.0 - 2026-11-02
 
 - Split `minitel/` into ownership packages: `protocol/`, `terminal/`,

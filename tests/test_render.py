@@ -187,6 +187,75 @@ class DiffTests(unittest.TestCase):
         self.assertTrue(decoded.text().splitlines()[0].startswith("PAGE 110"))
 
 
+class ScrollDiffTests(unittest.TestCase):
+    def numbered(self):
+        screen = Screen()
+        screen.text(0, 0, "STATUS")
+        for row in range(1, codec.ROWS):
+            screen.text(row, 0, f"LINE {row}")
+        return screen
+
+    def test_full_paint_asserts_scroll_mode(self):
+        screen = Screen()
+        self.assertIn(codec.SCROLL_ON, render(screen, scroll=True))
+        self.assertIn(codec.SCROLL_OFF, render(screen, scroll=False))
+        self.assertNotIn(codec.SCROLL_ON, render(screen))
+        self.assertNotIn(codec.SCROLL_OFF, render(screen))
+
+    def test_one_line_up_shift_uses_line_feed(self):
+        old = self.numbered()
+        new = Screen()
+        new.rows[0] = old.rows[0]
+        new.rows[1:codec.ROWS - 1] = old.rows[2:codec.ROWS]
+        new.text(codec.ROWS - 1, 0, "NEW LINE")
+
+        diff = render_diff(old, new, scroll=True)
+        self.assertIn(bytes([codec.LF]), diff)
+        self.assertLess(len(diff), len(render(new)))
+
+        decoded = decode(render(old, scroll=True) + diff)
+        self.assertEqual(decoded.text(), new.to_text())
+        self.assertTrue(decoded.text().splitlines()[0].startswith("STATUS"))
+
+    def test_one_line_down_shift_uses_vertical_tab(self):
+        old = self.numbered()
+        new = Screen()
+        new.rows[0] = old.rows[0]
+        new.rows[2:codec.ROWS] = old.rows[1:codec.ROWS - 1]
+        new.text(1, 0, "NEW TOP")
+
+        diff = render_diff(old, new, scroll=True)
+        self.assertIn(bytes([codec.VT]), diff)
+
+        decoded = decode(render(old, scroll=True) + diff)
+        self.assertEqual(decoded.text(), new.to_text())
+
+    def test_scroll_shift_can_repaint_the_status_row(self):
+        old = self.numbered()
+        new = Screen()
+        new.text(0, 0, "NEW STATUS")
+        new.rows[1:codec.ROWS - 1] = old.rows[2:codec.ROWS]
+        new.text(codec.ROWS - 1, 0, "NEW LINE")
+
+        decoded = decode(
+            render(old, scroll=True) + render_diff(old, new, scroll=True)
+        )
+        self.assertEqual(decoded.text(), new.to_text())
+        self.assertTrue(decoded.text().splitlines()[0].startswith("NEW STATUS"))
+
+    def test_page_mode_does_not_use_the_shift_path(self):
+        old = self.numbered()
+        new = Screen()
+        new.rows[0] = old.rows[0]
+        new.rows[1:codec.ROWS - 1] = old.rows[2:codec.ROWS]
+        new.text(codec.ROWS - 1, 0, "NEW LINE")
+
+        diff = render_diff(old, new)
+        self.assertNotIn(bytes([codec.LF]), diff)
+        decoded = decode(render(old) + diff)
+        self.assertEqual(decoded.text(), new.to_text())
+
+
 class PackageSurfaceTests(unittest.TestCase):
     def test_package_render_is_the_module_and_render_screen_is_the_function(self):
         self.assertTrue(hasattr(minitel.render, "render_diff"))

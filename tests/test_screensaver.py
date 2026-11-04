@@ -142,6 +142,29 @@ class ScreensaverMechanismTests(unittest.TestCase):
         self.session.feed(b"C")
         self.assertEqual(self.session.values["input"], "ABC")
 
+    def test_line_ending_echo_does_not_wake_the_screensaver(self):
+        self.session.activate_screensaver()
+        for data in (b"\x0a", b"\x0d\x0a", b"\x0a\x0d"):
+            self.assertEqual(self.session.feed(data), [])
+            self.assertTrue(self.session.screensaver_active)
+
+    def test_protocol_and_control_frames_do_not_wake_the_screensaver(self):
+        self.session.activate_screensaver()
+        for data in (
+            b"\x1b:\x73X",
+            b"\x1bA",
+            b"\x01ABC\x04",
+            b"\x12",
+        ):
+            self.assertEqual(self.session.feed(data), [])
+            self.assertTrue(self.session.screensaver_active)
+
+    def test_enter_still_wakes_the_screensaver(self):
+        self.session.activate_screensaver()
+        actions = self.session.feed(b"\x0d")
+        self.assertEqual(len(actions), 1)
+        self.assertFalse(self.session.screensaver_active)
+
     def test_wake_restores_the_input_cursor(self):
         self.session.feed(b"AB")
         self.session.activate_screensaver()

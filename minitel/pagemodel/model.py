@@ -142,6 +142,7 @@ class Page:
     back_page = None
     screensaver = None
     no_screensaver = False
+    scroll = False
     tick_interval = None
     on_form = None
     requires = ()
@@ -166,8 +167,8 @@ class FunctionPage(Page):
     def __init__(self, number, render, *, title="", aliases=(), on_submit=None,
                  on_key=None, on_tick=None, tick_interval=None, form=False,
                  on_form=None, transient=False, back_page=None,
-                 screensaver=None, no_screensaver=False, requires=(),
-                 meta=None):
+                 screensaver=None, no_screensaver=False, scroll=False,
+                 requires=(), meta=None):
         if screensaver is not None and (
             not isinstance(screensaver, str) or not screensaver
         ):
@@ -186,6 +187,7 @@ class FunctionPage(Page):
         self.back_page = back_page
         self.screensaver = screensaver or None
         self.no_screensaver = bool(no_screensaver)
+        self.scroll = bool(scroll)
         self._on_submit = on_submit
         self._on_key = on_key
         self._on_tick = on_tick
@@ -217,7 +219,7 @@ class FunctionPage(Page):
 def page(number, *, title="", aliases=(), on_submit=None, on_key=None,
          on_tick=None, tick_interval=None, form=False, on_form=None,
          transient=False, back_page=None, screensaver=None,
-         no_screensaver=False, requires=(), **meta):
+         no_screensaver=False, scroll=False, requires=(), **meta):
     def decorator(fn):
         return FunctionPage(
             number,
@@ -234,6 +236,7 @@ def page(number, *, title="", aliases=(), on_submit=None, on_key=None,
             back_page=back_page,
             screensaver=screensaver,
             no_screensaver=no_screensaver,
+            scroll=scroll,
             requires=requires,
             meta=meta,
         )

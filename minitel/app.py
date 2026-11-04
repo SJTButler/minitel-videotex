@@ -63,12 +63,12 @@ class MinitelApp:
             clock=self.clock,
         )
 
-    async def send(self, pacer, screen, log):
-        data = render_screen(screen)
+    async def send(self, pacer, screen, log, scroll=None):
+        data = render_screen(screen, scroll=scroll)
         await pacer.write(data)
         log(f"SENT page ({len(data)} bytes)")
 
-    async def _apply_action(self, pacer, action, log):
+    async def _apply_action(self, pacer, action, log, scroll=None):
         if action.power is not None:
             log("POWER off" if not action.power else "POWER on")
         if action.raw:
@@ -78,9 +78,9 @@ class MinitelApp:
         if action.page is not None:
             log(f"PAGE {action.page.number}")
         if action.screen is not None:
-            await self.send(pacer, action.screen, log)
+            await self.send(pacer, action.screen, log, scroll)
 
-    async def _apply_actions(self, pacer, actions, log):
+    async def _apply_actions(self, pacer, actions, log, scroll=None):
         pending = bytearray()
         for action in actions:
             if (
@@ -96,7 +96,7 @@ class MinitelApp:
                 if len(pending) > 4:
                     log(f"RAW {len(pending)} bytes")
                 pending.clear()
-            await self._apply_action(pacer, action, log)
+            await self._apply_action(pacer, action, log, scroll)
         if pending:
             await pacer.write(bytes(pending))
             if len(pending) > 4:
@@ -120,7 +120,12 @@ class MinitelApp:
             echo = session.echo_override()
             await pacer.write(echo)
             log(f"ECHO local {'off' if self.echo else 'on'}")
-            await self.send(pacer, session.start(), log)
+            await self.send(
+                pacer,
+                session.start(),
+                log,
+                getattr(session, "scroll_mode", None),
+            )
             while True:
                 interval = session.next_timeout()
                 if interval is None:
@@ -129,12 +134,22 @@ class MinitelApp:
                     try:
                         data = await asyncio.wait_for(reader.read(64), timeout=interval)
                     except asyncio.TimeoutError:
-                        await self._apply_action(pacer, session.on_timeout(), log)
+                        await self._apply_action(
+                            pacer,
+                            session.on_timeout(),
+                            log,
+                            getattr(session, "scroll_mode", None),
+                        )
                         continue
                 if not data:
                     break
                 log("RX " + " ".join(f"{b:02X}" for b in data))
-                await self._apply_actions(pacer, session.feed(data), log)
+                await self._apply_actions(
+                    pacer,
+                    session.feed(data),
+                    log,
+                    getattr(session, "scroll_mode", None),
+                )
         except (ConnectionResetError, BrokenPipeError):
             pass
         finally:

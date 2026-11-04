@@ -74,8 +74,12 @@ pages/         example site, auto-discovered
     selector.py  page 190
     clock.py     page 900
     test_card.py page 901
+    scroll.py    page 902, scrolling public-domain text
     ball.py      page 903
     promos.py    pages 910-912
+    _support/
+      text.py    loads and wraps the bundled public-domain text
+      texts/     public-domain source text
   guestbook/
     page.py      page 140
     _support/
@@ -326,8 +330,8 @@ uv run python run_server.py --screensaver bouncing_ball --screensaver-after 60
 uv run python run_server.py --screensaver off
 ```
 
-`--screensaver` accepts `clock`, `test_card`, `bouncing_ball`, `carousel`,
-`all`, or `off`. Screensaver pages declare their group with
+`--screensaver` accepts `clock`, `test_card`, `scroll`, `bouncing_ball`,
+`carousel`, `all`, or `off`. Screensaver pages declare their group with
 `@page(..., screensaver="group")`; `Registry.screensaver_groups()` collects
 them. `minitel/` carries a `Screensaver` with a page sequence and a `Carousel`
 timing policy, but no specific page numbers. `--screensaver-after` is the idle
@@ -338,7 +342,8 @@ multi-page screensaver.
 Page `190` (`7` on the home menu) is the selector. Type `1`-`4` to choose CLOCK,
 TEST CARD, BOUNCING BALL, or CAROUSEL, `6` to cycle the auto delay, and `0` to
 activate immediately. The screensaver pages are `900` CLOCK, `901` TEST CARD,
-`903` BOUNCING BALL, and the `910`-`912` CAROUSEL frames.
+`902` SHAKESPEARE (scrolling text), `903` BOUNCING BALL, and the `910`-`912`
+CAROUSEL frames.
 
 `MinitelApp(screensaver=..., screensaver_after=..., screensaver_hold=...)`
 provides the same configuration for another service. Pages may call

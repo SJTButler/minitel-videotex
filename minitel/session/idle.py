@@ -76,6 +76,7 @@ class IdleMixin:
 
     def _render_screensaver(self):
         page = self.display_page
+        self.scroll_mode = bool(page.scroll)
         ctx = PageContext(self, page, self.registry)
         screen = page.render(ctx)
         if not isinstance(screen, Screen):
@@ -86,6 +87,7 @@ class IdleMixin:
         screen.set_cursor(codec.ROWS - 1, 0, False)
         self._screensaver_page = page
         self.screen = screen
+        self.screen_scroll_mode = self.scroll_mode
         return Action(screen=screen)
 
     def wake(self):

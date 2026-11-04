@@ -73,6 +73,55 @@ class DecoderTests(unittest.TestCase):
         decoder = self.decode(bytes(range(256)))
         self.assertEqual(len(decoder.screen.rows), VM.ROWS)
 
+    def pos(self, row, col=0):
+        return bytes([0x1F, 0x40 + row, 0x41 + col])
+
+    def numbered_rows(self):
+        decoder = self.decode(self.pos(0) + b"STATUS")
+        for row in range(1, VM.ROWS):
+            decoder.feed(self.pos(row) + str(row).encode())
+        return decoder
+
+    def test_scroll_mode_command_sets_the_mode(self):
+        decoder = VM.Decoder()
+        decoder.feed(b"\x1b:\x69C")
+        self.assertTrue(decoder.screen.scroll_mode)
+        decoder.feed(b"\x1b:\x6aC")
+        self.assertFalse(decoder.screen.scroll_mode)
+
+    def test_line_feed_at_bottom_scrolls_rows_one_to_24(self):
+        decoder = self.numbered_rows()
+        decoder.feed(b"\x1b:\x69C")
+        decoder.feed(self.pos(24) + b"\x0a")
+        lines = decoder.screen.text().splitlines()
+        self.assertTrue(lines[0].startswith("STATUS"))
+        self.assertEqual(lines[1].strip(), "2")
+        self.assertEqual(lines[23].strip(), "24")
+        self.assertEqual(lines[24].strip(), "")
+
+    def test_vertical_tab_at_top_scrolls_rows_one_to_24_down(self):
+        decoder = self.numbered_rows()
+        decoder.feed(b"\x1b:\x69C")
+        decoder.feed(self.pos(1) + b"\x0b")
+        lines = decoder.screen.text().splitlines()
+        self.assertTrue(lines[0].startswith("STATUS"))
+        self.assertEqual(lines[1].strip(), "")
+        self.assertEqual(lines[2].strip(), "1")
+        self.assertEqual(lines[24].strip(), "23")
+
+    def test_page_mode_line_feed_wraps_to_row_one(self):
+        decoder = self.numbered_rows()
+        decoder.feed(self.pos(24) + b"\x0a")
+        self.assertEqual(decoder.screen.row, 1)
+        self.assertEqual(
+            decoder.screen.text().splitlines()[24].strip(), "24"
+        )
+
+    def test_page_mode_vertical_tab_wraps_to_row_24(self):
+        decoder = self.numbered_rows()
+        decoder.feed(self.pos(1) + b"\x0b")
+        self.assertEqual(decoder.screen.row, VM.ROWS - 1)
+
 
 if __name__ == "__main__":
     unittest.main()

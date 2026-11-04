@@ -460,5 +460,75 @@ class SessionTests(unittest.TestCase):
         self.assertEqual(actions[-1].screen.rows[0][0].ch, "H")
 
 
+class ScrollSessionTests(unittest.TestCase):
+    def _screen(self, offset=0):
+        screen = Screen()
+        screen.text(0, 0, "STATUS")
+        for row in range(1, codec.ROWS):
+            screen.text(row, 0, f"LINE {row + offset}")
+        screen.set_cursor(codec.ROWS - 1, 0, False)
+        return screen
+
+    def _registry(self):
+        registry = Registry()
+
+        @page("500", title="SCROLL", scroll=True, tick_interval=1.0,
+              on_tick=lambda ctx: self._screen(1))
+        def scrolling(ctx):
+            return self._screen()
+
+        @page("510", title="PLAIN")
+        def plain(ctx):
+            screen = Screen()
+            screen.text(0, 0, "PLAIN")
+            return screen
+
+        registry.add(scrolling)
+        registry.add(plain)
+        return registry
+
+    def test_page_defaults_to_no_scroll_mode(self):
+        self.assertFalse(page("520", title="PLAIN")(lambda ctx: Screen()).scroll)
+        self.assertTrue(
+            page("521", title="SCROLL", scroll=True)(
+                lambda ctx: Screen()
+            ).scroll
+        )
+
+    def test_scroll_page_sets_mode_and_tick_uses_line_feed(self):
+        registry = self._registry()
+        session = Session(registry, profiles.M1, initial="500",
+                          fallback=registry.get("510"))
+        session.start()
+        self.assertTrue(session.scroll_mode)
+        self.assertTrue(session.screen_scroll_mode)
+
+        action = session.tick()
+        self.assertIsNone(action.screen)
+        self.assertIn(bytes([codec.LF]), action.raw)
+        self.assertLess(len(action.raw), 200)
+
+        session.navigate("510")
+        self.assertFalse(session.scroll_mode)
+        self.assertFalse(session.screen_scroll_mode)
+
+    def test_wake_from_scroll_screensaver_restores_page_mode(self):
+        registry = self._registry()
+        session = Session(
+            registry,
+            profiles.M1,
+            initial="510",
+            fallback=registry.get("510"),
+            screensaver=("500",),
+        )
+        session.start()
+        session.activate_screensaver()
+        self.assertTrue(session.scroll_mode)
+
+        session.wake()
+        self.assertFalse(session.scroll_mode)
+        self.assertFalse(session.screen_scroll_mode)
+
+
 if __name__ == "__main__":
     unittest.main()

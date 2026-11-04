@@ -1,8 +1,12 @@
 import unittest
+from types import SimpleNamespace
 
 import pages
 
 from minitel import M1, Session
+from minitel.protocol import codec
+from pages.screensavers import scroll as scroll_page
+from pages.screensavers._support.text import LINES
 
 ENVOI = bytes([0x13, 0x41])
 
@@ -27,7 +31,7 @@ class ScreensaverPageTests(unittest.TestCase):
         self.assertIn(pages.DEFAULT_SCREENSAVER, groups)
         self.assertEqual(
             list(groups),
-            ["clock", "test_card", "bouncing_ball", "carousel"],
+            ["clock", "test_card", "scroll", "bouncing_ball", "carousel"],
         )
         self.assertEqual(
             [page.number for page in groups["carousel"]],
@@ -35,16 +39,21 @@ class ScreensaverPageTests(unittest.TestCase):
         )
         self.assertEqual(
             [page.number for page in self.registry.screensaver_pages("all")],
-            ["900", "901", "903", "910", "911", "912"],
+            ["900", "901", "902", "903", "910", "911", "912"],
         )
         self.assertIsNone(self.registry.screensaver_pages("missing"))
         self.assertEqual(self.registry.get("900").screensaver, "clock")
+        self.assertEqual(self.registry.get("902").screensaver, "scroll")
 
     def test_selector_layout(self):
         text = self.session.screen.to_text().splitlines()
         self.assertEqual(text[1].strip(), "SCREENSAVER")
         self.assertEqual(text[3].strip(), "SCREENSAVER SETTINGS")
-        self.assertEqual(text[5].strip(), "> 1  CLOCK")
+        self.assertEqual(text[5][:20].strip(), "> 1  CLOCK")
+        self.assertEqual(text[5][20:].strip(), "5  CAROUSEL")
+        self.assertEqual(text[6][:20].strip(), "2  TEST CARD")
+        self.assertEqual(text[7][:20].strip(), "3  SCROLL")
+        self.assertEqual(text[8][:20].strip(), "4  BOUNCING BALL")
         self.assertEqual(text[12].strip(), "CHOICE: CLOCK")
         self.assertEqual(text[13].strip(), "AUTO: 2 MIN")
         self.assertEqual((self.session.screen.cursor_row,
@@ -54,11 +63,18 @@ class ScreensaverPageTests(unittest.TestCase):
         self.feed(b"3" + ENVOI)
         self.assertEqual(
             [page.number for page in self.session.screensaver.pages],
+            ["902"],
+        )
+        self.assertIn("SCROLL", self.session.screen.to_text())
+
+        self.feed(b"4" + ENVOI)
+        self.assertEqual(
+            [page.number for page in self.session.screensaver.pages],
             ["903"],
         )
         self.assertIn("BOUNCING BALL", self.session.screen.to_text())
 
-        self.feed(b"4" + ENVOI)
+        self.feed(b"5" + ENVOI)
         self.assertEqual(
             [page.number for page in self.session.screensaver.pages],
             ["910", "911", "912"],
@@ -135,6 +151,73 @@ class ScreensaverPageTests(unittest.TestCase):
         self.assertIn("LOCAL TIME", text)
         self.assertIn("PRESS ANY KEY", text)
         self.assertFalse(session.screen.cursor_visible)
+
+    def test_scroll_text_is_wrapped_and_encodable(self):
+        self.assertTrue(LINES)
+        for line in LINES:
+            self.assertLess(len(line), codec.COLS)
+            codec.text(line)
+
+    def test_scroll_page_loops_after_the_gap(self):
+        ctx = SimpleNamespace(state={})
+        total = len(LINES) + scroll_page.LOOP_GAP
+        frame = None
+        for _ in range(total):
+            frame = scroll_page.scroll_tick(ctx)
+        self.assertEqual(ctx.state[scroll_page.STATE_KEY], 0)
+        self.assertEqual(
+            frame.to_text().splitlines()[1].strip(), "SONNET 18"
+        )
+        self.assertEqual(
+            frame.to_text().splitlines()[0].strip(),
+            "3615 KILO / SHAKESPEARE",
+        )
+
+    def test_scroll_page_keeps_status_and_advances_one_line(self):
+        session = Session(
+            self.registry, M1, initial="902",
+            fallback=self.registry.get(pages.NOT_FOUND),
+        )
+        session.start()
+        self.assertTrue(session.scroll_mode)
+        self.assertTrue(session.screen_scroll_mode)
+        self.assertEqual(session.fields, [])
+        self.assertEqual(session.current.back_page, "190")
+
+        lines = session.screen.to_text().splitlines()
+        self.assertEqual(lines[0].strip(), "3615 KILO / SHAKESPEARE")
+        self.assertEqual(lines[1].strip(), "SONNET 18")
+
+        first = session.tick()
+        self.assertIsNone(first.screen)
+        self.assertIn(bytes([0x0A]), first.raw)
+        action = session.tick()
+        self.assertIsNone(action.screen)
+        self.assertIn(bytes([0x0A]), action.raw)
+        self.assertEqual(
+            session.screen.to_text().splitlines()[1].strip(),
+            "SHALL I COMPARE THEE TO A SUMMER'S DAY?",
+        )
+        status_line = session.screen.to_text().splitlines()[0]
+        self.assertEqual(status_line.strip(), "3615 KILO / SHAKESPEARE")
+
+    def test_scroll_echo_does_not_wake_the_screensaver(self):
+        session = Session(
+            self.registry,
+            M1,
+            initial="100",
+            fallback=self.registry.get(pages.NOT_FOUND),
+            screensaver=("902",),
+        )
+        session.start()
+        session.activate_screensaver()
+        action = session.tick()
+        self.assertIn(bytes([0x0A]), action.raw)
+        self.assertTrue(session.screensaver_active)
+        self.assertEqual(session.feed(b"\x0a"), [])
+        self.assertTrue(session.screensaver_active)
+        self.assertEqual(session.feed(b"\x0d\x0a"), [])
+        self.assertTrue(session.screensaver_active)
 
     def test_mire_page(self):
         session = Session(

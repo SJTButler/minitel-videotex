@@ -49,6 +49,8 @@ class Session(NavigationMixin, EditingMixin, IdleMixin, PowerMixin):
         self._pager_carousel_next = None
         self._pager_carousel_key = None
         self.screen = None
+        self.scroll_mode = False
+        self.screen_scroll_mode = False
         self.clock = clock
         self.screensaver = (
             screensaver
@@ -161,12 +163,14 @@ class Session(NavigationMixin, EditingMixin, IdleMixin, PowerMixin):
         if self.paused:
             return Action()
         old = self.screen
+        old_scroll = self.screen_scroll_mode
         new = self.render()
-        if old is None:
+        if old is None or old_scroll != self.screen_scroll_mode:
             return Action(screen=new)
-        return Action(raw=render_diff(old, new))
+        return Action(raw=render_diff(old, new, scroll=self.scroll_mode))
 
     def render(self):
+        self.scroll_mode = bool(self.current.scroll)
         ctx = PageContext(self, self.current, self.registry)
         screen = self.current.render(ctx)
         if not isinstance(screen, Screen):
@@ -202,12 +206,14 @@ class Session(NavigationMixin, EditingMixin, IdleMixin, PowerMixin):
         else:
             screen.set_cursor(24, 0, False)
         self.screen = screen
+        self.screen_scroll_mode = self.scroll_mode
         return screen
 
     def tick(self):
         if self.paused:
             return Action()
         page = self.display_page
+        self.scroll_mode = bool(page.scroll)
         if self.screensaver_active:
             if self._page_tick_interval(page, pause_on_input=False) is None:
                 return Action()
@@ -238,11 +244,13 @@ class Session(NavigationMixin, EditingMixin, IdleMixin, PowerMixin):
                 else:
                     frame.set_cursor(codec.ROWS - 1, 0, False)
             old = self.screen
-            if old is None:
+            if old is None or self.scroll_mode != self.screen_scroll_mode:
                 self.screen = frame
+                self.screen_scroll_mode = self.scroll_mode
                 return Action(screen=frame)
-            diff = render_diff(old, frame)
+            diff = render_diff(old, frame, scroll=self.scroll_mode)
             self.screen = frame
+            self.screen_scroll_mode = self.scroll_mode
             return Action(raw=diff)
         raise TypeError(
             f"page {page.number!r} tick returned {type(frame)!r}; "
@@ -251,7 +259,9 @@ class Session(NavigationMixin, EditingMixin, IdleMixin, PowerMixin):
 
     def handle(self, event):
         if self.screensaver_active:
-            return self._wake_from_input()
+            if self._is_user_input(event):
+                return self._wake_from_input()
+            return Action()
         self._touch()
         if isinstance(event, codec.Text):
             return self.text_event(event)
@@ -329,14 +339,31 @@ class Session(NavigationMixin, EditingMixin, IdleMixin, PowerMixin):
             return self.navigate(self.guide)
         return Action()
 
+    @staticmethod
+    def _is_user_input(event):
+        return isinstance(
+            event, (codec.Text, codec.Enter, codec.Function, codec.Key)
+        )
+
+    @staticmethod
+    def _is_line_ending_echo(data):
+        return data in (b"\n", b"\r\n", b"\n\r")
+
     def _feed_bytes(self, data):
         if not data:
             return []
+        if self.screensaver_active and self._is_line_ending_echo(data):
+            return []
+        events = self.parser.feed(data)
+        user_events = [
+            event for event in events if self._is_user_input(event)
+        ]
+        if not user_events:
+            return []
         if self.screensaver_active:
             return [self._wake_from_input()]
-        events = self.parser.feed(data)
         self._touch()
-        return [self.handle(event) for event in events]
+        return [self.handle(event) for event in user_events]
 
     def feed(self, data):
         if not data:

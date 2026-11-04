@@ -74,6 +74,7 @@ class Screen:
         self.cursor = False
         self.last_ch = " "
         self.bell = 0
+        self.scroll_mode = False
 
     def clear(self):
         self.rows = [[Cell() for _ in range(COLS)] for _ in range(ROWS)]
@@ -92,7 +93,7 @@ class Screen:
     def put(self, ch):
         if self.col >= COLS:
             self.col = 0
-            self.row = min(ROWS - 1, self.row + 1)
+            self.line_feed()
         cell = self.pen.clone(ch)
         cell.charset = self.pen.charset
         self.rows[self.row][self.col] = cell
@@ -102,6 +103,37 @@ class Screen:
     def repeat(self, count):
         for _ in range(count):
             self.put(self.last_ch)
+
+    def _blank_row(self):
+        return [self.pen.clone(" ") for _ in range(COLS)]
+
+    def _scroll_up(self):
+        for row in range(1, ROWS - 1):
+            self.rows[row] = self.rows[row + 1]
+        self.rows[ROWS - 1] = self._blank_row()
+
+    def _scroll_down(self):
+        for row in range(ROWS - 1, 1, -1):
+            self.rows[row] = self.rows[row - 1]
+        self.rows[1] = self._blank_row()
+
+    def line_feed(self):
+        if self.row < ROWS - 1:
+            self.row += 1
+            return
+        if self.scroll_mode:
+            self._scroll_up()
+        else:
+            self.row = 1
+
+    def vertical_tab(self):
+        if self.row > 1:
+            self.row -= 1
+            return
+        if self.row == 1 and self.scroll_mode:
+            self._scroll_down()
+        elif self.row == 1:
+            self.row = ROWS - 1
 
     def can(self):
         for c in range(self.col, COLS):
@@ -179,8 +211,11 @@ class Decoder:
             elif b == 0x08:
                 self.screen.col = max(0, self.screen.col - 1)
                 i += 1
-            elif b == 0x0A or b == 0x0B:
-                self.screen.row = min(ROWS - 1, self.screen.row + 1)
+            elif b == 0x0A:
+                self.screen.line_feed()
+                i += 1
+            elif b == 0x0B:
+                self.screen.vertical_tab()
                 i += 1
             elif b == 0x07:
                 self.screen.bell += 1
@@ -207,6 +242,10 @@ class Decoder:
         if b == 0x3A:
             if i + 3 >= n:
                 return 0, i
+            command = self.buf[i + 2]
+            argument = self.buf[i + 3]
+            if argument == 0x43 and command in (0x69, 0x6A):
+                self.screen.scroll_mode = command == 0x69
             return 4, i + 4
         if b == 0x3B:
             if i + 4 >= n:

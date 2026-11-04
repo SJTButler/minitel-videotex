@@ -37,6 +37,9 @@ DOUBLE_SIZE = 3
 ECHO_ON = bytes([ESC, 0x3B, 0x61, 0x5A, 0x51])
 ECHO_OFF = bytes([ESC, 0x3B, 0x60, 0x5A, 0x51])
 
+SCROLL_ON = bytes([ESC, 0x3A, 0x69, 0x43])
+SCROLL_OFF = bytes([ESC, 0x3A, 0x6A, 0x43])
+
 ROWS = 25
 COLS = 40
 
@@ -207,6 +210,15 @@ def echo_mode(local=True):
     on; ``local=False`` turns it off so the server can echo.
     """
     return ECHO_ON if local else ECHO_OFF
+
+
+def scroll_mode(on=True):
+    """Select the hardware scroll ("rouleau") or page mode.
+
+    In scroll mode a line feed at row 24 scrolls rows 1-24 up; row 0 is
+    untouched.  In page mode the same line feed wraps to row 1.
+    """
+    return SCROLL_ON if on else SCROLL_OFF
 
 
 @dataclass(frozen=True)

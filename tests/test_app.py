@@ -3,6 +3,7 @@ import unittest
 import pages
 import services
 
+from minitel import Registry, page
 from minitel.protocol import codec
 from minitel.app import MinitelApp
 from minitel.terminal.power import PowerSignals
@@ -187,6 +188,50 @@ class AppTests(unittest.IsolatedAsyncioTestCase):
 
         self.assertEqual(writes[0], codec.echo_mode(False))
         self.assertGreater(len(writes[1]), 0)
+
+    async def test_handle_asserts_scroll_mode_for_a_scroll_page(self):
+        registry = Registry()
+
+        @page("600", title="SCROLL", scroll=True)
+        def scrolling(ctx):
+            screen = Screen()
+            screen.text(0, 0, "STATUS")
+            return screen
+
+        registry.add(scrolling)
+        writes = []
+
+        class Reader:
+            async def read(self, size):
+                return b""
+
+        class Writer:
+            def get_extra_info(self, name):
+                return None
+
+            def write(self, data):
+                writes.append(data)
+
+            async def drain(self):
+                pass
+
+            def close(self):
+                pass
+
+            async def wait_closed(self):
+                pass
+
+        app = MinitelApp(
+            registry,
+            initial="600",
+            cps=0,
+            echo=True,
+            log=lambda peer, message: None,
+        )
+        await app.handle(Reader(), Writer())
+
+        self.assertEqual(writes[0], codec.echo_mode(False))
+        self.assertIn(codec.SCROLL_ON, writes[1])
 
     async def test_sync_hooks_are_supported(self):
         events = []

@@ -48,10 +48,11 @@ class PageDirectoryTests(unittest.TestCase):
         session.feed(SUITE)
         text = session.screen.to_text().splitlines()
         self.assertIn("REGISTERED PAGES 2/2", session.screen.to_text())
-        self.assertTrue(text[5].startswith("903"))
-        self.assertTrue(text[6].startswith("910"))
-        self.assertTrue(text[7].startswith("911"))
-        self.assertTrue(text[8].startswith("912"))
+        self.assertTrue(text[5].startswith("902"))
+        self.assertTrue(text[6].startswith("903"))
+        self.assertTrue(text[7].startswith("910"))
+        self.assertTrue(text[8].startswith("911"))
+        self.assertTrue(text[9].startswith("912"))
 
     def test_hides_internal_pages(self):
         session = make_session()
@@ -81,14 +82,16 @@ class PageDirectoryTests(unittest.TestCase):
 
         session.feed(SUITE)
         text = session.screen.to_text().splitlines()
-        self.assertTrue(text[5].startswith("903*"))
-        self.assertIn("BOUNCING BALL", text[5])
-        self.assertTrue(text[6].startswith("910*"))
-        self.assertIn("CAROUSEL: KILO", text[6])
-        self.assertTrue(text[7].startswith("911*"))
-        self.assertIn("CAROUSEL: NEWS", text[7])
-        self.assertTrue(text[8].startswith("912*"))
-        self.assertIn("CAROUSEL: WEATHER", text[8])
+        self.assertTrue(text[5].startswith("902*"))
+        self.assertIn("SCROLL: SHAKESPEARE", text[5])
+        self.assertTrue(text[6].startswith("903*"))
+        self.assertIn("BOUNCING BALL", text[6])
+        self.assertTrue(text[7].startswith("910*"))
+        self.assertIn("CAROUSEL: KILO", text[7])
+        self.assertTrue(text[8].startswith("911*"))
+        self.assertIn("CAROUSEL: NEWS", text[8])
+        self.assertTrue(text[9].startswith("912*"))
+        self.assertIn("CAROUSEL: WEATHER", text[9])
 
     def test_has_page_input_and_footer(self):
         session = make_session()
@@ -120,7 +123,8 @@ class PageDirectoryTests(unittest.TestCase):
         self.assertIn("REGISTERED PAGES 2/2", text)
         lines = text.splitlines()
         self.assertTrue(lines[5].startswith("901"))
-        self.assertTrue(lines[9].startswith("912"))
+        self.assertTrue(lines[6].startswith("902"))
+        self.assertTrue(lines[10].startswith("912"))
 
 
 if __name__ == "__main__":
