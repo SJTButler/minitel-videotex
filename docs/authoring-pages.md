@@ -42,12 +42,16 @@ def hello(ctx):
 ```
 
 Restart the server. The page is auto-discovered; type `200` in the `PAGE:`
-field and press `ENVOI`. To put it on the main menu, add a line in
-`pages/home.py`:
+field and press `ENVOI`.
+
+To put it on the main menu, give it a 1-2 digit numeric alias:
 
 ```python
-s.text(8, 0, "4  HELLO")
+@page("200", title="HELLO", aliases=("6",))
 ```
+
+The home page builds its menu from those aliases; do not edit `pages/home.py`
+to add an entry. See [Aliases and the menu](#aliases-and-the-menu).
 
 There is no central page list. Any `Page` object in a `pages/*.py` module is
 registered by:
@@ -71,7 +75,9 @@ def render(ctx):
 ```
 
 - `number` is the primary key (`"200"`).
-- `aliases` are extra keys (`("4",)` or `("", "0")` for the home page).
+- `aliases` are extra keys (`("4",)` or `("", "0")` for the home page). A
+  1-2 digit numeric alias also declares a home-menu entry; see
+  [Aliases and the menu](#aliases-and-the-menu).
 - `requires=("sports",)` declares the process-wide services the page needs; the
   server validates the graph at startup.
 - `title` is metadata; it is not drawn automatically.
@@ -868,6 +874,29 @@ Normal pages are pushed as usual.
 `@page("110", aliases=("1",))` lets the user type either `1` or `110`. The home
 page uses `aliases=("", "0")`, so an empty submit and `0` both go home.
 
+The home menu is built from the registry, not from a list in `pages/home.py`.
+A page joins the menu when it declares a **1-2 digit numeric alias**
+(`"1"`...`"99"`):
+
+```python
+@page("150", title="LIVE SCORES", aliases=("5",))
+```
+
+Rules:
+
+- one line per page; if a page has several numeric aliases, the lowest is shown;
+- entries sort numerically, so `1, 2, 3, ... 10, 11` stay in human order;
+- the home page itself (`""`, `"0"`) is excluded;
+- non-numeric aliases remain direct-entry keys only;
+- the lowest 10 entries are shown; the hint reports `(+N MORE)` and every page
+  remains reachable by number and on page 199;
+- the title comes from `Page.title`, so a private page with a numeric alias
+  publishes its title on the home menu. Use a neutral title or no alias when
+  that matters.
+
+To put a page on the menu, add an alias. To keep it off the menu while still
+supporting direct entry, use a non-numeric alias or no alias.
+
 Keep page numbers stable and descriptive. The example scheme is:
 
 | Number | Page |
@@ -891,6 +920,11 @@ Keep page numbers stable and descriptive. The example scheme is:
 | `903` | BOUNCING BALL screensaver |
 | `910`-`912` | CAROUSEL promo frames |
 | `__not_found__` | fallback |
+
+Page numbers and aliases are global keys: a duplicate is a startup error. The
+example service uses `100`-`199` and `900`-`912`. An additional package can
+reserve `800`-`899` for private pages; see
+[Loading another page or service package](#loading-another-page-or-service-package).
 
 ## Page extension codes
 
@@ -1032,6 +1066,40 @@ Review generated pages for:
 
 One page per file is the easiest review unit. Keep page logic in `pages/` and
 reusable behaviour in `minitel/`.
+
+## Loading another page or service package
+
+The default entrypoint discovers `pages` and `services`. A second package can
+add pages, services, or both without changing the public tree. This is how a
+private page repository stays separate from the published code.
+
+```sh
+uv run python run_server.py \
+  --extra-path ../minitel_private_pages \
+  --pages-package private_pages \
+  --services-package private_services
+```
+
+- `--extra-path PATH` prepends a directory to `sys.path`; repeat it for more.
+  `PYTHONPATH` works too.
+- `--pages-package NAME` and `--services-package NAME` are repeatable.
+- The packages are ordinary module packages discovered by `Registry.discover`
+  and `ServiceRegistry.discover`; subpackages are walked.
+- Page numbers, aliases, and service keys are global. A duplicate aborts
+  startup. `requires=("espn_sports",)` is validated against the composed
+  service registry.
+- The home menu and page 199 use the composed registry, so a private page with
+  a numeric alias appears on the home menu.
+- The package is content, not a fork: import `minitel` and `pages.common` as
+  usual. Public code must not import the private package.
+
+`pages.build_registry("private_pages")` and
+`services.build_registry("private_services")` provide the same composition for
+a custom launcher.
+
+Direct entry, the home menu, and page 199 do not authenticate the user; the
+server still listens on its configured host and port. Source privacy is not
+access control - any connected user can visit any page on the server.
 
 ## Extending beyond pages
 

@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Added extra package composition: `pages.build_registry(*packages)` and
+  `services.build_registry(*packages)` discover additional page and service
+  packages, and `run_server.py` accepts repeatable `--pages-package`,
+  `--services-package`, and `--extra-path` options.
+- The home menu is derived from 1-2 digit numeric page aliases instead of a
+  hardcoded list; the lowest 10 are shown, with a `(+N MORE)` hint when
+  truncated.
 - Added native Minitel scroll mode (`@page(..., scroll=True)`) and the `902
   SHAKESPEARE` scrolling-text screensaver, including scroll-aware rendering,
   screensaver wake filtering, virtual terminal support, and the 39-column

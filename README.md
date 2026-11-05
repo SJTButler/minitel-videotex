@@ -407,7 +407,22 @@ The full guide is in [`docs/authoring-pages.md`](docs/authoring-pages.md).
 
 Short version: create `pages/your_page.py`, use `@page(...)`, return a `Screen`,
 and call `page_input(s, ctx)` if you want typing. Restart the server; pages are
-discovered automatically.
+discovered automatically. Add a 1-2 digit numeric alias
+(`aliases=("6",)`) to put the page on the home menu.
+
+To load pages or services from another package, such as a private repository:
+
+```sh
+uv run python run_server.py \
+  --extra-path ../minitel_private_pages \
+  --pages-package private_pages \
+  --services-package private_services
+```
+
+The extra packages are ordinary Python packages and are discovered alongside
+the public ones. Page numbers, aliases, and service keys are global; a duplicate
+aborts startup. See [Loading another page or service
+package](docs/authoring-pages.md#loading-another-page-or-service-package).
 
 ## Tools
 
