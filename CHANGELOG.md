@@ -8,7 +8,8 @@
   scrolling layout.
 - Added page extension codes (`page#token`) for direct links to sub-views:
   `153#PL` league tables, `120#PAR` weather city detail, and `150#PL` live
-  scores league selection.
+  scores league selection. The page directory marks extension-aware pages with
+  the `#` page-number marker and scrolling pages with the `S` page flag.
 - Sports live scores fall back to the next matchday with fixtures when today
   has no matches; the page shows `NEXT FIXTURES` with the date.
 

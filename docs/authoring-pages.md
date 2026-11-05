@@ -478,6 +478,8 @@ def shakespeare(ctx):
     return screen(ctx)
 ```
 
+The page directory flags scrolling pages with the `S` page flag.
+
 - **The hardware scrolls rows 1-24. Row 0 never scrolls.** A normal page can
   keep the status bar in row 0 with `status(s, ...)`; it stays put without being
   reprinted. A screensaver scroll page follows the other screensavers instead:
@@ -936,8 +938,11 @@ The registry parses the route; pages never split `#` themselves.
 - An alias resolves to the canonical base: `5#PL` addresses `150#PL`.
 - Extension routes are not registered pages. `Registry.all()`, the page
   directory, screensaver groups, and startup requirement validation list base
-  pages only.
-- Do not declare `extensions=True` on screensaver pages in the current version.
+  pages only. The page directory marks extension-aware base pages with the `#`
+  page-number marker.
+- Do not declare `extensions=True` on screensaver pages in the current version;
+  extension routes are not part of screensaver groups. Markers and flags are
+  independent; the directory renders every applicable one.
 - Keep the existing one-cursor rule. An extension that selects a pager or form
   cursor uses `take_extension()` so `SUITE`/`RETOUR` are not fought on every
   render; stable single-view routes read `ctx.extension`.

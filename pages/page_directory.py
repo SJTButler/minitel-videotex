@@ -7,8 +7,10 @@ from minitel.render import Screen
 from .common.layout import SECONDARY, footer, status
 from .common.widgets import page_input
 
-PAGE_SIZE = 15
-FLAG_LEGEND = "* SAVER D DYN F FORM T TRANS N NO-SLEEP"
+PAGE_SIZE = 12
+NUMBER_LEGEND = "NUMBER: * SAVER  # EXT"
+FLAG_LEGEND_1 = "FLAGS: D DYN  F FORM  T TRANS"
+FLAG_LEGEND_2 = "       N NO-SLEEP  S SCROLL"
 
 
 def _sort_key(page):
@@ -41,11 +43,15 @@ def _flags(page):
         flags.append("T")
     if page.no_screensaver:
         flags.append("N")
-    return " ".join(flags)
+    if page.scroll:
+        flags.append("S")
+    return "".join(flags)
 
 
 def _number(page):
     suffix = "*" if page.screensaver else ""
+    if page.extensions:
+        suffix += "#"
     return f"{page.number}{suffix}"
 
 
@@ -85,7 +91,9 @@ def page_directory_screen(ctx):
     for index, entry in enumerate(visible):
         s.text(5 + index, 0, _line(entry))
 
-    s.text(23, 0, FLAG_LEGEND, fg=SECONDARY)
+    s.text(17, 0, NUMBER_LEGEND, fg=SECONDARY)
+    s.text(18, 0, FLAG_LEGEND_1, fg=SECONDARY)
+    s.text(19, 0, FLAG_LEGEND_2, fg=SECONDARY)
     page_input(s, ctx)
     footer(s)
     return s
