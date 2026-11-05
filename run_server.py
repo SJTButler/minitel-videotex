@@ -2,6 +2,7 @@
 
 import argparse
 import asyncio
+import sys
 
 import pages
 import services
@@ -18,25 +19,45 @@ def missing_service_message(missing):
     )
 
 
+def load_registries(pages_packages=(), services_packages=(), extra_paths=()):
+    for path in reversed(tuple(extra_paths)):
+        sys.path.insert(0, path)
+    try:
+        page_registry = pages.build_registry(*pages_packages)
+    except ModuleNotFoundError as exc:
+        raise SystemExit(f"cannot load pages package(s): {exc}") from exc
+    try:
+        service_registry = services.build_registry(*services_packages)
+    except ModuleNotFoundError as exc:
+        raise SystemExit(f"cannot load services package(s): {exc}") from exc
+    return page_registry, service_registry
+
+
 def main():
-    registry = pages.build_registry()
-    service_registry = services.build_registry()
-    missing = registry.missing_requirements(service_registry)
-    if missing:
-        raise SystemExit(
-            f"missing services: {missing_service_message(missing)}"
-        )
-
-    modes = registry.screensaver_groups()
-    default_mode = (
-        pages.DEFAULT_SCREENSAVER
-        if pages.DEFAULT_SCREENSAVER in modes
-        else "off"
-    )
-
     ap = argparse.ArgumentParser(description="Minitel 1 Videotex server")
     ap.add_argument("--host", default="0.0.0.0")
     ap.add_argument("--port", type=int, default=3615)
+    ap.add_argument(
+        "--pages-package",
+        action="append",
+        default=[],
+        metavar="NAME",
+        help="additional page package to discover (repeatable)",
+    )
+    ap.add_argument(
+        "--services-package",
+        action="append",
+        default=[],
+        metavar="NAME",
+        help="additional service package to discover (repeatable)",
+    )
+    ap.add_argument(
+        "--extra-path",
+        action="append",
+        default=[],
+        metavar="PATH",
+        help="prepend PATH to sys.path before loading extra packages",
+    )
     ap.add_argument(
         "--cps",
         type=float,
@@ -58,9 +79,11 @@ def main():
     )
     ap.add_argument(
         "--screensaver",
-        choices=(*modes, "all", "off"),
-        default=default_mode,
-        help=f"default screensaver sequence (default: {default_mode})",
+        default=None,
+        help=(
+            "screensaver sequence; the default is the public clock group, "
+            "or off when unavailable"
+        ),
     )
     ap.add_argument(
         "--screensaver-after",
@@ -98,6 +121,29 @@ def main():
         help="disable terminal power detection entirely",
     )
     args = ap.parse_args()
+
+    registry, service_registry = load_registries(
+        args.pages_package, args.services_package, args.extra_path
+    )
+    missing = registry.missing_requirements(service_registry)
+    if missing:
+        raise SystemExit(
+            f"missing services: {missing_service_message(missing)}"
+        )
+
+    modes = registry.screensaver_groups()
+    default_mode = (
+        pages.DEFAULT_SCREENSAVER
+        if pages.DEFAULT_SCREENSAVER in modes
+        else "off"
+    )
+    if args.screensaver is None:
+        args.screensaver = default_mode
+    if args.screensaver not in (*modes, "all", "off"):
+        choices = ", ".join((*modes, "all", "off"))
+        raise SystemExit(
+            f"invalid screensaver {args.screensaver!r}; choose from: {choices}"
+        )
 
     try:
         if args.no_power:
