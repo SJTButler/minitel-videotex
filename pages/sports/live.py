@@ -1,7 +1,5 @@
 """Page 150: live scores or next fixtures by league."""
 
-from dataclasses import dataclass
-
 from minitel.protocol import codec
 from minitel.design import Carousel
 from minitel.pagemodel import page
@@ -9,7 +7,6 @@ from minitel.render import Screen
 from minitel.text import fit, sanitize
 
 from ..common.layout import (
-    ACCENT,
     SECONDARY,
     WARNING,
     key_footer,
@@ -28,75 +25,36 @@ from ._support.layout import (
     minute_label,
     score_label,
 )
+from ._support.scoreboard import (
+    MAX_MATCHES,
+    SCORE_TOP,
+    MatchCard,
+    build_pages,
+    draw_rows,
+)
 from services.sports.models import FeedSnapshot, MatchStatus
 
 LIVE_PAGE = "150"
 DETAIL_PAGE = "151"
-SCORE_TOP = 4
-SCORE_ROWS = 11
-COLUMN_WIDTH = 20
-MAX_MATCHES = SCORE_ROWS * 2
 ALERT_ROWS = 2
-
-
-@dataclass(frozen=True)
-class ScoreRow:
-    label: str = ""
-    left: object = None
-    right: object = None
-
-
-@dataclass(frozen=True)
-class LeaguePage:
-    code: str
-    number: int
-    count: int
-    rows: tuple
-    matches: tuple
 
 
 def _matches(feed_snapshot):
     return tuple(sorted(feed_snapshot.matches, key=match_sort_key))
 
 
-def _league_pages(code, matches):
-    groups = {}
-    for match in matches:
-        groups.setdefault(kickoff_label(match.kickoff), []).append(match)
-
-    ordered = sorted(
-        groups.items(),
-        key=lambda item: min(match.kickoff for match in item[1]),
+def _card(match):
+    return MatchCard(
+        code=match.competition_code,
+        kickoff=match.kickoff,
+        home=match.home.short,
+        away=match.away.short,
+        score=score_label(match),
+        status=_status_suffix(match).strip(),
+        live=match.is_live,
+        order=match.id,
+        source=match,
     )
-    pages = []
-    current = []
-    for label, group in ordered:
-        group.sort(key=lambda match: (
-            match.home.name, match.away.name, match.id
-        ))
-        pairs = [group[index:index + 2] for index in range(0, len(group), 2)]
-        chunk_size = SCORE_ROWS - 1
-        chunks = [
-            pairs[index:index + chunk_size]
-            for index in range(0, len(pairs), chunk_size)
-        ]
-        for chunk in chunks:
-            needed = 1 + len(chunk)
-            if len(current) + needed > SCORE_ROWS:
-                if current:
-                    pages.append(current)
-                current = []
-            current.append(ScoreRow(label=label))
-            for pair in chunk:
-                current.append(
-                    ScoreRow(
-                        left=pair[0],
-                        right=pair[1] if len(pair) > 1 else None,
-                    )
-                )
-    if current:
-        pages.append(current)
-    return pages
 
 
 def _pages(feed, matches):
@@ -115,27 +73,23 @@ def _pages(feed, matches):
 
     pages = []
     for code in order:
-        league = [
-            match for match in matches if match.competition_code == code
+        cards = [
+            _card(match)
+            for match in matches
+            if match.competition_code == code
         ]
-        league_pages = _league_pages(code, league)
-        total = len(league_pages)
-        for index, rows in enumerate(league_pages):
-            display = []
-            for row in rows:
-                if row.left is not None:
-                    display.append(row.left)
-                if row.right is not None:
-                    display.append(row.right)
-            pages.append(
-                LeaguePage(
-                    code=code,
-                    number=index + 1,
-                    count=total,
-                    rows=tuple(rows),
-                    matches=tuple(display),
-                )
+        pages.extend(
+            build_pages(
+                code,
+                cards,
+                kickoff_label,
+                sort_key=lambda card: (
+                    card.source.home.name,
+                    card.source.away.name,
+                    card.source.id,
+                ),
             )
+        )
     return tuple(pages)
 
 
@@ -191,7 +145,7 @@ def _header(feed, feed_snapshot, page):
             f"{clock_label(feed_snapshot.updated_at)}",
             codec.COLS,
         )
-    live = sum(1 for match in page.matches if match.is_live)
+    live = sum(1 for card in page.matches if card.live)
     return fit(
         f"{name}  LIVE {live}  UPD "
         f"{clock_label(feed_snapshot.updated_at)}",
@@ -250,19 +204,6 @@ def _status_suffix(match):
     return "     "
 
 
-def _cell(match, number):
-    return f"{number:>2} {match.home.short:<3} {score_label(match):>3} " \
-           f"{match.away.short:<3} {_status_suffix(match)}"
-
-
-def _draw_cell(s, row, col, match, number):
-    suffix = _status_suffix(match)
-    s.text(row, col, fit(_cell(match, number), COLUMN_WIDTH))
-    if suffix.strip():
-        colour = ACCENT if match.is_live else SECONDARY
-        s.text(row, col + 15, suffix, fg=colour)
-
-
 def live_screen(ctx):
     feed = service(ctx)
     feed_snapshot = snapshot(ctx) if feed is not None else FeedSnapshot(
@@ -306,18 +247,7 @@ def live_screen(ctx):
     s.rule(3, 0, codec.COLS, "-")
 
     if page is not None and page.rows:
-        number = 1
-        for index, item in enumerate(page.rows):
-            row = SCORE_TOP + index
-            if item.label:
-                s.text(row, 0, item.label, fg=ACCENT, underline=True)
-                continue
-            if item.left is not None:
-                _draw_cell(s, row, 0, item.left, number)
-                number += 1
-            if item.right is not None:
-                _draw_cell(s, row, COLUMN_WIDTH, item.right, number)
-                number += 1
+        draw_rows(s, page)
     else:
         colour = _header_colour(feed, feed_snapshot)
         for index, line in enumerate(_empty_lines(feed, feed_snapshot)):
@@ -372,7 +302,7 @@ def submit_live(ctx, line):
     if value.isdigit() and 1 <= int(value) <= MAX_MATCHES:
         number = int(value)
         if number <= len(window):
-            ctx.state["sports_match_id"] = window[number - 1].id
+            ctx.state["sports_match_id"] = window[number - 1].source.id
             latch.clear()
             return DETAIL_PAGE
         latch.set(f"NO MATCH {number}.", pager.offset)
