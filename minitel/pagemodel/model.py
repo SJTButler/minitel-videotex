@@ -2,6 +2,7 @@
 
 import importlib
 import pkgutil
+from dataclasses import dataclass
 
 from ..design.carousel import Carousel
 from ..design.field import InputField
@@ -316,15 +317,32 @@ def split_extension(key):
     return base, token.upper()
 
 
+@dataclass(frozen=True)
+class KeyOverride:
+    key: str
+    kind: str
+    old_page: Page
+    new_page: Page
+    old_source: object = None
+    new_source: object = None
+
+
 class Registry:
     def __init__(self):
         self._pages = []
         self._by_key = {}
+        self._sources = {}
+        self._overrides = []
 
-    def add(self, page: Page):
+    def add(self, page: Page, *, source=None, on_conflict="error"):
+        if on_conflict not in ("error", "override"):
+            raise ValueError(
+                "on_conflict must be 'error' or 'override'"
+            )
         if any(existing is page for existing in self._pages):
             return page
-        for key in (page.number, *page.aliases):
+        keys = (page.number, *page.aliases)
+        for key in keys:
             if any(
                 separator in key for separator in EXTENSION_SEPARATORS
             ):
@@ -332,15 +350,93 @@ class Registry:
                     f"page key {key!r} must not contain an extension "
                     "separator"
                 )
-            existing = self._by_key.get(key)
-            if existing is not None:
-                raise ValueError(
-                    f"page key {key!r} already registered by {existing.title!r}"
+
+        if on_conflict == "error":
+            for key in keys:
+                existing = self._by_key.get(key)
+                if existing is not None:
+                    raise ValueError(
+                        f"page key {key!r} already registered by "
+                        f"{existing.title!r}"
+                    )
+        else:
+            for key in keys:
+                existing = self._by_key.get(key)
+                if existing is None:
+                    continue
+                if self._sources.get(id(existing)) == source:
+                    raise ValueError(
+                        f"page key {key!r} already registered by "
+                        f"{existing.title!r} in the same package "
+                        f"{source!r}"
+                    )
+
+            overridden = []
+            for key in keys:
+                existing = self._by_key.get(key)
+                if (
+                    existing is not None
+                    and existing.number == key
+                    and not any(item is existing for item in overridden)
+                ):
+                    overridden.append(existing)
+            for existing in overridden:
+                old_source = self._sources.get(id(existing))
+                self._remove_page(existing)
+                self._overrides.append(
+                    KeyOverride(
+                        key=existing.number,
+                        kind="page",
+                        old_page=existing,
+                        new_page=page,
+                        old_source=old_source,
+                        new_source=source,
+                    )
                 )
+
+            for key in keys:
+                existing = self._by_key.get(key)
+                if existing is None or existing is page:
+                    continue
+                self._overrides.append(
+                    KeyOverride(
+                        key=key,
+                        kind="alias",
+                        old_page=existing,
+                        new_page=page,
+                        old_source=self._sources.get(id(existing)),
+                        new_source=source,
+                    )
+                )
+                self._by_key[key] = page
+
         self._pages.append(page)
-        for key in (page.number, *page.aliases):
+        for key in keys:
             self._by_key[key] = page
+        self._sources[id(page)] = source
         return page
+
+    def _remove_page(self, page):
+        self._pages = [
+            existing for existing in self._pages if existing is not page
+        ]
+        for key in (page.number, *page.aliases):
+            if self._by_key.get(key) is page:
+                del self._by_key[key]
+        self._sources.pop(id(page), None)
+
+    @property
+    def overrides(self):
+        return tuple(self._overrides)
+
+    def aliases_for(self, page):
+        owned = {
+            key
+            for key, owner in self._by_key.items()
+            if owner is page and key != page.number
+        }
+        declared = tuple(alias for alias in page.aliases if alias in owned)
+        return declared + tuple(sorted(owned - set(declared)))
 
     def get(self, key):
         key = str(key).strip()
@@ -398,15 +494,25 @@ class Registry:
     def all(self):
         return tuple(self._pages)
 
-    def discover(self, package_name):
+    def discover(self, package_name, *, source=None, on_conflict="error"):
+        if source is None:
+            source = package_name
         package = importlib.import_module(package_name)
         modules = sorted(pkgutil.iter_modules(package.__path__), key=lambda m: m.name)
         for module_info in modules:
             if module_info.ispkg:
-                self.discover(f"{package_name}.{module_info.name}")
+                self.discover(
+                    f"{package_name}.{module_info.name}",
+                    source=source,
+                    on_conflict=on_conflict,
+                )
                 continue
             module = importlib.import_module(f"{package_name}.{module_info.name}")
             for value in vars(module).values():
                 if isinstance(value, Page):
-                    self.add(value)
+                    self.add(
+                        value,
+                        source=source,
+                        on_conflict=on_conflict,
+                    )
         return self

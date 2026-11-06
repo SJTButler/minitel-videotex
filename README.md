@@ -410,18 +410,20 @@ and call `page_input(s, ctx)` if you want typing. Restart the server; pages are
 discovered automatically. Add a 1-2 digit numeric alias
 (`aliases=("6",)`) to put the page on the home menu.
 
-To load pages or services from another package, such as a private repository:
+To load pages or services from another package:
 
 ```sh
 uv run python run_server.py \
-  --extra-path ../minitel_private_pages \
-  --pages-package private_pages \
-  --services-package private_services
+  --extra-path ../extra_pages \
+  --pages-package extra_pages \
+  --services-package extra_services
 ```
 
 The extra packages are ordinary Python packages and are discovered alongside
-the public ones. Page numbers, aliases, and service keys are global; a duplicate
-aborts startup. See [Loading another page or service
+the public ones, in the order given. A later package wins a duplicate page
+number or alias, with a startup warning; same-package duplicates and duplicate
+service keys still abort startup. `--strict-overrides` turns the warning into a
+failure. See [Loading another page or service
 package](docs/authoring-pages.md#loading-another-page-or-service-package).
 
 ## Tools

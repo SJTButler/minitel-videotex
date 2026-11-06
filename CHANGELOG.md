@@ -6,6 +6,10 @@
   `services.build_registry(*packages)` discover additional page and service
   packages, and `run_server.py` accepts repeatable `--pages-package`,
   `--services-package`, and `--extra-path` options.
+- Extra page packages now layer in load order: a later package can override a
+  duplicate page number or alias, with a startup override report and
+  `--strict-overrides` to fail instead. Same-package duplicates and service
+  keys remain startup errors.
 - The home menu is derived from 1-2 digit numeric page aliases instead of a
   hardcoded list; the lowest 10 are shown, with a `(+N MORE)` hint when
   truncated.

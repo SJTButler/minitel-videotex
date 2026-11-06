@@ -22,7 +22,7 @@ def menu_entries(registry):
             continue
         aliases = [
             alias
-            for alias in entry.aliases
+            for alias in registry.aliases_for(entry)
             if isinstance(alias, str)
             and alias.isascii()
             and alias.isdigit()

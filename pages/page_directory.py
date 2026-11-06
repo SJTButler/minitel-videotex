@@ -65,10 +65,11 @@ def _title(page):
     return f"{label}: {page.title}"
 
 
-def _line(page):
-    aliases = ",".join(alias for alias in page.aliases if alias)[:8]
+def _line(page, aliases):
+    alias_text = ",".join(alias for alias in aliases if alias)[:8]
     return (
-        f"{_number(page):<5}{_title(page)[:20]:<21}{aliases:<8}{_flags(page)}"
+        f"{_number(page):<5}{_title(page)[:20]:<21}"
+        f"{alias_text:<8}{_flags(page)}"
     )[:codec.COLS]
 
 
@@ -89,7 +90,11 @@ def page_directory_screen(ctx):
         underline=True,
     )
     for index, entry in enumerate(visible):
-        s.text(5 + index, 0, _line(entry))
+        s.text(
+            5 + index,
+            0,
+            _line(entry, ctx.registry.aliases_for(entry)),
+        )
 
     s.text(17, 0, NUMBER_LEGEND, fg=SECONDARY)
     s.text(18, 0, FLAG_LEGEND_1, fg=SECONDARY)

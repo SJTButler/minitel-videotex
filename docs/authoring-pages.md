@@ -890,7 +890,7 @@ Rules:
 - non-numeric aliases remain direct-entry keys only;
 - the lowest 10 entries are shown; the hint reports `(+N MORE)` and every page
   remains reachable by number and on page 199;
-- the title comes from `Page.title`, so a private page with a numeric alias
+- the title comes from `Page.title`, so a page with a numeric alias
   publishes its title on the home menu. Use a neutral title or no alias when
   that matters.
 
@@ -921,9 +921,10 @@ Keep page numbers stable and descriptive. The example scheme is:
 | `910`-`912` | CAROUSEL promo frames |
 | `__not_found__` | fallback |
 
-Page numbers and aliases are global keys: a duplicate is a startup error. The
-example service uses `100`-`199` and `900`-`912`. An additional package can
-reserve `800`-`899` for private pages; see
+Page numbers and aliases are keys. Duplicates within one package are startup
+errors; across packages, a later package overrides an earlier claim with a
+startup report. The example service uses `100`-`199` and `900`-`912`. An
+additional package can reserve its own page-number range; see
 [Loading another page or service package](#loading-another-page-or-service-package).
 
 ## Page extension codes
@@ -1069,15 +1070,15 @@ reusable behaviour in `minitel/`.
 
 ## Loading another page or service package
 
-The default entrypoint discovers `pages` and `services`. A second package can
-add pages, services, or both without changing the public tree. This is how a
-private page repository stays separate from the published code.
+The default entrypoint discovers `pages` and `services`. An additional package
+can add pages, services, or both without changing the public tree. This is how
+an additional package stays separate from the published code.
 
 ```sh
 uv run python run_server.py \
-  --extra-path ../minitel_private_pages \
-  --pages-package private_pages \
-  --services-package private_services
+  --extra-path ../extra_pages \
+  --pages-package extra_pages \
+  --services-package extra_services
 ```
 
 - `--extra-path PATH` prepends a directory to `sys.path`; repeat it for more.
@@ -1085,21 +1086,46 @@ uv run python run_server.py \
 - `--pages-package NAME` and `--services-package NAME` are repeatable.
 - The packages are ordinary module packages discovered by `Registry.discover`
   and `ServiceRegistry.discover`; subpackages are walked.
-- Page numbers, aliases, and service keys are global. A duplicate aborts
-  startup. `requires=("espn_sports",)` is validated against the composed
-  service registry.
-- The home menu and page 199 use the composed registry, so a private page with
-  a numeric alias appears on the home menu.
+- `requires=("extra_service",)` is validated against the composed service
+  registry.
+- The home menu and page 199 use the composed registry and its resolved
+  aliases, so an overridden alias appears once, on the winning page.
 - The package is content, not a fork: import `minitel` and `pages.common` as
-  usual. Public code must not import the private package.
+  usual. Public code must not import the additional package.
 
-`pages.build_registry("private_pages")` and
-`services.build_registry("private_services")` provide the same composition for
+### Page and alias overrides
+
+Pages from extra packages compose in load order: the public `pages` package
+first, then each `--pages-package` in the order given. A later package may
+reuse a page number or alias:
+
+- **Page-number override**: the later page replaces the earlier page at that
+  number. The earlier page is removed from the composed registry. Its aliases
+  disappear unless the new page declares them; the startup report lists moved
+  and removed aliases. References to the number (`back_page`, links, extension
+  bases) now reach the replacement.
+- **Alias override**: the later page takes the alias and home-menu slot. The
+  earlier page remains reachable at its canonical number. This is the usual way
+  to keep the earlier page available for testing while giving a replacement
+  page the menu slot.
+- **Same package**: duplicate page numbers or aliases are still errors. Only
+  cross-package overrides are allowed.
+- **Startup report**: `run_server.py` prints a warning listing each override
+  and its package chain. `--strict-overrides` turns the report into a startup
+  failure.
+- **Services are not layered**: duplicate service keys remain startup errors.
+  An additional service uses a new key.
+
+Example: a later page can take an existing menu alias while the earlier page
+stays reachable by its number.
+
+`pages.build_registry("extra_pages")` and
+`services.build_registry("extra_services")` provide the same composition for
 a custom launcher.
 
 Direct entry, the home menu, and page 199 do not authenticate the user; the
-server still listens on its configured host and port. Source privacy is not
-access control - any connected user can visit any page on the server.
+server still listens on its configured host and port. Access control is
+separate: any connected user can visit any page on the server.
 
 ## Extending beyond pages
 

@@ -9,5 +9,5 @@ DEFAULT_SCREENSAVER = "clock"
 def build_registry(*extra_packages):
     registry = Registry().discover(__name__)
     for package_name in extra_packages:
-        registry.discover(package_name)
+        registry.discover(package_name, on_conflict="override")
     return registry

@@ -19,6 +19,43 @@ def missing_service_message(missing):
     )
 
 
+def override_lines(overrides):
+    lines = []
+    for event in overrides:
+        old = f"{event.old_source or '?'}/{event.old_page.number}"
+        new = f"{event.new_source or '?'}/{event.new_page.number}"
+        if event.kind == "page":
+            new_aliases = set(event.new_page.aliases)
+            moved = [
+                alias
+                for alias in event.old_page.aliases
+                if alias in new_aliases
+            ]
+            removed = [
+                alias
+                for alias in event.old_page.aliases
+                if alias not in new_aliases
+            ]
+            detail = ""
+            if moved:
+                detail += f"; aliases moved: {', '.join(moved)}"
+            if removed:
+                detail += f"; aliases removed: {', '.join(removed)}"
+            lines.append(f"page {event.key}: {old} -> {new}{detail}")
+        else:
+            lines.append(f"alias {event.key}: {old} -> {new}")
+    return lines
+
+
+def override_report(registry):
+    if not registry.overrides:
+        return ""
+    lines = override_lines(registry.overrides)
+    return "page composition overrides:\n" + "\n".join(
+        f"  {line}" for line in lines
+    )
+
+
 def load_registries(pages_packages=(), services_packages=(), extra_paths=()):
     for path in reversed(tuple(extra_paths)):
         sys.path.insert(0, path)
@@ -57,6 +94,11 @@ def main():
         default=[],
         metavar="PATH",
         help="prepend PATH to sys.path before loading extra packages",
+    )
+    ap.add_argument(
+        "--strict-overrides",
+        action="store_true",
+        help="fail instead of warning when a later package overrides a page or alias",
     )
     ap.add_argument(
         "--cps",
@@ -130,6 +172,12 @@ def main():
         raise SystemExit(
             f"missing services: {missing_service_message(missing)}"
         )
+
+    report = override_report(registry)
+    if report:
+        if args.strict_overrides:
+            raise SystemExit(f"strict overrides enabled:\n{report}")
+        print(f"WARNING: {report}", file=sys.stderr, flush=True)
 
     modes = registry.screensaver_groups()
     default_mode = (
