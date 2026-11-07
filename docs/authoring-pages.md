@@ -158,6 +158,8 @@ Every `render`, `on_submit`, `on_form`, and `on_key` receives a
 | `ctx.set_input(row, col, width, *, cursor="visible")` | one-field shorthand |
 | `ctx.set_pager(total, page_size, *, offset=None, carousel=None)` | register a session-owned pager, optionally with timed advance |
 | `ctx.pager` | the `Pager` registered for this render |
+| `ctx.set_viewport(total, height, *, offset=None, follow=None, step=None)` | register a session-owned viewport over a line buffer |
+| `ctx.viewport` | the active `Viewport` for this render, or `None` before the page sets one |
 | `ctx.focus(name)` | request focus when the page rerenders |
 | `ctx.page_for(key)` | look up another page |
 | `ctx.screensaver` | the session's `Screensaver`, or `None` |
@@ -411,7 +413,47 @@ def render_list(ctx):
 - Page-specific error text is the page's responsibility. If it should disappear
   when the page changes, store the offset with the error and clear it when the
   pager offset differs, as `pages/news/hackernews.py` does.
-- Use one cursor style per page: multi-field form focus or a pager, not both.
+- Use one cursor style per page: multi-field form focus, a pager, or a viewport,
+  not more than one.
+
+## Scroll viewports
+
+A page with `scroll=True` can register a session-owned viewport over its line
+buffer. The page owns the lines and the layout; the session owns the offset,
+follow state, and key handling.
+
+```python
+@page("155", title="VIDIPRINTER", scroll=True, on_tick=render_feed,
+      tick_interval=5.0)
+def render_feed(ctx):
+    lines = tuple(alert_text(alert) for alert in alerts)
+    viewport = ctx.set_viewport(len(lines), 24, follow=True)
+    screen = Screen()
+    for index, line in enumerate(viewport.window(lines)):
+        screen.text(1 + index, 0, fit(line, 39))
+    return screen
+```
+
+- `ctx.set_viewport(total, height)` returns a clamped `Viewport`. Call it on
+  every render and tick. `offset=None` uses the active cursor, then the offset
+  remembered for this page key, then `0`.
+- `follow=None` preserves the current follow state. Pass `follow=True` when the
+  page should start at the tail; pass it only on entry, not on every tick, or
+  the user's freeze will be undone. `Viewport.page_down` resumes follow when it
+  reaches the bottom.
+- `UP`/`DOWN` always move one line. `SUITE`/`RETOUR` move by `step` lines;
+  `step=1` (the default) is the M1-friendly one-line move that uses the
+  one-line `LF`/`VT` fast path. A long reader can set `step=height-1` for
+  page-sized movement. `RETOUR` at the top follows `back_page`/history;
+  `SUITE` at the bottom resumes follow.
+- The viewport is remembered per page key. A static reader can restore its
+  position; a live feed can request the tail on entry.
+- `viewport.line_number`, `viewport.total`, `viewport.height`, and
+  `viewport.offset` are available for a header or position label.
+- Only row 0 is hardware-fixed. A footer below it scrolls unless repainted after
+  every scroll, which costs bytes; use row 0 for static chrome.
+- A scroll page may have one input field, but not a multi-field form or a pager.
+- Do not send `LF`, `VT`, or scroll-mode bytes from a page.
 
 This is the same shape as multi-field forms: a bounded list, a session-owned
 cursor, and a boundary that falls through to history.

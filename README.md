@@ -19,6 +19,7 @@ minitel/       reusable, content-free library
   render/screen.py     25x40 screen model
   render/render.py     screen -> Videotex bytes
   design/pager.py      fixed-size paging arithmetic
+  design/viewport.py   line-buffer viewport arithmetic
   design/carousel.py   timed advance policy for a page sequence
   design/field.py      declarative input field
   pagemodel/model.py   Page, PageContext, Registry, @page
