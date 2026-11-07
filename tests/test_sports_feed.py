@@ -5,7 +5,7 @@ from datetime import datetime, timezone
 from minitel.data.http import HttpError
 from services.sports.config import SportsConfig
 from services.sports.feed import SportsService
-from services.sports.models import Match, MatchStatus, StandingRow, Team
+from services.sports.models import Alert, Goal, Match, MatchStatus, StandingRow, Team
 from services.sports.source import FetchResult
 
 KICKOFF = datetime(2026, 11, 1, 15, 0, tzinfo=timezone.utc)
@@ -91,8 +91,36 @@ def service(source, **kwargs):
 
 
 class FeedTests(unittest.TestCase):
-    def test_first_snapshot_has_no_alerts(self):
-        source = FakeSource([FetchResult((match(),))])
+    def test_alert_history_is_bounded(self):
+        feed = service(FakeSource([FetchResult((match(),))]))
+        for minute in range(250):
+            feed._alert(
+                Alert(
+                    KICKOFF,
+                    "GOAL",
+                    1,
+                    "ARS",
+                    "CHE",
+                    2,
+                    1,
+                    minute,
+                )
+            )
+        self.assertEqual(len(feed._alerts), 200)
+        self.assertEqual(feed._alerts[0].minute, 249)
+        self.assertEqual(feed._alerts[-1].minute, 50)
+
+    def test_first_snapshot_has_no_alerts_before_kickoff(self):
+        source = FakeSource([
+            FetchResult((
+                match(
+                    status=MatchStatus.SCHEDULED,
+                    home_goals=None,
+                    away_goals=None,
+                    minute=None,
+                ),
+            )),
+        ])
         feed = service(source)
         asyncio.run(feed.refresh_once())
 
@@ -100,7 +128,7 @@ class FeedTests(unittest.TestCase):
         self.assertTrue(snapshot.has_value)
         self.assertEqual(len(snapshot.matches), 1)
         self.assertEqual(snapshot.alerts, ())
-        self.assertEqual(feed.poll_delay(), 60.0)
+        self.assertEqual(feed.poll_delay(), 1800.0)
 
     def test_empty_today_falls_back_to_next_matchday(self):
         source = FakeSource(
@@ -241,13 +269,46 @@ class FeedTests(unittest.TestCase):
         asyncio.run(feed.refresh_once())
 
         alerts = feed.snapshot().alerts
-        self.assertEqual(len(alerts), 1)
+        self.assertEqual(len(alerts), 2)
         self.assertEqual(alerts[0].kind, "GOAL")
+        self.assertEqual(alerts[1].kind, "KO")
         self.assertEqual(alerts[0].home, "ARS")
         self.assertEqual(alerts[0].away, "CHE")
         self.assertEqual(alerts[0].home_goals, 2)
         self.assertEqual(alerts[0].away_goals, 0)
         self.assertEqual(alerts[0].minute, 40)
+
+    def test_backfills_finished_match_history(self):
+        finished = Match(
+            id=1001,
+            competition_id=2021,
+            competition_code="PL",
+            competition_name="PREMIER LEAGUE",
+            home=Team(57, "ARSENAL", "ARS"),
+            away=Team(61, "CHELSEA", "CHE"),
+            kickoff=KICKOFF,
+            status=MatchStatus.FINISHED,
+            minute=90,
+            home_goals=1,
+            away_goals=1,
+            goals=(
+                Goal(23, None, 57, "ARSENAL", "SAKA",
+                     home_score=1, away_score=0),
+                Goal(67, None, 61, "CHELSEA", "PALMER",
+                     home_score=1, away_score=1),
+            ),
+        )
+        source = FakeSource([FetchResult((finished,))])
+        feed = service(source)
+        asyncio.run(feed.refresh_once())
+
+        alerts = feed.snapshot().alerts
+        self.assertEqual(
+            [alert.kind for alert in alerts],
+            ["FT", "GOAL", "HT", "GOAL", "KO"],
+        )
+        self.assertEqual(alerts[1].minute, 67)
+        self.assertEqual(alerts[3].minute, 23)
 
     def test_finished_alert(self):
         source = FakeSource([

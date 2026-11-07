@@ -1,6 +1,6 @@
 import time
 import unittest
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 import pages
 
@@ -361,6 +361,88 @@ class LivePageTests(unittest.TestCase):
             FakeSports(loaded_snapshot([ars_che()], alerts=[alert]))
         )
         self.assertIn("GOAL ARS 2-1 CHE 34'", session.screen.to_text())
+
+
+class VidiprinterPageTests(unittest.TestCase):
+    def test_layout_and_alias(self):
+        alert = Alert(KICKOFF, "GOAL", 1001, "ARS", "CHE", 2, 1, 34)
+        session = make_session(
+            FakeSports(loaded_snapshot([ars_che()], alerts=[alert])),
+            initial="155",
+        )
+        text = session.screen.to_text().splitlines()
+        self.assertIn("155", text[0])
+        self.assertIn("1/1", text[0])
+        self.assertIn("15:00 GOAL ARS 2-1 CHE 34'", text[1])
+        self.assertEqual(session.screen.paint_order, "up")
+        self.assertEqual(pages.build_registry().get("6").number, "155")
+
+    def test_oldest_alert_first(self):
+        older = Alert(KICKOFF, "KO", 1001, "ARS", "CHE")
+        newer = Alert(
+            KICKOFF + timedelta(minutes=30), "GOAL", 1001, "ARS", "CHE", 2, 1, 34
+        )
+        session = make_session(
+            FakeSports(loaded_snapshot([ars_che()], alerts=[newer, older])),
+            initial="155",
+        )
+        text = session.screen.to_text().splitlines()
+        self.assertTrue(text[1].startswith("15:00 KO"))
+        self.assertTrue(text[2].startswith("15:30 GOAL"))
+
+    def test_follows_tail_and_steps(self):
+        alerts = [
+            Alert(
+                KICKOFF + timedelta(minutes=index),
+                "GOAL",
+                1001,
+                "ARS",
+                "CHE",
+                2,
+                1,
+                index,
+            )
+            for index in range(30)
+        ]
+        session = make_session(
+            FakeSports(loaded_snapshot([ars_che()], alerts=list(reversed(alerts)))),
+            initial="155",
+        )
+        self.assertEqual(session.viewport.offset, 6)
+        self.assertIn("7/30", session.screen.to_text())
+
+        session.feed(RETOUR)
+        self.assertEqual(session.viewport.offset, 5)
+        self.assertFalse(session.viewport.follow)
+
+        session.feed(SUITE)
+        self.assertEqual(session.viewport.offset, 6)
+        self.assertTrue(session.viewport.follow)
+
+    def test_empty_feed_waits(self):
+        session = make_session(
+            FakeSports(loaded_snapshot([], upcoming=False)), initial="155"
+        )
+        self.assertIn("WAITING FOR KICKOFF", session.screen.to_text())
+
+    def test_missing_service(self):
+        session = make_session(None, initial="155")
+        text = session.screen.to_text()
+        self.assertIn("SPORTS FEED NOT CONFIGURED", text)
+        self.assertIn("SET FOOTBALL_API_KEY", text)
+
+    def test_direct_retour_goes_to_scores(self):
+        registry = pages.build_registry()
+        session = Session(
+            registry,
+            profiles.M1,
+            initial="155",
+            fallback=registry.get(pages.NOT_FOUND),
+            services={"sports": FakeSports(loaded_snapshot([]))},
+        )
+        session.start()
+        session.feed(RETOUR)
+        self.assertEqual(session.current.number, "150")
 
 
 class DetailPageTests(unittest.TestCase):

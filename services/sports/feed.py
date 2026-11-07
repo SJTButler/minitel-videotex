@@ -19,7 +19,7 @@ from .source import (
     local_today,
 )
 
-ALERT_LIMIT = 20
+ALERT_LIMIT = 200
 SOON_WINDOW = 6 * 3600
 UPCOMING_WINDOW_DAYS = 10
 UPCOMING_WINDOWS = 2
@@ -71,6 +71,8 @@ class SportsService:
         self.today = today
         self._snapshot = FeedSnapshot(loading=self.configured)
         self._alerts = []
+        self._backfilled = False
+        self._history_date = None
         self._task = None
         self.standings_cache = ResourceCache(
             ttl=86400,
@@ -183,8 +185,19 @@ class SportsService:
     def _apply(self, result, *, match_date=None, upcoming=False):
         matches = tuple(result.value)
         now = datetime.now(timezone.utc)
-        if upcoming or match_date != self._snapshot.match_date:
+        if upcoming:
             self._alerts = []
+            self._backfilled = False
+            self._history_date = None
+        elif (
+            not self._backfilled
+            or match_date != self._history_date
+            or not self._snapshot.matches
+        ):
+            self._alerts = []
+            self._backfill_alerts(matches)
+            self._backfilled = True
+            self._history_date = match_date
         else:
             self._detect_alerts(matches, now)
         self._snapshot = FeedSnapshot(
@@ -200,6 +213,100 @@ class SportsService:
             match_date=match_date,
             upcoming=upcoming,
         )
+
+    def _backfill_alerts(self, matches):
+        events = []
+
+        def add(match, at, order, kind, *, home_goals=None, away_goals=None,
+                minute=None, injury_time=None):
+            events.append(
+                (
+                    at,
+                    order,
+                    Alert(
+                        at,
+                        kind,
+                        match.id,
+                        match.home.short,
+                        match.away.short,
+                        home_goals,
+                        away_goals,
+                        minute,
+                        injury_time,
+                    ),
+                )
+            )
+
+        for match in matches:
+            if match.status not in (
+                MatchStatus.LIVE,
+                MatchStatus.HALF_TIME,
+                MatchStatus.FINISHED,
+            ):
+                continue
+
+            add(match, match.kickoff, 0, "KO")
+            goal_times = []
+            for goal in match.goals:
+                minute = goal.minute or 0
+                at = match.kickoff + timedelta(
+                    minutes=minute + (goal.injury_time or 0)
+                )
+                goal_times.append(at)
+                add(
+                    match,
+                    at,
+                    1,
+                    "GOAL",
+                    home_goals=goal.home_score,
+                    away_goals=goal.away_score,
+                    minute=goal.minute,
+                    injury_time=goal.injury_time,
+                )
+
+            if match.status is MatchStatus.HALF_TIME:
+                add(
+                    match,
+                    match.kickoff + timedelta(minutes=45),
+                    2,
+                    "HT",
+                    home_goals=match.home_goals,
+                    away_goals=match.away_goals,
+                )
+            elif match.status is MatchStatus.FINISHED and match.goals:
+                home_goals = 0
+                away_goals = 0
+                for goal in match.goals:
+                    if (goal.minute or 0) <= 45:
+                        if goal.home_score is not None:
+                            home_goals = goal.home_score
+                        if goal.away_score is not None:
+                            away_goals = goal.away_score
+                add(
+                    match,
+                    match.kickoff + timedelta(minutes=45),
+                    2,
+                    "HT",
+                    home_goals=home_goals,
+                    away_goals=away_goals,
+                )
+
+            if match.status is MatchStatus.FINISHED:
+                last = max(
+                    [match.kickoff + timedelta(minutes=90)] + goal_times
+                )
+                add(
+                    match,
+                    last + timedelta(minutes=1),
+                    3,
+                    "FT",
+                    home_goals=match.home_goals,
+                    away_goals=match.away_goals,
+                )
+
+        events.sort(key=lambda item: (item[0], item[1]))
+        for _, _, alert in events:
+            self._alert(alert)
 
     def _detect_alerts(self, matches, now):
         previous = {match.id: match for match in self._snapshot.matches}

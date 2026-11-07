@@ -68,6 +68,7 @@ pages/         example site, auto-discovered
     detail.py    page 151, match detail
     tables.py    page 153, league tables
     status.py    page 154, feed status
+    vidiprinter.py page 155, full-screen alert feed
     _support/
       state.py   service adapters and snapshot helpers
       layout.py  sports formatting and geometry
@@ -296,6 +297,7 @@ shell. The key is never logged or rendered.
   -> 151 MATCH detail
   -> 153 TABLES
   -> 154 FEED STATUS
+6 VIDIPRINTER (page 155), the full-screen alert history
 ```
 
 - `pages/sports/live.py` shows one league per page with the league in the title,
@@ -316,6 +318,12 @@ shell. The key is never logged or rendered.
   configured competition codes in one request, derives goal/FT/KO/HT alerts, and
   keeps an immutable `FeedSnapshot`. A failed refresh keeps the last good
   snapshot and turns the pages into `DATA STALE` rather than blanking them.
+- `pages/sports/vidiprinter.py` is the full-screen `155` feed (alias `6`). It
+  shows the last 200 KO/HT/FT/GOAL alerts oldest-first, follows the tail, and
+  steps one line per `SUITE`/`RETOUR`. Page `150` keeps its two-row alert
+  preview. On the first load of a matchday the service backfills the day's
+  KO/HT/FT/GOAL history from the provider's goal events; cards are not in the
+  public feed.
 - Polling adapts: 60 s while a match is live, 15 min near kickoff, 30 min when
   idle. `x-requests-available-minute` and `X-RequestCounter-Reset` feed the quota line on
   page 154; the poller slows down if the quota is nearly exhausted.
