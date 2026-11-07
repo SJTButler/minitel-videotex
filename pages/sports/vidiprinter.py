@@ -52,6 +52,9 @@ def vidiprinter_screen(ctx):
 
     screen = Screen()
     screen.paint_order = "up"
+    if feed_snapshot.alerts and not ctx.state.get("vidiprinter_loaded"):
+        ctx.state["vidiprinter_loaded"] = True
+        screen.force_full = True
     status(screen, f"PAGE 155 {view.line_number}/{view.total}")
     colour = WARNING if not configured(feed) else SECONDARY
     for row, line in enumerate(view.window(lines), start=1):

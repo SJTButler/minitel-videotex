@@ -166,6 +166,28 @@ class SessionViewportTests(unittest.TestCase):
         session.feed(SUITE)
         self.assertIsNotNone(seen[1])
 
+    def test_force_full_returns_a_full_paint(self):
+        def tick(ctx):
+            screen = Screen()
+            screen.force_full = True
+            screen.text(1, 0, "DATA")
+            ctx.set_viewport(1, 24)
+            return screen
+
+        @page("590", scroll=True, tick_interval=1.0, on_tick=tick)
+        def loading(ctx):
+            screen = Screen()
+            screen.paint_order = "up"
+            screen.text(1, 0, "LOADING")
+            ctx.set_viewport(1, 24)
+            return screen
+
+        session = self.make_session(loading)
+        action = session.tick()
+        self.assertIsNotNone(action.screen)
+        self.assertFalse(action.raw)
+        self.assertTrue(action.screen.force_full)
+
     def test_viewport_requires_scroll_page(self):
         @page("581")
         def bad(ctx):

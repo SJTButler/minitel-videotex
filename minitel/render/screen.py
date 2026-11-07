@@ -68,6 +68,7 @@ class Screen:
         self.cursor_col = 0
         self.cursor_visible = True
         self.paint_order = "down"
+        self.force_full = False
 
     def clear(self):
         for row in self.rows:

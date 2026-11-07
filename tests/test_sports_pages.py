@@ -390,6 +390,20 @@ class VidiprinterPageTests(unittest.TestCase):
         self.assertTrue(text[1].startswith("15:00 KO"))
         self.assertTrue(text[2].startswith("15:30 GOAL"))
 
+    def test_first_data_forces_a_full_paint(self):
+        service = FakeSports(FeedSnapshot(loading=True))
+        session = make_session(service, initial="155")
+        self.assertFalse(session.screen.force_full)
+
+        alert = Alert(KICKOFF, "GOAL", 1001, "ARS", "CHE", 2, 1, 34)
+        service._snapshot = loaded_snapshot(
+            [ars_che()], alerts=[alert]
+        )
+        action = session.tick()
+        self.assertIsNotNone(action.screen)
+        self.assertTrue(action.screen.force_full)
+        self.assertEqual(action.screen.paint_order, "up")
+
     def test_follows_tail_and_steps(self):
         alerts = [
             Alert(

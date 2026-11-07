@@ -18,6 +18,8 @@
 - Added a session-owned `Viewport` cursor for long-text pages and a full-screen
   football vidiprinter (`155`, alias `6`) with a 200-alert history and
   current-day backfill from goal events.
+- The vidiprinters force one full bottom-up repaint when their first data
+  arrives after loading.
 - Added native Minitel scroll mode (`@page(..., scroll=True)`) and the `902
   SHAKESPEARE` scrolling-text screensaver, including scroll-aware rendering,
   screensaver wake filtering, virtual terminal support, and the 39-column

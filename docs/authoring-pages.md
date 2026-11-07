@@ -472,6 +472,16 @@ newest bottom line appear first on a full paint. It does not change the model
 or diffs: appended lines are still bottom updates, and later one-line changes
 use the normal diff. The default is `"down"`.
 
+If a page first shows a loading or empty state and later gets its data, set
+`screen.force_full = True` on that first data render. The session sends a full
+paint instead of a diff, so the `paint_order` choice applies to the transition:
+
+```python
+if has_events and not ctx.state.get("loaded"):
+    ctx.state["loaded"] = True
+    screen.force_full = True
+```
+
 ## Dynamic pages
 
 A page can update a region without repainting the whole screen. Set

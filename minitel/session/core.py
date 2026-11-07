@@ -178,7 +178,11 @@ class Session(NavigationMixin, EditingMixin, IdleMixin, PowerMixin):
         old = self.screen
         old_scroll = self.screen_scroll_mode
         new = self.render()
-        if old is None or old_scroll != self.screen_scroll_mode:
+        if (
+            old is None
+            or old_scroll != self.screen_scroll_mode
+            or getattr(new, "force_full", False)
+        ):
             return Action(screen=new)
         return Action(raw=render_diff(old, new, scroll=self.scroll_mode))
 
@@ -271,7 +275,11 @@ class Session(NavigationMixin, EditingMixin, IdleMixin, PowerMixin):
                 else:
                     frame.set_cursor(codec.ROWS - 1, 0, False)
             old = self.screen
-            if old is None or self.scroll_mode != self.screen_scroll_mode:
+            if (
+                old is None
+                or self.scroll_mode != self.screen_scroll_mode
+                or getattr(frame, "force_full", False)
+            ):
                 self.screen = frame
                 self.screen_scroll_mode = self.scroll_mode
                 return Action(screen=frame)
