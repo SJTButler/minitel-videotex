@@ -456,8 +456,33 @@ class SessionTests(unittest.TestCase):
         actions = session.feed(b"HI" + ENVOI)
         self.assertEqual(session.state["echo"], "HI")
         self.assertIs(session.current, echo)
-        self.assertIsNotNone(actions[-1].screen)
-        self.assertEqual(actions[-1].screen.rows[0][0].ch, "H")
+        self.assertIsNone(actions[-1].screen)
+        self.assertEqual(session.screen.rows[0][0].ch, "H")
+
+    def test_same_page_navigation_refreshes_instead_of_full_paint(self):
+        renders = []
+
+        def submit(ctx, line):
+            return "301"
+
+        @page("301", on_submit=submit)
+        def paged(ctx):
+            renders.append(ctx.input_value)
+            screen = Screen()
+            screen.text(0, 0, ctx.input_value)
+            ctx.set_input(1, 0, 5)
+            return screen
+
+        registry = Registry()
+        registry.add(paged)
+        session = Session(
+            registry, profiles.M1, initial="301", fallback=paged
+        )
+        session.start()
+        actions = session.feed(b"X" + ENVOI)
+        self.assertEqual(session.current.number, "301")
+        self.assertGreaterEqual(len(renders), 2)
+        self.assertIsNone(actions[-1].screen)
 
 
 class ScrollSessionTests(unittest.TestCase):

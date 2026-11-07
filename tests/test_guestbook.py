@@ -69,16 +69,16 @@ class GuestbookFlowTests(unittest.TestCase):
 
         actions = self.session.feed(ENVOI)
         self.assertEqual(self.session.current.number, "140")
+        self.assertIsNone(actions[-1].screen)
         entries = self.store.recent(1)
         self.assertEqual(len(entries), 1)
         self.assertEqual(entries[0].handle, "ALICE")
         self.assertEqual(entries[0].message, "HELLO")
 
-        screen = actions[-1].screen
-        self.assertIn("ALICE", screen.to_text())
-        self.assertIn("HELLO", screen.to_text())
         self.assertEqual(self.session.active_field.name, "handle")
         self.assertEqual(self.session.line, "")
+        self.assertIn("ALICE", self.session.screen.to_text())
+        self.assertIn("HELLO", self.session.screen.to_text())
 
     def test_focus_moves_between_fields(self):
         self.session.feed(b"ALICE")
@@ -104,7 +104,8 @@ class GuestbookFlowTests(unittest.TestCase):
         self.session.feed(b"MSG")
         actions = self.session.feed(ENVOI)
         self.assertEqual(self.session.current.number, "140")
-        self.assertIn("HANDLE REQUIRED", actions[-1].screen.to_text())
+        self.assertIsNone(actions[-1].screen)
+        self.assertIn("HANDLE REQUIRED", self.session.screen.to_text())
         self.assertEqual(self.session.active_field.name, "handle")
         self.assertEqual(self.store.recent(1), [])
 
@@ -113,7 +114,8 @@ class GuestbookFlowTests(unittest.TestCase):
         self.session.feed(SUITE)
         actions = self.session.feed(ENVOI)
         self.assertEqual(self.session.current.number, "140")
-        self.assertIn("MESSAGE REQUIRED", actions[-1].screen.to_text())
+        self.assertIsNone(actions[-1].screen)
+        self.assertIn("MESSAGE REQUIRED", self.session.screen.to_text())
         self.assertEqual(self.session.active_field.name, "message")
         self.assertEqual(self.store.recent(1), [])
 

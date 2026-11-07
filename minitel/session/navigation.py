@@ -27,8 +27,10 @@ class NavigationMixin:
                     self.history.append(self.current)
             self._reset_page()
             self._extension_pending = isinstance(page, ExtensionPage)
+            self.current = page
+            return Action(screen=self.render(), page=page)
         self.current = page
-        return Action(screen=self.render(), page=page)
+        return self.refresh()
 
     def submit(self):
         line = self.line.strip()

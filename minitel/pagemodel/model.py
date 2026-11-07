@@ -73,13 +73,14 @@ class PageContext:
         return self._session.requested_focus or self._session.active_name
 
     def add_field(self, name, row, col, width, *, mask=None, value="",
-                  cursor="visible"):
+                  cursor="visible", live=False, visible=True):
         if cursor not in CURSOR_MODES:
             raise ValueError(f"cursor must be one of {CURSOR_MODES}")
         if any(field.name == name for field in self.fields):
             raise ValueError(f"duplicate field name {name!r}")
         field = InputField(
-            name, row, col, width, mask=mask, value=value, cursor=cursor
+            name, row, col, width, mask=mask, value=value, cursor=cursor,
+            live=live, visible=visible,
         )
         self.fields.append(field)
         self.values.setdefault(name, value)
@@ -93,10 +94,11 @@ class PageContext:
         self.values[LINE_FIELD] = ""
 
     def set_input(self, row, col, width, *, mask=None, value="",
-                  cursor="visible"):
+                  cursor="visible", live=False, visible=True):
         return self.add_field(
             LINE_FIELD, row, col, width,
             mask=mask, value=value, cursor=cursor,
+            live=live, visible=visible,
         )
 
     def set_pager(self, total, page_size, *, offset=None, carousel=None):

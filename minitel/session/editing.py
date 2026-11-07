@@ -34,12 +34,12 @@ class EditingMixin:
 
     def _clear_active_field(self):
         field = self.active_field
-        if field is not None:
+        if field is not None and not field.live:
             self.values[field.name] = ""
 
     def _cursor_visible(self):
         field = self.active_field
-        if field is None:
+        if field is None or not field.visible:
             return False
         if field.cursor == "auto":
             return bool(self.values.get(field.name, ""))
@@ -49,6 +49,8 @@ class EditingMixin:
         field = self.active_field
         if field is None:
             return b""
+        if not field.visible:
+            return bytes(codec.cursor(False))
         value = self.values.get(field.name, "")
         col = field.col + min(len(value), field.width)
         raw = bytearray(codec.pos(field.row, col))
@@ -59,7 +61,7 @@ class EditingMixin:
         return bytes(raw)
 
     def _shadow_put(self, field, index, char):
-        if self.screen is None:
+        if not field.visible or self.screen is None:
             return
         row = field.row
         col = field.col + index
@@ -72,6 +74,9 @@ class EditingMixin:
         field = self.active_field
         if field is None or self.screen is None:
             return
+        if not field.visible:
+            self.screen.set_cursor(codec.ROWS - 1, 0, False)
+            return
         value = self.values.get(field.name, "")
         col = field.col + min(len(value), field.width)
         self.screen.set_cursor(field.row, col, self._cursor_visible())
@@ -83,6 +88,11 @@ class EditingMixin:
         value = self.values.get(field.name, "")
         if len(value) >= field.width:
             return Action(raw=bytes([codec.BEL]))
+        if field.live or not field.visible:
+            self.values[field.name] = value + event.char
+            if field.live:
+                return self.refresh()
+            return Action()
         prefix = b""
         if field.cursor == "auto" and not value:
             prefix = codec.cursor(True)
@@ -103,6 +113,10 @@ class EditingMixin:
         if field and value:
             value = value[:-1]
             self.values[field.name] = value
+            if field.live or not field.visible:
+                if field.live:
+                    return self.refresh()
+                return Action()
             self._shadow_put(field, len(value), " ")
             self._sync_shadow_cursor()
             raw = bytes([codec.BS, 0x20, codec.BS])

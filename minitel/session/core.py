@@ -228,12 +228,12 @@ class Session(NavigationMixin, EditingMixin, IdleMixin, PowerMixin):
             self.active_name = names[0] if names else None
 
         field = self.active_field
-        if field is not None:
+        if field is not None and field.visible:
             value = self.values.get(field.name, "")
             col = field.col + min(len(value), field.width)
             screen.set_cursor(field.row, col, self._cursor_visible())
         else:
-            screen.set_cursor(24, 0, False)
+            screen.set_cursor(codec.ROWS - 1, 0, False)
         self.screen = screen
         self.screen_scroll_mode = self.scroll_mode
         return screen
@@ -268,7 +268,7 @@ class Session(NavigationMixin, EditingMixin, IdleMixin, PowerMixin):
                 frame.set_cursor(codec.ROWS - 1, 0, False)
             else:
                 field = self.active_field
-                if field is not None:
+                if field is not None and field.visible:
                     value = self.values.get(field.name, "")
                     col = field.col + min(len(value), field.width)
                     frame.set_cursor(field.row, col, self._cursor_visible())

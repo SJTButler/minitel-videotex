@@ -12,3 +12,5 @@ class InputField:
     mask: str | None = None
     value: str = ""
     cursor: str = "visible"
+    live: bool = False
+    visible: bool = True
