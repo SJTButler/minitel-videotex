@@ -218,7 +218,7 @@ class SportsService:
         events = []
 
         def add(match, at, order, kind, *, home_goals=None, away_goals=None,
-                minute=None, injury_time=None):
+                minute=None, injury_time=None, side=""):
             events.append(
                 (
                     at,
@@ -233,6 +233,8 @@ class SportsService:
                         away_goals,
                         minute,
                         injury_time,
+                        competition=match.competition_code,
+                        side=side,
                     ),
                 )
             )
@@ -247,12 +249,27 @@ class SportsService:
 
             add(match, match.kickoff, 0, "KO")
             goal_times = []
+            home_score = 0
+            away_score = 0
             for goal in match.goals:
                 minute = goal.minute or 0
                 at = match.kickoff + timedelta(
                     minutes=minute + (goal.injury_time or 0)
                 )
                 goal_times.append(at)
+                side = ""
+                if goal.home_score is not None and goal.away_score is not None:
+                    if goal.home_score > home_score:
+                        side = "home"
+                    elif goal.away_score > away_score:
+                        side = "away"
+                    home_score = goal.home_score
+                    away_score = goal.away_score
+                elif goal.team_id is not None:
+                    if goal.team_id == match.home.id:
+                        side = "home"
+                    elif goal.team_id == match.away.id:
+                        side = "away"
                 add(
                     match,
                     at,
@@ -262,6 +279,7 @@ class SportsService:
                     away_goals=goal.away_score,
                     minute=goal.minute,
                     injury_time=goal.injury_time,
+                    side=side,
                 )
 
             if match.status is MatchStatus.HALF_TIME:
@@ -322,7 +340,16 @@ class SportsService:
                 old.status is MatchStatus.SCHEDULED
                 and match.status in (MatchStatus.LIVE, MatchStatus.HALF_TIME)
             ):
-                self._alert(Alert(now, "KO", match.id, home, away))
+                self._alert(
+                    Alert(
+                        now,
+                        "KO",
+                        match.id,
+                        home,
+                        away,
+                        competition=match.competition_code,
+                    )
+                )
             if (
                 old.status is MatchStatus.LIVE
                 and match.status is MatchStatus.HALF_TIME
@@ -336,6 +363,7 @@ class SportsService:
                         away,
                         match.home_goals,
                         match.away_goals,
+                        competition=match.competition_code,
                     )
                 )
             if (
@@ -350,6 +378,7 @@ class SportsService:
                         away,
                         match.home_goals,
                         match.away_goals,
+                        competition=match.competition_code,
                     )
                 )
             if (
@@ -359,6 +388,11 @@ class SportsService:
                 and match.away_goals is not None
                 and match.goal_total > old.goal_total
             ):
+                side = ""
+                if match.home_goals > old.home_goals:
+                    side = "home"
+                elif match.away_goals > old.away_goals:
+                    side = "away"
                 self._alert(
                     Alert(
                         now,
@@ -370,6 +404,8 @@ class SportsService:
                         match.away_goals,
                         match.minute,
                         match.injury_time,
+                        competition=match.competition_code,
+                        side=side,
                     )
                 )
 

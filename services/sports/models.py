@@ -91,6 +91,8 @@ class Alert:
     away_goals: int | None = None
     minute: int | None = None
     injury_time: int | None = None
+    competition: str = ""
+    side: str = ""
 
 
 @dataclass(frozen=True)

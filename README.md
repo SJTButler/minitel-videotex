@@ -320,10 +320,13 @@ shell. The key is never logged or rendered.
   snapshot and turns the pages into `DATA STALE` rather than blanking them.
 - `pages/sports/vidiprinter.py` is the full-screen `155` feed (alias `6`). It
   shows the last 200 KO/HT/FT/GOAL alerts oldest-first, follows the tail, and
-  steps one line per `SUITE`/`RETOUR`. Page `150` keeps its two-row alert
-  preview. On the first load of a matchday the service backfills the day's
+  steps one line per `SUITE`/`RETOUR`. It shows the competition and highlights
+  the event team's abbreviation. Page `150` keeps its two-row alert preview.
+  On the first load of a matchday the service backfills the day's
   KO/HT/FT/GOAL history from the provider's goal events; cards are not in the
-  public feed.
+  public feed. The free feed can lag, so live alerts stay in arrival order and
+  use detection time; backfilled history uses event time. If several goals
+  arrive between polls, the scoring side is left neutral.
 - Polling adapts: 60 s while a match is live, 15 min near kickoff, 30 min when
   idle. `x-requests-available-minute` and `X-RequestCounter-Reset` feed the quota line on
   page 154; the poller slows down if the quota is nearly exhausted.

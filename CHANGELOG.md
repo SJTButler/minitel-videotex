@@ -20,6 +20,8 @@
   current-day backfill from goal events.
 - The vidiprinters force one full bottom-up repaint when their first data
   arrives after loading.
+- The public vidiprinter shows the competition and highlights the event team;
+  live alerts stay in arrival order because the free feed can lag.
 - Added native Minitel scroll mode (`@page(..., scroll=True)`) and the `902
   SHAKESPEARE` scrolling-text screensaver, including scroll-aware rendering,
   screensaver wake filtering, virtual terminal support, and the 39-column

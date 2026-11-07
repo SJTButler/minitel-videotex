@@ -277,6 +277,8 @@ class FeedTests(unittest.TestCase):
         self.assertEqual(alerts[0].home_goals, 2)
         self.assertEqual(alerts[0].away_goals, 0)
         self.assertEqual(alerts[0].minute, 40)
+        self.assertEqual(alerts[0].competition, "PL")
+        self.assertEqual(alerts[0].side, "home")
 
     def test_backfills_finished_match_history(self):
         finished = Match(
@@ -308,7 +310,11 @@ class FeedTests(unittest.TestCase):
             ["FT", "GOAL", "HT", "GOAL", "KO"],
         )
         self.assertEqual(alerts[1].minute, 67)
+        self.assertEqual(alerts[1].side, "away")
         self.assertEqual(alerts[3].minute, 23)
+        self.assertEqual(alerts[3].side, "home")
+        self.assertEqual(alerts[1].competition, "PL")
+        self.assertEqual(alerts[-1].competition, "PL")
 
     def test_finished_alert(self):
         source = FakeSource([

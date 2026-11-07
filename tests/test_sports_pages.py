@@ -4,8 +4,11 @@ from datetime import datetime, timedelta, timezone
 
 import pages
 
+from pages.sports.vidiprinter import _alert_line
+
 from minitel.protocol import codec
 from minitel.terminal import profiles
+from pages.common.layout import SECONDARY
 from minitel.data.cache import Snapshot
 from minitel.session import Session
 from pages.sports._support.labels import competition_label
@@ -389,6 +392,17 @@ class VidiprinterPageTests(unittest.TestCase):
         text = session.screen.to_text().splitlines()
         self.assertTrue(text[1].startswith("15:00 KO"))
         self.assertTrue(text[2].startswith("15:30 GOAL"))
+
+    def test_alert_line_includes_competition_and_team_colours(self):
+        alert = Alert(
+            KICKOFF, "GOAL", 1001, "ARS", "CHE", 2, 1, 34,
+            competition="PL", side="home",
+        )
+        line = _alert_line(alert)
+        self.assertIn("PL", line.text)
+        colours = dict(line.segments)
+        self.assertEqual(colours["ARS"], codec.WHITE)
+        self.assertEqual(colours["CHE"], SECONDARY)
 
     def test_first_data_forces_a_full_paint(self):
         service = FakeSports(FeedSnapshot(loading=True))
