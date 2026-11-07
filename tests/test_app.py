@@ -96,6 +96,7 @@ class AppTests(unittest.IsolatedAsyncioTestCase):
                 "one": FakeService("one", events),
                 "two": FakeService("two", events),
             },
+            log=lambda peer, message: None,
         )
         await app._start_services()
         await app._stop_services()
@@ -108,6 +109,31 @@ class AppTests(unittest.IsolatedAsyncioTestCase):
                 "one:stop", "one:stopped",
             ],
         )
+
+    async def test_reports_services_no_composed_page_requires(self):
+        registry = Registry()
+
+        @page("601", requires=("needed",))
+        def page_with_service(ctx):
+            return Screen()
+
+        registry.add(page_with_service)
+        messages = []
+        app = MinitelApp(
+            registry,
+            services={
+                "needed": FakeService("needed", []),
+                "orphan": FakeService("orphan", []),
+            },
+            log=lambda peer, message: messages.append(message),
+        )
+
+        await app._start_services()
+
+        warnings = [m for m in messages if "WARNING:" in m]
+        self.assertEqual(len(warnings), 1)
+        self.assertIn("orphan", warnings[0])
+        self.assertNotIn("needed", warnings[0])
 
     async def test_handle_closes_the_session_on_disconnect(self):
         closed = []
@@ -238,6 +264,7 @@ class AppTests(unittest.IsolatedAsyncioTestCase):
         app = MinitelApp(
             self.registry,
             services={"sync": FakeService("sync", events, sync=True)},
+            log=lambda peer, message: None,
         )
         await app._start_services()
         await app._stop_services()

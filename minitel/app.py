@@ -161,7 +161,22 @@ class MinitelApp:
             writer.close()
             await writer.wait_closed()
 
+    def _report_orphan_services(self):
+        required = {
+            key
+            for page in self.registry.all()
+            for key in getattr(page, "requires", ())
+        }
+        unrequired = sorted(set(self.services) - required)
+        if unrequired:
+            self.log(
+                "startup",
+                "WARNING: services not required by any composed page: "
+                + ", ".join(unrequired),
+            )
+
     async def _start_services(self):
+        self._report_orphan_services()
         await self.services.start()
 
     async def _stop_services(self):
