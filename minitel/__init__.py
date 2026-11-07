@@ -7,7 +7,7 @@ from .data import cache, http, services
 from .data.cache import ResourceCache, Snapshot
 from .data.http import HttpError, JsonResponse, get_json, get_json_response
 from .data.services import ServiceRegistry, ServiceSpec, service
-from .design import Carousel, InputField, Pager
+from .design import Carousel, InputField, Pager, Viewport
 from .pagemodel import (
     LINE_FIELD,
     FunctionPage,
@@ -58,6 +58,7 @@ __all__ = [
     "Session",
     "Snapshot",
     "TerminalProfile",
+    "Viewport",
     "by_type",
     "cache",
     "codec",

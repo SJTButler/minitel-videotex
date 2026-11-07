@@ -44,6 +44,8 @@ class Session(NavigationMixin, EditingMixin, IdleMixin, PowerMixin):
         self.requested_focus = None
         self.pager = None
         self.pagers = {}
+        self.viewport = None
+        self.viewports = {}
         self._resources = []
         self._closed = False
         self._pager_carousel = None
@@ -89,6 +91,7 @@ class Session(NavigationMixin, EditingMixin, IdleMixin, PowerMixin):
         self.active_name = None
         self.requested_focus = None
         self.pager = None
+        self.viewport = None
         self._pager_carousel = None
         self._pager_carousel_next = None
         self._pager_carousel_key = None
@@ -152,6 +155,14 @@ class Session(NavigationMixin, EditingMixin, IdleMixin, PowerMixin):
         else:
             self._pager_carousel = carousel
 
+    def _adopt_viewport(self, viewport):
+        if viewport is None:
+            self.viewport = None
+            self.viewports.pop(self.current.number, None)
+            return
+        self.viewport = viewport
+        self.viewports[self.current.number] = viewport
+
     def start(self):
         self.paused = False
         self.parser = self._new_parser()
@@ -180,12 +191,23 @@ class Session(NavigationMixin, EditingMixin, IdleMixin, PowerMixin):
             raise TypeError(
                 f"page {self.current.number!r} returned {type(screen)!r}, expected Screen"
             )
+        if ctx._viewport_set and ctx.pager is not None:
+            raise ValueError(
+                f"page {self.current.number!r} cannot declare both a viewport "
+                "and a pager"
+            )
         if self.current.form and ctx.fields and ctx.pager is not None:
             raise ValueError(
                 f"page {self.current.number!r} cannot declare both form fields "
                 "and a pager"
             )
+        if self.current.form and ctx.fields and ctx._viewport_set:
+            raise ValueError(
+                f"page {self.current.number!r} cannot declare both form fields "
+                "and a viewport"
+            )
         self._adopt_pager(ctx.pager, ctx.pager_carousel)
+        self._adopt_viewport(ctx.viewport if ctx._viewport_set else None)
         self.fields = ctx.fields
         names = [field.name for field in self.fields]
         self.values = {name: self.values.get(name, "") for name in names}
@@ -226,6 +248,8 @@ class Session(NavigationMixin, EditingMixin, IdleMixin, PowerMixin):
         frame = page.on_tick(ctx)
         if not self.screensaver_active and ctx.pager is not None:
             self._adopt_pager(ctx.pager, ctx.pager_carousel)
+        if not self.screensaver_active and ctx._viewport_set:
+            self._adopt_viewport(ctx.viewport)
         if frame is None:
             return Action()
         if isinstance(frame, (bytes, bytearray)):
@@ -273,6 +297,13 @@ class Session(NavigationMixin, EditingMixin, IdleMixin, PowerMixin):
         if isinstance(event, codec.Function):
             return self.function(event.name)
         if isinstance(event, codec.Key):
+            if self.viewport is not None and event.name in ("up", "down"):
+                if event.name == "up":
+                    self.viewport = self.viewport.line_up()
+                else:
+                    self.viewport = self.viewport.line_down()
+                self.viewports[self.current.number] = self.viewport
+                return self.refresh()
             ctx = PageContext(self, self.current, self.registry)
             result = self.current.on_key(ctx, event.name)
             requested = self._take_screensaver_request()
@@ -308,6 +339,20 @@ class Session(NavigationMixin, EditingMixin, IdleMixin, PowerMixin):
                 if self.active > 0:
                     self.active -= 1
                     self.active_name = self.fields[self.active].name
+                    return self.refresh()
+                return self._back_or_parent()
+
+        if self.viewport is not None:
+            if name == "SUITE":
+                self.viewport = self.viewport.step_down()
+                self.viewports[self.current.number] = self.viewport
+                self._clear_active_field()
+                return self.refresh()
+            if name == "RETOUR":
+                if not self.viewport.at_top:
+                    self.viewport = self.viewport.step_up()
+                    self.viewports[self.current.number] = self.viewport
+                    self._clear_active_field()
                     return self.refresh()
                 return self._back_or_parent()
 

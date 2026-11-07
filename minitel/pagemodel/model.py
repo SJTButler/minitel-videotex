@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from ..design.carousel import Carousel
 from ..design.field import InputField
 from ..design.pager import Pager
+from ..design.viewport import Viewport
 from ..render.screen import Screen
 
 
@@ -26,6 +27,8 @@ class PageContext:
         self.focus_name = None
         self.pager = None
         self.pager_carousel = None
+        self.viewport = session.viewport
+        self._viewport_set = False
 
     @property
     def line(self):
@@ -97,6 +100,11 @@ class PageContext:
         )
 
     def set_pager(self, total, page_size, *, offset=None, carousel=None):
+        if self._viewport_set:
+            raise ValueError(
+                f"page {self.page.number!r} cannot declare both a viewport "
+                "and a pager"
+            )
         if self.page.form and self.fields:
             raise ValueError(
                 f"page {self.page.number!r} cannot declare both form fields "
@@ -114,6 +122,39 @@ class PageContext:
         self.pager = Pager(total, page_size, offset).clamp()
         self.pager_carousel = carousel
         return self.pager
+
+    def set_viewport(self, total, height, *, offset=None, follow=None, step=None):
+        if not self.page.scroll:
+            raise ValueError(
+                f"page {self.page.number!r} must declare scroll=True "
+                "to use a viewport"
+            )
+        if self.pager is not None:
+            raise ValueError(
+                f"page {self.page.number!r} cannot declare both a pager "
+                "and a viewport"
+            )
+        if self.page.form and self.fields:
+            raise ValueError(
+                f"page {self.page.number!r} cannot declare both form fields "
+                "and a viewport"
+            )
+        stored = self._session.viewports.get(self.page.number)
+        base = self.viewport if self.viewport is not None else stored
+        requested_offset = offset
+        if offset is None:
+            offset = base.offset if base is not None else 0
+        if follow is None:
+            follow = base.follow if base is not None else False
+        if step is None:
+            step = base.step if base is not None else 1
+        if requested_offset is None and follow:
+            offset = max(0, total - height)
+        self.viewport = Viewport(
+            total, height, offset, follow, step
+        ).clamp()
+        self._viewport_set = True
+        return self.viewport
 
     @property
     def screensaver(self):
