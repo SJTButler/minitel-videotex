@@ -148,8 +148,12 @@ def render(screen, scroll=None):
         out += codec.scroll_mode(scroll)
     out += reset()
 
-    for row_index, row in enumerate(screen.rows):
-        paint_runs(out, row_index, row)
+    if getattr(screen, "paint_order", "down") == "up":
+        rows = [0] + list(range(codec.ROWS - 1, 0, -1))
+    else:
+        rows = range(codec.ROWS)
+    for row_index in rows:
+        paint_runs(out, row_index, screen.rows[row_index])
 
     out += cursor_bytes(screen)
     return bytes(out)

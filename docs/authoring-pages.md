@@ -458,6 +458,20 @@ def render_feed(ctx):
 This is the same shape as multi-field forms: a bounded list, a session-owned
 cursor, and a boundary that falls through to history.
 
+## First paint order
+
+A page that appends the newest lines at the bottom can paint the first full
+screen bottom-up:
+
+```python
+screen.paint_order = "up"
+```
+
+The renderer still paints row 0 first, then rows 24 down to 1. This makes the
+newest bottom line appear first on a full paint. It does not change the model
+or diffs: appended lines are still bottom updates, and later one-line changes
+use the normal diff. The default is `"down"`.
+
 ## Dynamic pages
 
 A page can update a region without repainting the whole screen. Set

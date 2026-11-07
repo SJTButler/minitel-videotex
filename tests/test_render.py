@@ -1,6 +1,7 @@
 import importlib.util
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 import minitel
 from minitel.protocol import codec
@@ -81,6 +82,20 @@ class RenderTests(unittest.TestCase):
         self.assertEqual(cell.bg, codec.BLUE)
         self.assertTrue(cell.underline)
         self.assertTrue(cell.flash)
+
+    def test_paint_order_defaults_down(self):
+        with patch("minitel.render.render.paint_runs") as paint:
+            render(Screen())
+        rows = [call.args[1] for call in paint.call_args_list]
+        self.assertEqual(rows, list(range(codec.ROWS)))
+
+    def test_paint_order_up_paints_bottom_first(self):
+        screen = Screen()
+        screen.paint_order = "up"
+        with patch("minitel.render.render.paint_runs") as paint:
+            render(screen)
+        rows = [call.args[1] for call in paint.call_args_list]
+        self.assertEqual(rows, [0] + list(range(codec.ROWS - 1, 0, -1)))
 
     def test_double_width_marker(self):
         s = Screen()
