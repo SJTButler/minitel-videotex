@@ -7,7 +7,7 @@ from minitel.text import fit, wrap
 
 from ..common.layout import ACCENT, SECONDARY, WARNING, key_footer, status
 from ..common.widgets import page_input
-from ._support.state import configured, find_match, service, snapshot
+from ._support.state import configured, find_match, find_matches, service, snapshot
 from ._support.layout import (
     clock_label,
     day_label,
@@ -36,10 +36,17 @@ def _fixture_lines(match):
 def detail_screen(ctx):
     feed = service(ctx)
     feed_snapshot = snapshot(ctx) if feed is not None else None
-    match = find_match(feed_snapshot, ctx.state.get("sports_match_id"))
+    token = str(ctx.extension or "").strip().upper()
+    if token:
+        matches = find_matches(feed_snapshot, token)
+    else:
+        match = find_match(
+            feed_snapshot, ctx.state.get("sports_match_id")
+        )
+        matches = (match,) if match is not None else ()
 
     s = Screen()
-    status(s, "PAGE 151")
+    status(s, f"PAGE 151#{ctx.extension}" if ctx.extension else "PAGE 151")
     s.text(1, 0, "MATCH", inverse=True, size=codec.DOUBLE_WIDTH)
 
     if not configured(feed):
@@ -48,23 +55,51 @@ def detail_screen(ctx):
         key_footer(s, ("RETOUR=SCORES", "SOMMAIRE=HOME"))
         return s
 
-    if ctx.state.get("sports_match_id") is None:
-        _message(s, ["NO MATCH SELECTED.", "OPEN LIVE SCORES, PICK A NUMBER."])
-        page_input(s, ctx, cursor="auto")
-        key_footer(s, ("RETOUR=SCORES", "SOMMAIRE=HOME"))
-        return s
-
-    if match is None:
-        if feed_snapshot is not None and feed_snapshot.error:
+    if not matches:
+        if not token:
+            lines = ["NO MATCH SELECTED.", "USE 151#TEAM OR 151#HOMEAWAY."]
+        elif feed_snapshot is not None and feed_snapshot.error:
             lines = ["MATCH DATA UNAVAILABLE.", "RETURN TO LIVE SCORES."]
         elif feed_snapshot is None or not feed_snapshot.has_value:
             lines = ["MATCH DATA LOADING...", "TRY AGAIN IN A MOMENT."]
         else:
-            lines = ["MATCH NOT AVAILABLE.", "RETURN TO LIVE SCORES."]
+            lines = [f"NO MATCH FOR {token}.", "CHECK LIVE SCORES."]
         _message(s, lines)
         page_input(s, ctx, cursor="auto")
         key_footer(s, ("RETOUR=SCORES", "SOMMAIRE=HOME"))
         return s
+
+    if len(matches) > 1:
+        s.text(
+            4,
+            0,
+            fit(f"MULTIPLE MATCHES FOR {token}", codec.COLS),
+            fg=WARNING,
+        )
+        for index, candidate in enumerate(matches[:12]):
+            code = f"{candidate.home.short}{candidate.away.short}"
+            s.text(
+                5 + index,
+                0,
+                fit(
+                    f"{candidate.home.short} V {candidate.away.short}"
+                    f"  151#{code}",
+                    codec.COLS,
+                ),
+                fg=SECONDARY,
+            )
+        if len(matches) > 12:
+            s.text(
+                18,
+                0,
+                f"+{len(matches) - 12} MORE MATCHES",
+                fg=SECONDARY,
+            )
+        page_input(s, ctx, cursor="auto")
+        key_footer(s, ("RETOUR=SCORES", "SOMMAIRE=HOME"))
+        return s
+
+    match = matches[0]
 
     competition = fit(match.competition_name, 30)
     if match.matchday is not None:
@@ -135,8 +170,10 @@ def detail_screen(ctx):
     title="MATCH",
     requires=("sports",),
     back_page=LIVE_PAGE,
+    extension_back_page=LIVE_PAGE,
     tick_interval=5.0,
     on_tick=detail_screen,
+    extensions=True,
 )
 def match_detail(ctx):
     return detail_screen(ctx)

@@ -65,6 +65,7 @@ class PageDirectoryTests(unittest.TestCase):
         text = session.screen.to_text().splitlines()
         self.assertTrue(text[9].startswith("120#"))
         self.assertTrue(text[12].startswith("150#"))
+        self.assertTrue(text[13].startswith("151#"))
         self.assertTrue(text[14].startswith("153#"))
         self.assertFalse(text[5].startswith("100#"))
 

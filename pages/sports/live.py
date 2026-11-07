@@ -302,9 +302,10 @@ def submit_live(ctx, line):
     if value.isdigit() and 1 <= int(value) <= MAX_MATCHES:
         number = int(value)
         if number <= len(window):
-            ctx.state["sports_match_id"] = window[number - 1].source.id
+            match = window[number - 1].source
+            ctx.state["sports_match_id"] = match.id
             latch.clear()
-            return DETAIL_PAGE
+            return f"{DETAIL_PAGE}#{match.home.short}{match.away.short}"
         latch.set(f"NO MATCH {number}.", pager.offset)
         ctx.clear_input()
         return LIVE_PAGE

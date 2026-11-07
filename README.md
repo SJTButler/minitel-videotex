@@ -294,7 +294,7 @@ shell. The key is never logged or rendered.
 
 ```
 5 LIVE SCORES (page 150)
-  -> 151 MATCH detail
+  -> 151 MATCH detail (151#<TEAM> or 151#<HOMEAWAY>)
   -> 153 TABLES
   -> 154 FEED STATUS
 6 VIDIPRINTER (page 155), the full-screen alert history

@@ -1,5 +1,6 @@
 import time
 import unittest
+from dataclasses import replace
 from datetime import datetime, timedelta, timezone
 
 import pages
@@ -177,18 +178,19 @@ class LivePageTests(unittest.TestCase):
         self.assertIn("NEXT MATCHDAY", text[17])
 
         session.feed(b"1" + ENVOI)
-        self.assertEqual(session.current.number, "151")
+        self.assertTrue(session.current.number.startswith("151#"))
 
     def test_select_match_opens_detail(self):
         session = make_session(FakeSports(loaded_snapshot([ars_che()])))
         session.feed(b"1" + ENVOI)
 
-        self.assertEqual(session.current.number, "151")
+        self.assertTrue(session.current.number.startswith("151#"))
         self.assertEqual(session.state["sports_match_id"], 1001)
         text = session.screen.to_text()
         self.assertIn("ARSENAL FC", text)
         self.assertIn("CHELSEA FC", text)
         self.assertIn("2-1", text)
+        self.assertEqual(session.current.number, "151#ARSCHE")
 
     def test_suite_advances_by_league_and_wraps(self):
         matches = [
@@ -258,6 +260,45 @@ class LivePageTests(unittest.TestCase):
         session.tick()
         self.assertIn("LIVE SCORES - PD", session.screen.to_text())
 
+    def test_direct_match_detail_extension_route(self):
+        session = make_session(
+            FakeSports(loaded_snapshot([ars_che()])), initial="151#ARSCHE"
+        )
+        text = session.screen.to_text()
+        self.assertIn("ARSENAL FC", text)
+        self.assertIn("2-1", text)
+        self.assertIn("151#ARSCHE", text.splitlines()[0])
+
+    def test_direct_match_detail_by_team_code(self):
+        session = make_session(
+            FakeSports(loaded_snapshot([ars_che()])), initial="151#ARS"
+        )
+        text = session.screen.to_text()
+        self.assertIn("ARSENAL FC", text)
+        self.assertIn("2-1", text)
+
+    def test_unknown_match_detail_extension(self):
+        session = make_session(
+            FakeSports(loaded_snapshot([ars_che()])), initial="151#ZZZ"
+        )
+        self.assertIn("NO MATCH FOR ZZZ.", session.screen.to_text())
+
+    def test_team_code_lists_ambiguous_matches(self):
+        other = replace(
+            ars_che(),
+            id=1002,
+            away=Team(62, "HULL CITY", "HUL"),
+            away_goals=0,
+        )
+        session = make_session(
+            FakeSports(loaded_snapshot([ars_che(), other])),
+            initial="151#ARS",
+        )
+        text = session.screen.to_text()
+        self.assertIn("MULTIPLE MATCHES FOR ARS", text)
+        self.assertIn("151#ARSCHE", text)
+        self.assertIn("151#ARSHUL", text)
+
     def test_extension_route_detail_back_restores_the_route(self):
         matches = [
             make_match(index=1, code="PL"),
@@ -268,7 +309,7 @@ class LivePageTests(unittest.TestCase):
         )
         session.feed(SUITE)
         session.feed(b"1" + ENVOI)
-        self.assertEqual(session.current.number, "151")
+        self.assertTrue(session.current.number.startswith("151#"))
 
         session.feed(RETOUR)
         self.assertEqual(session.current.number, "150#PL")
@@ -480,7 +521,7 @@ class DetailPageTests(unittest.TestCase):
         )
         text = session.screen.to_text()
         self.assertIn("NO MATCH SELECTED.", text)
-        self.assertIn("OPEN LIVE SCORES, PICK A NUMBER.", text)
+        self.assertIn("USE 151#TEAM OR 151#HOMEAWAY.", text)
 
     def test_retour_returns_to_scores(self):
         session = make_session(FakeSports(loaded_snapshot([ars_che()])))
