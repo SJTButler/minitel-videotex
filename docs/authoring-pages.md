@@ -1052,7 +1052,7 @@ Add a Minitel page in pages/ using the existing library.
 - Call page_input(s, ctx) for a single field, or ctx.add_field(...) and
   form=True/on_form(ctx, values) for a multi-field form.
 - Use ctx.state for per-session data.
-- Add a menu line in pages/home.py.
+- Add a 1-2 digit numeric alias to put the page on the home menu.
 - Run: uv run python -m unittest discover -s tests -v
 - Inspect: uv run python tools/virtual_minitel.py --connect 127.0.0.1:43620 --plain
 ```
