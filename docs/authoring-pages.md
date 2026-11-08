@@ -154,12 +154,14 @@ Every `render`, `on_submit`, `on_form`, and `on_key` receives a
 | `ctx.input_value` | the value of the `PAGE:` field |
 | `ctx.clear_input()` | clear the `PAGE:` field |
 | `ctx.fields` | the registered fields |
-| `ctx.add_field(name, row, col, width, *, cursor="visible")` | register a named field |
-| `ctx.set_input(row, col, width, *, cursor="visible")` | one-field shorthand |
+| `ctx.add_field(name, row, col, width, *, cursor="visible", live=False, visible=True)` | register a named field |
+| `ctx.set_input(row, col, width, *, cursor="visible", live=False, visible=True)` | one-field shorthand |
 | `ctx.set_pager(total, page_size, *, offset=None, carousel=None)` | register a session-owned pager, optionally with timed advance |
 | `ctx.pager` | the `Pager` registered for this render |
 | `ctx.set_viewport(total, height, *, offset=None, follow=None, step=None)` | register a session-owned viewport over a line buffer |
 | `ctx.viewport` | the active `Viewport` for this render, or `None` before the page sets one |
+| `ctx.set_stops(stops, *, start_next=0, start_prev=0, selected=None, reset=False, wrap=True)` | register viewport match stops |
+| `ctx.stops` | the active `Stops` for this render, or `None` |
 | `ctx.focus(name)` | request focus when the page rerenders |
 | `ctx.page_for(key)` | look up another page |
 | `ctx.screensaver` | the session's `Screensaver`, or `None` |
@@ -179,6 +181,19 @@ registration:
 ```python
 page_input(s, ctx)
 ```
+
+A field can also be `live` and/or hidden:
+
+- `live=True` re-renders the page after every edit, correction, and
+  cancellation. The page must be cheap: cache immutable lines and recompute
+  only the derived match state. A live field is not cleared by `SUITE`/`RETOUR`
+  cursor movement; `ANNULATION` still clears it.
+- `visible=False` captures text without drawing a field bar or cursor. The page
+  must draw the buffer itself (the reader uses row 0); hidden fields assume
+  server echo, the default. `--local-echo` would print the characters at the
+  terminal cursor, so use a visible field there.
+- The field width is always the buffer cap, not necessarily the display width.
+  A hidden reader field can hold 32 characters and show a shorter status window.
 
 Without an input field, typing returns `BEL` and the cursor is parked at row
 24, column 0.
@@ -269,8 +284,8 @@ The session handles the common keys:
 | `CORRECTION` | remove one character from the active field |
 | `ANNULATION` | clear the active field, rerender |
 | `SOMMAIRE` | go to `INITIAL`, clear history |
-| `SUITE` | form: next field; pager: next page; otherwise page `on_key` |
-| `RETOUR` | form: previous field; pager: previous page; otherwise/at the boundary: `back_page` if history isn't already there, then history back |
+| `SUITE` | form: next field; pager: next page; viewport with 2+ stops: next match; otherwise page `on_key` |
+| `RETOUR` | form: previous field; pager: previous page; viewport with 2+ stops: previous match; otherwise/at the boundary: `back_page` if history isn't already there, then history back |
 | `GUIDE` | page's `on_key`, then the app's guide page |
 
 `on_submit` can return:
@@ -405,7 +420,8 @@ def render_list(ctx):
   `offset=0` to force the first page after a filter change.
 - The session stores the pager. `SUITE` moves to the next page (wrapping from
   the last page to the first); `RETOUR` moves to the previous page and calls
-  `back()` only from page 1. Moving pages clears the active input field.
+  `back()` only from page 1. Moving pages clears the active input field unless
+  the field is live.
 - Do not handle `SUITE`/`RETOUR` in `on_key` on a paginated page; the session
   handles them before `on_key`, just as it handles form focus.
 - The offset is remembered per page for the session. Returning from a detail
@@ -443,9 +459,9 @@ def render_feed(ctx):
   reaches the bottom.
 - `UP`/`DOWN` always move one line. `SUITE`/`RETOUR` move by `step` lines;
   `step=1` (the default) is the M1-friendly one-line move that uses the
-  one-line `LF`/`VT` fast path. A long reader can set `step=height-1` for
-  page-sized movement. `RETOUR` at the top follows `back_page`/history;
-  `SUITE` at the bottom resumes follow.
+  one-line `LF`/`VT` fast path. `step=8` is the largest step that stays on the
+  fast path; larger steps fall back to a changed-row repaint. `RETOUR` at the
+  top follows `back_page`/history; `SUITE` at the bottom resumes follow.
 - The viewport is remembered per page key. A static reader can restore its
   position; a live feed can request the tail on entry.
 - `viewport.line_number`, `viewport.total`, `viewport.height`, and
@@ -454,6 +470,73 @@ def render_feed(ctx):
   every scroll, which costs bytes; use row 0 for static chrome.
 - A scroll page may have one input field, but not a multi-field form or a pager.
 - Do not send `LF`, `VT`, or scroll-mode bytes from a page.
+
+### Viewport stops
+
+A viewport may declare **stops** for selecting matching links. A `Stop` is one
+per matching target, with the target's first line (stable order), a reveal line
+(the topmost visible occurrence, or the first line), and the link index. The
+page builds `(Stop, ...)` and calls:
+
+```python
+stops = ctx.set_stops(
+    stops,
+    start_next=start_next,
+    start_prev=start_prev,
+    reset=buffer_changed,
+)
+selected = stops.selected_stop
+```
+
+- The session owns the selected stop and the viewport offset; the page owns the
+  stop list and drawing.
+- With two or more stops, `SUITE`/`RETOUR` cycle all matching targets. The first
+  press selects `start_next`/`start_prev`; later presses move and wrap, and the
+  session reveals the selected line with a minimal scroll.
+- `start_next`/`start_prev` are the topmost visible target when one is visible;
+  otherwise the first target below / last target above the window. Compute them
+  from the current `viewport.window`.
+- `reset=True` clears the selection when the find buffer changes;
+  `selected=None` preserves it while the target list is unchanged (for ticks
+  and reveals).
+- Stops are viewport metadata, not a second cursor. The page still declares one
+  viewport and at most one field; `ENVOI` is the page's `on_submit`, using
+  `ctx.stops.selected_stop` or the single visible match.
+- Reader colour is link-only. Link anchors use `SECONDARY` at rest, `WARNING`
+  for matched non-selected targets, and inverse for the selected target (or the
+  sole visible target). Headings use inverse; titles, the status row, and the
+  field use inverse; quote, code, rule, credit, pager, query, status, tags, and
+  snippets stay normal. An index result title is a link and may use the link
+  colour; the rest of the result stays normal. The selected target is the only
+  link `ENVOI` follows when a selection exists.
+- Do not use inline underline for links on the M1. The underline runs from the
+  trigger space to the row end and `underline(False)` does not retract an
+  already-drawn row. Reserve underline for whole-line headings/metadata.
+- For whole-line underline, `paint_runs` closes each underlined run with
+  `underline(False)` and `diff_row_bytes` repaints the whole row (including
+  blank default cells) when either the old or new row contains underline; the
+  full paint after wake is the reference. The virtual decoder models per-cell
+  underline and cannot see the row effect, so attribute changes need a hardware
+  check.
+
+### Reader documents
+
+`services/common/reader.py` defines the content-free reader model: `Span`,
+`Block`, `Link`, `Document`, `SearchResult`, `ReaderSource`, the cached
+`ReaderService`, the synchronous `StaticReaderService`, and `find_links` /
+`match_prefix`. A source owns sanitising and stable link tokens.
+
+`pages/common/reader.py` owns the shared presentation: `render_lines`,
+`visible_matches`, `build_stops`, `starts_for`, `find_results`,
+`article_screen`, and `index_screen`. Page `160 WIKIPEDIA` is the first caller;
+it currently serves fixture documents from `services/wikipedia.py` through the
+`wikipedia` service key. The real Wikipedia source replaces the service backend
+without changing the page or renderer.
+
+Headings are flush left in v1; `Block.level` is carried for a later hierarchy
+rule. If indentation is added, use h2 flush, h3 +2 columns, and h4 +4 columns.
+Links match both their visible anchor labels and the target title, so a source
+must populate `Link.labels` from the anchors it emits.
 
 This is the same shape as multi-field forms: a bounded list, a session-owned
 cursor, and a boundary that falls through to history.

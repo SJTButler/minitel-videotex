@@ -2,6 +2,7 @@
 
 import time
 
+from ..design.stops import reveal_viewport
 from ..pagemodel.model import PageContext
 from ..protocol import codec
 from ..render.render import render_diff, reset
@@ -46,6 +47,7 @@ class Session(NavigationMixin, EditingMixin, IdleMixin, PowerMixin):
         self.pagers = {}
         self.viewport = None
         self.viewports = {}
+        self.stops = None
         self._resources = []
         self._closed = False
         self._pager_carousel = None
@@ -92,6 +94,7 @@ class Session(NavigationMixin, EditingMixin, IdleMixin, PowerMixin):
         self.requested_focus = None
         self.pager = None
         self.viewport = None
+        self.stops = None
         self._pager_carousel = None
         self._pager_carousel_next = None
         self._pager_carousel_key = None
@@ -163,6 +166,17 @@ class Session(NavigationMixin, EditingMixin, IdleMixin, PowerMixin):
         self.viewport = viewport
         self.viewports[self.current.number] = viewport
 
+    def _reveal_stop(self):
+        if self.stops is None or self.viewport is None:
+            return
+        stop = self.stops.selected_stop
+        if stop is None:
+            return
+        viewport = reveal_viewport(self.viewport, stop.line)
+        if viewport is not None:
+            self.viewport = viewport
+            self.viewports[self.current.number] = viewport
+
     def start(self):
         self.paused = False
         self.parser = self._new_parser()
@@ -212,6 +226,7 @@ class Session(NavigationMixin, EditingMixin, IdleMixin, PowerMixin):
             )
         self._adopt_pager(ctx.pager, ctx.pager_carousel)
         self._adopt_viewport(ctx.viewport if ctx._viewport_set else None)
+        self.stops = ctx.stops if ctx._stops_set else None
         self.fields = ctx.fields
         names = [field.name for field in self.fields]
         self.values = {name: self.values.get(name, "") for name in names}
@@ -254,6 +269,8 @@ class Session(NavigationMixin, EditingMixin, IdleMixin, PowerMixin):
             self._adopt_pager(ctx.pager, ctx.pager_carousel)
         if not self.screensaver_active and ctx._viewport_set:
             self._adopt_viewport(ctx.viewport)
+        if not self.screensaver_active and ctx._stops_set:
+            self.stops = ctx.stops
         if frame is None:
             return Action()
         if isinstance(frame, (bytes, bytearray)):
@@ -351,6 +368,18 @@ class Session(NavigationMixin, EditingMixin, IdleMixin, PowerMixin):
                 return self._back_or_parent()
 
         if self.viewport is not None:
+            if (
+                self.stops is not None
+                and len(self.stops.stops) > 1
+                and name in ("SUITE", "RETOUR")
+            ):
+                self.stops = (
+                    self.stops.next() if name == "SUITE"
+                    else self.stops.prev()
+                )
+                self._reveal_stop()
+                self._clear_active_field()
+                return self.refresh()
             if name == "SUITE":
                 self.viewport = self.viewport.step_down()
                 self.viewports[self.current.number] = self.viewport

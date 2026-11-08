@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from ..design.carousel import Carousel
 from ..design.field import InputField
 from ..design.pager import Pager
+from ..design.stops import Stops
 from ..design.viewport import Viewport
 from ..render.screen import Screen
 
@@ -29,6 +30,8 @@ class PageContext:
         self.pager_carousel = None
         self.viewport = session.viewport
         self._viewport_set = False
+        self.stops = session.stops
+        self._stops_set = False
 
     @property
     def line(self):
@@ -157,6 +160,30 @@ class PageContext:
         ).clamp()
         self._viewport_set = True
         return self.viewport
+
+    def set_stops(self, stops, *, start_next=0, start_prev=0,
+                  selected=None, reset=False, wrap=True):
+        if not self._viewport_set:
+            raise ValueError(
+                f"page {self.page.number!r} must set a viewport before stops"
+            )
+        stops = tuple(stops)
+        for stop in stops:
+            if not hasattr(stop, "first_line") or not hasattr(stop, "link"):
+                raise TypeError("stops must be Stop values")
+        current = self.stops
+        identity = tuple(
+            (stop.first_line, stop.link) for stop in stops
+        )
+        if reset or current is None or current.identity != identity:
+            selected = None
+        elif selected is None:
+            selected = current.selected
+        self.stops = Stops(
+            stops, selected, start_next, start_prev, wrap
+        ).clamp()
+        self._stops_set = True
+        return self.stops
 
     @property
     def screensaver(self):

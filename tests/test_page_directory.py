@@ -22,6 +22,22 @@ def make_session(registry=None):
     return session
 
 
+def find_line(lines, prefix):
+    for line in lines:
+        if line.startswith(prefix):
+            return line
+    raise AssertionError(f"no line starts with {prefix!r}")
+
+
+def page_numbers(lines, start=5, count=12):
+    numbers = []
+    for line in lines[start:start + count]:
+        if not line.strip():
+            continue
+        numbers.append(line.split()[0].rstrip("*#"))
+    return numbers
+
+
 class PageDirectoryTests(unittest.TestCase):
     def test_lists_numeric_pages_in_order(self):
         session = make_session()
@@ -29,32 +45,25 @@ class PageDirectoryTests(unittest.TestCase):
         self.assertEqual(text[1].strip(), "PAGES")
         self.assertEqual(text[2].strip(), "REGISTERED PAGES 1/2")
         self.assertIn("PAGE", text[4])
-        self.assertTrue(text[5].startswith("100"))
-        self.assertTrue(text[6].startswith("110"))
-        self.assertTrue(text[7].startswith("111"))
-        self.assertTrue(text[8].startswith("112"))
-        self.assertTrue(text[9].startswith("120"))
-        self.assertTrue(text[10].startswith("130"))
-        self.assertTrue(text[11].startswith("140"))
-        self.assertTrue(text[12].startswith("150"))
-        self.assertTrue(text[13].startswith("151"))
-        self.assertTrue(text[14].startswith("153"))
-        self.assertTrue(text[15].startswith("154"))
-        self.assertTrue(text[16].startswith("155"))
+        self.assertEqual(
+            page_numbers(text),
+            [
+                "100", "110", "111", "112", "120", "130",
+                "140", "150", "151", "153", "154", "155",
+            ],
+        )
         self.assertIn("NUMBER:", text[17])
 
         session.feed(SUITE)
         text = session.screen.to_text().splitlines()
         self.assertIn("REGISTERED PAGES 2/2", session.screen.to_text())
-        self.assertTrue(text[5].startswith("190"))
-        self.assertTrue(text[6].startswith("199"))
-        self.assertTrue(text[7].startswith("900"))
-        self.assertTrue(text[8].startswith("901"))
-        self.assertTrue(text[9].startswith("902"))
-        self.assertTrue(text[10].startswith("903"))
-        self.assertTrue(text[11].startswith("910"))
-        self.assertTrue(text[12].startswith("911"))
-        self.assertTrue(text[13].startswith("912"))
+        self.assertEqual(
+            page_numbers(text),
+            [
+                "160", "190", "199", "900", "901", "902",
+                "903", "910", "911", "912",
+            ],
+        )
 
     def test_hides_internal_pages(self):
         session = make_session()
@@ -63,16 +72,17 @@ class PageDirectoryTests(unittest.TestCase):
     def test_marks_extension_aware_pages(self):
         session = make_session()
         text = session.screen.to_text().splitlines()
-        self.assertTrue(text[9].startswith("120#"))
-        self.assertTrue(text[12].startswith("150#"))
-        self.assertTrue(text[13].startswith("151#"))
-        self.assertTrue(text[14].startswith("153#"))
-        self.assertFalse(text[5].startswith("100#"))
+        self.assertTrue(find_line(text, "120").startswith("120#"))
+        self.assertTrue(find_line(text, "150").startswith("150#"))
+        self.assertTrue(find_line(text, "151").startswith("151#"))
+        self.assertTrue(find_line(text, "153").startswith("153#"))
+        self.assertFalse(find_line(text, "100").startswith("100#"))
 
         session.feed(SUITE)
         text = session.screen.to_text().splitlines()
-        self.assertTrue(text[7].startswith("900*"))
-        self.assertNotIn("#", text[7])
+        line = find_line(text, "900")
+        self.assertTrue(line.startswith("900*"))
+        self.assertNotIn("#", line)
 
     def test_number_markers_can_combine(self):
         registry = pages.build_registry()
@@ -85,52 +95,60 @@ class PageDirectoryTests(unittest.TestCase):
         session = make_session(registry)
         session.feed(SUITE)
         text = session.screen.to_text().splitlines()
-        self.assertTrue(text[5].startswith("156*#"))
+        self.assertTrue(find_line(text, "156").startswith("156*#"))
 
     def test_shows_aliases_and_flags(self):
         session = make_session()
         text = session.screen.to_text().splitlines()
-        self.assertIn(" 0", text[5])
-        self.assertIn(" 1", text[6])
-        self.assertIn(" 2", text[9])
-        self.assertIn(" 3", text[10])
-        self.assertIn(" 4", text[11])
-        self.assertIn(" 5", text[12])
-        self.assertIn(" 6", text[16])
-        self.assertIn("DN", text[7])
-        self.assertIn("F", text[11])
+        self.assertIn(" 0", find_line(text, "100"))
+        self.assertIn(" 1", find_line(text, "110"))
+        self.assertIn(" 2", find_line(text, "120"))
+        self.assertIn(" 3", find_line(text, "130"))
+        self.assertIn(" 4", find_line(text, "140"))
+        self.assertIn(" 5", find_line(text, "150"))
+        self.assertIn(" 6", find_line(text, "155"))
+        self.assertIn("DN", find_line(text, "111"))
+        self.assertIn("F", find_line(text, "140"))
 
         session.feed(SUITE)
         text = session.screen.to_text().splitlines()
-        self.assertIn(" 7", text[5])
-        self.assertTrue(text[7].startswith("900*"))
-        self.assertIn("D", text[7])
+        self.assertIn(" 7", find_line(text, "190"))
+        line = find_line(text, "900")
+        self.assertTrue(line.startswith("900*"))
+        self.assertIn("D", line)
 
     def test_marks_scrolling_pages(self):
         session = make_session()
         session.feed(SUITE)
         text = session.screen.to_text().splitlines()
-        self.assertTrue(text[9].startswith("902*"))
-        self.assertEqual(text[9][34:].strip(), "DS")
+        line = find_line(text, "902")
+        self.assertTrue(line.startswith("902*"))
+        self.assertEqual(line[34:].strip(), "DS")
 
     def test_screensaver_group_is_a_prefix_when_it_differs(self):
         session = make_session()
         session.feed(SUITE)
         text = session.screen.to_text().splitlines()
-        self.assertTrue(text[7].startswith("900*"))
-        self.assertIn("CLOCK", text[7])
-        self.assertNotIn("CLOCK:", text[7])
+        line = find_line(text, "900")
+        self.assertTrue(line.startswith("900*"))
+        self.assertIn("CLOCK", line)
+        self.assertNotIn("CLOCK:", line)
 
-        self.assertTrue(text[9].startswith("902*"))
-        self.assertIn("SCROLL: SHAKESPEARE", text[9])
-        self.assertTrue(text[10].startswith("903*"))
-        self.assertIn("BOUNCING BALL", text[10])
-        self.assertTrue(text[11].startswith("910*"))
-        self.assertIn("CAROUSEL: KILO", text[11])
-        self.assertTrue(text[12].startswith("911*"))
-        self.assertIn("CAROUSEL: NEWS", text[12])
-        self.assertTrue(text[13].startswith("912*"))
-        self.assertIn("CAROUSEL: WEATHER", text[13])
+        line = find_line(text, "902")
+        self.assertTrue(line.startswith("902*"))
+        self.assertIn("SCROLL: SHAKESPEARE", line)
+        line = find_line(text, "903")
+        self.assertTrue(line.startswith("903*"))
+        self.assertIn("BOUNCING BALL", line)
+        line = find_line(text, "910")
+        self.assertTrue(line.startswith("910*"))
+        self.assertIn("CAROUSEL: KILO", line)
+        line = find_line(text, "911")
+        self.assertTrue(line.startswith("911*"))
+        self.assertIn("CAROUSEL: NEWS", line)
+        line = find_line(text, "912")
+        self.assertTrue(line.startswith("912*"))
+        self.assertIn("CAROUSEL: WEATHER", line)
 
     def test_has_page_input_and_footer(self):
         session = make_session()
@@ -166,12 +184,13 @@ class PageDirectoryTests(unittest.TestCase):
         text = session.screen.to_text()
         self.assertIn("REGISTERED PAGES 2/2", text)
         lines = text.splitlines()
-        self.assertTrue(lines[5].startswith("190"))
-        self.assertTrue(lines[6].startswith("199"))
-        self.assertTrue(lines[7].startswith("250"))
-        self.assertTrue(lines[8].startswith("900"))
-        self.assertTrue(lines[9].startswith("901"))
-        self.assertTrue(lines[14].startswith("912"))
+        self.assertEqual(
+            page_numbers(lines),
+            [
+                "160", "190", "199", "250", "900", "901",
+                "902", "903", "910", "911", "912",
+            ],
+        )
 
 
 if __name__ == "__main__":

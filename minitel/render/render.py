@@ -72,11 +72,15 @@ def encode_run(run):
 SCROLL_MAX = 8
 
 
-def paint_runs(out, row_index, row):
+def paint_runs(out, row_index, row, *, include_default=False):
     col = 0
     while col < codec.COLS:
         cell = row[col]
-        if cell.ch == " " and attrs(cell) == DEFAULT_ATTRS:
+        if (
+            not include_default
+            and cell.ch == " "
+            and attrs(cell) == DEFAULT_ATTRS
+        ):
             col += 1
             continue
 
@@ -86,14 +90,15 @@ def paint_runs(out, row_index, row):
             col += 1
 
         end = col
-        while (
-            end > start
-            and row[end - 1].ch == " "
-            and attrs(row[end - 1]) == DEFAULT_ATTRS
-        ):
-            end -= 1
-        if end == start:
-            continue
+        if not include_default:
+            while (
+                end > start
+                and row[end - 1].ch == " "
+                and attrs(row[end - 1]) == DEFAULT_ATTRS
+            ):
+                end -= 1
+            if end == start:
+                continue
 
         run = row[start:end]
         out += codec.pos(row_index, start)
@@ -104,15 +109,22 @@ def paint_runs(out, row_index, row):
         out += encode_run(run)
         if run[0].size != codec.NORMAL:
             out += codec.size(codec.NORMAL)
+        if run[0].underline:
+            out += codec.underline(False)
 
 
-def diff_row_bytes(row_index, row):
+def _row_has_underline(row):
+    return any(cell.underline for cell in row)
+
+
+def diff_row_bytes(row_index, row, *, full=False):
     out = bytearray()
     out += codec.pos(row_index, 0)
     state = default_state()
     out += attr_bytes(state, DEFAULT_CELL)
-    out += bytes([codec.CAN])
-    paint_runs(out, row_index, row)
+    if not full:
+        out += bytes([codec.CAN])
+    paint_runs(out, row_index, row, include_default=full)
     return bytes(out)
 
 
@@ -186,18 +198,40 @@ def render_diff(old, new, scroll=False):
             out += reset()
             out += bytes([codec.LF]) * count
             for row_index in range(codec.ROWS - count, codec.ROWS):
-                out += diff_row_bytes(row_index, new.rows[row_index])
+                full = (
+                    _row_has_underline(old.rows[row_index])
+                    or _row_has_underline(new.rows[row_index])
+                )
+                out += diff_row_bytes(
+                    row_index, new.rows[row_index], full=full
+                )
         else:
             out += codec.pos(1, 0)
             out += reset()
             out += bytes([codec.VT]) * count
             for row_index in range(1, 1 + count):
-                out += diff_row_bytes(row_index, new.rows[row_index])
+                full = (
+                    _row_has_underline(old.rows[row_index])
+                    or _row_has_underline(new.rows[row_index])
+                )
+                out += diff_row_bytes(
+                    row_index, new.rows[row_index], full=full
+                )
         if old.rows[0] != new.rows[0]:
-            out += diff_row_bytes(0, new.rows[0])
+            full = (
+                _row_has_underline(old.rows[0])
+                or _row_has_underline(new.rows[0])
+            )
+            out += diff_row_bytes(0, new.rows[0], full=full)
     else:
         for row_index in changed:
-            out += diff_row_bytes(row_index, new.rows[row_index])
+            full = (
+                _row_has_underline(old.rows[row_index])
+                or _row_has_underline(new.rows[row_index])
+            )
+            out += diff_row_bytes(
+                row_index, new.rows[row_index], full=full
+            )
 
     out += cursor_bytes(new)
     return bytes(out)

@@ -179,6 +179,55 @@ class DiffTests(unittest.TestCase):
         self.assertTrue(decoded.text().splitlines()[10].startswith("COMMENT BODY"))
         self.assertFalse(any(cell.inverse for cell in decoded.rows[10]))
 
+    def test_diff_moves_underline_without_stale_cells(self):
+        old = Screen()
+        old.text(5, 0, "ONE LINK TWO")
+        old.text(5, 4, "LINK", underline=True)
+
+        new = Screen()
+        new.text(5, 0, "ONE LINK TWO")
+        new.text(5, 9, "TWO", underline=True)
+
+        decoded = apply_diff(old, render_diff(old, new))
+        self.assertFalse(
+            any(decoded.rows[5][col].underline for col in range(4, 8))
+        )
+        self.assertTrue(
+            all(decoded.rows[5][col].underline for col in range(9, 12))
+        )
+        self.assertFalse(
+            any(
+                cell.underline for cell in decoded.rows[5]
+                if cell.ch == " "
+            )
+        )
+
+    def test_full_paint_closes_underline_before_following_text(self):
+        screen = Screen()
+        screen.text(5, 0, "ONE LINK TWO")
+        screen.text(5, 4, "LINK", underline=True)
+
+        data = render(screen)
+        on = data.find(codec.underline(True))
+        off = data.find(codec.underline(False), on + 1)
+        self.assertGreaterEqual(on, 0)
+        self.assertGreater(off, on)
+        self.assertGreater(data.find(b"TWO"), off)
+
+    def test_diff_closes_underline_before_following_text(self):
+        old = Screen()
+        old.text(5, 0, "ONE LINK TWO")
+        new = Screen()
+        new.text(5, 0, "ONE LINK TWO")
+        new.text(5, 4, "LINK", underline=True)
+
+        data = render_diff(old, new)
+        on = data.find(codec.underline(True))
+        off = data.find(codec.underline(False), on + 1)
+        self.assertGreaterEqual(on, 0)
+        self.assertGreater(off, on)
+        self.assertGreater(data.find(b"TWO"), off)
+
     def test_diff_is_smaller_than_full_page(self):
         old = Screen()
         old.fill(22, 0, 40, " ", inverse=True)

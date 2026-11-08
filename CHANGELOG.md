@@ -28,6 +28,14 @@
   SHAKESPEARE` scrolling-text screensaver, including scroll-aware rendering,
   screensaver wake filtering, virtual terminal support, and the 39-column
   scrolling layout.
+- Added a fixture-backed `160 WIKIPEDIA` linked reader: hidden live input
+  fields, document search/index, colour-only link anchors with inverse
+  selection (headings use inverse) and prefix rollback, and viewport match
+  stops cycled by `SUITE`/`RETOUR`. Inline
+  underline is not used on the M1 (it is row-scoped); whole-line underline runs
+  are closed explicitly and their rows repaint fully. The real Wikipedia source
+  replaces the fixture backend next; the home
+  alias and two-column menu remain separate work.
 - Added page extension codes (`page#token`) for direct links to sub-views:
   `153#PL` league tables, `120#PAR` weather city detail, and `150#PL` live
   scores league selection. The page directory marks extension-aware pages with

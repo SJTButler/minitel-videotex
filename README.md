@@ -20,6 +20,7 @@ minitel/       reusable, content-free library
   render/render.py     screen -> Videotex bytes
   design/pager.py      fixed-size paging arithmetic
   design/viewport.py   line-buffer viewport arithmetic
+  design/stops.py      selected match stops over a viewport
   design/carousel.py   timed advance policy for a page sequence
   design/field.py      declarative input field
   pagemodel/model.py   Page, PageContext, Registry, @page
@@ -40,6 +41,7 @@ run_server.py  example CLI wiring: pages + services + MinitelApp
 services/      background services, auto-discovered
   common/
     config.py    .env loader and shared env helpers
+    reader.py    reader document model, sources, and cached service
   news/
     service.py   Hacker News source, cache, and service
   weather/
@@ -49,10 +51,13 @@ services/      background services, auto-discovered
     models.py    provider-neutral Match, Team, Goal, and FeedSnapshot
     source.py    football-data.org parsing and HTTP source
     feed.py      one shared poller, alerts, quota, and standings cache
+  wikipedia.py   fixture reader source behind the wikipedia service key
 pages/         example site, auto-discovered
   common/      shared presentation: layout, widgets, status, messages, clock
+    reader.py  shared reader lines, stops, article/index screens
   home.py      page 100
   about.py     page 130
+  wikipedia.py page 160, fixture-backed linked reader
   not_found.py fallback
   page_directory.py page 199, hidden developer directory
   news/
@@ -273,6 +278,34 @@ The weather page is the second cached service:
   remembered per page, so returning to the list resumes the same page.
 - `112` declares `back_page="111"`, so typing `112` directly returns to the list
   first, then follows the existing history.
+
+The linked reader is the third source example:
+
+- `services/common/reader.py` owns the content-free `Document`, `Block`,
+  `Span`, `Link`, `SearchResult`, `ReaderSource`, `ReaderService`, and
+  `StaticReaderService` types, plus `find_links` and `match_prefix`.
+- `services/wikipedia.py` is a temporary fixture source behind the `wikipedia`
+  service key: three small pages with headings, bullets, quotes, links, and
+  enough body text to exercise the viewport. Phase 3 replaces the source
+  backend with the real Wikipedia API; the page and renderer stay the same.
+- `pages/common/reader.py` owns the shared `render_lines`, matching, stops,
+  article-screen, and index-screen helpers. Page `160 WIKIPEDIA` wires them to
+  the fixture service; `160#TOKEN` is an article, `160` is the search/index.
+- The article's find field is hidden and live: typing highlights matches and
+  rolls an invalid suffix back to the last matching prefix. `ENVOI` follows the
+  only visible match or an explicit `SUITE`/`RETOUR` selection; several visible
+  matches require a selection. `GUIDE` returns to the index.
+- Reader colour is reserved for link anchors: `SECONDARY` at rest, `WARNING`
+  for matched non-selected links, inverse for the selected/sole visible link.
+  Headings, titles, status, and fields use inverse; quote, code, credit, query,
+  tags, and snippets stay normal. Inline underline is not used on the M1; it
+  is row-scoped, so it remains a whole-line cue outside the reader.
+- The page uses `ctx.set_stops` and the shared `Stop`/`Stops` values. The
+  session cycles all matching targets, starts at the topmost visible match,
+  wraps, and reveals off-screen selections. The page still has one viewport and
+  one field; stops are viewport metadata, not a second cursor.
+- The home alias `6` and the two-column/block menu are separate pending work;
+  use direct page `160` until then.
 
 `on_tick` may return a complete `Screen`; the session diffs it against the
 shadow screen and restores the input cursor. Raw bytes remain the cheaper choice
