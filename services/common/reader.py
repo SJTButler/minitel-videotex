@@ -102,6 +102,8 @@ class ReaderService:
     def search(self, query="", limit=20):
         query = " ".join(str(query or "").split())
         limit = max(1, int(limit))
+        if not query:
+            return Snapshot(value=(), loaded_at=time.monotonic())
         return self.cache.get(
             ("search", query.casefold(), limit),
             lambda: tuple(self.source.search(query, limit)),

@@ -21,6 +21,7 @@ minitel/       reusable, content-free library
   design/pager.py      fixed-size paging arithmetic
   design/viewport.py   line-buffer viewport arithmetic
   design/stops.py      selected match stops over a viewport
+  design/choice.py     selectable paged list; outer page follows selection
   design/carousel.py   timed advance policy for a page sequence
   design/field.py      declarative input field
   pagemodel/model.py   Page, PageContext, Registry, @page
@@ -51,13 +52,16 @@ services/      background services, auto-discovered
     models.py    provider-neutral Match, Team, Goal, and FeedSnapshot
     source.py    football-data.org parsing and HTTP source
     feed.py      one shared poller, alerts, quota, and standings cache
-  wikipedia.py   fixture reader source behind the wikipedia service key
+  wikipedia/
+    __init__.py  service builder and Wikipedia config
+    html.py      action HTML -> reader blocks
+    source.py    action API, base36 tokens, link resolution
 pages/         example site, auto-discovered
   common/      shared presentation: layout, widgets, status, messages, clock
     reader.py  shared reader lines, stops, article/index screens
   home.py      page 100
   about.py     page 130
-  wikipedia.py page 160, fixture-backed linked reader
+  wikipedia.py page 160, linked reader over the wikipedia service
   not_found.py fallback
   page_directory.py page 199, hidden developer directory
   news/
@@ -284,13 +288,17 @@ The linked reader is the third source example:
 - `services/common/reader.py` owns the content-free `Document`, `Block`,
   `Span`, `Link`, `SearchResult`, `ReaderSource`, `ReaderService`, and
   `StaticReaderService` types, plus `find_links` and `match_prefix`.
-- `services/wikipedia.py` is a temporary fixture source behind the `wikipedia`
-  service key: three small pages with headings, bullets, quotes, links, and
-  enough body text to exercise the viewport. Phase 3 replaces the source
-  backend with the real Wikipedia API; the page and renderer stay the same.
+- `services/wikipedia/` is the live source behind the `wikipedia` service
+  key. `source.py` calls the MediaWiki action API for search and parse,
+  resolves internal link titles in batches, encodes pageids as base36 tokens,
+  and caches `Document` snapshots. `html.py` is a stdlib HTML-to-reader-block
+  parser that strips tables, infoboxes, references, and other chrome.
+- `services/wikipedia/__init__.py` reads `WIKIPEDIA_LANG` (default `en`),
+  `WIKIPEDIA_USER_AGENT`, and `WIKIPEDIA_TIMEOUT`. The page tests use
+  `tests/fixtures/wikipedia.py`; that fixture is not a production service.
 - `pages/common/reader.py` owns the shared `render_lines`, matching, stops,
   article-screen, and index-screen helpers. Page `160 WIKIPEDIA` wires them to
-  the fixture service; `160#TOKEN` is an article, `160` is the search/index.
+  the live service; `160#TOKEN` is an article, `160` is the search/index.
 - The article's find field is hidden and live: typing highlights matches and
   rolls an invalid suffix back to the last matching prefix. `ENVOI` follows the
   only visible match or an explicit `SUITE`/`RETOUR` selection; several visible
@@ -300,6 +308,13 @@ The linked reader is the third source example:
   Headings, titles, status, and fields use inverse; quote, code, credit, query,
   tags, and snippets stay normal. Inline underline is not used on the M1; it
   is row-scoped, so it remains a whole-line cue outside the reader.
+- The search index uses a session-owned `Choice` (a pager of pagers). Results
+  show with the first selected; `SUITE`/`RETOUR` move through the articles and
+  advance the outer page at each boundary; `ENVOI` opens the selected result.
+  A changed query plus `ENVOI` searches; an unchanged query plus `ENVOI` opens
+  the selection; an empty field with a selection also opens it. `RETOUR` at the
+  first result follows history. Returning via `GUIDE` restores the last query
+  and selection, and an empty query is a prompt rather than a cache load.
 - The page uses `ctx.set_stops` and the shared `Stop`/`Stops` values. The
   session cycles all matching targets, starts at the topmost visible match,
   wraps, and reveals off-screen selections. The page still has one viewport and

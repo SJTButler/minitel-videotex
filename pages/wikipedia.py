@@ -13,7 +13,6 @@ from .common.reader import (
     LineSpan,
     article_screen,
     build_stops,
-    find_results,
     index_screen,
     render_lines,
     starts_for,
@@ -30,6 +29,8 @@ READER_SEARCH_LOADED = "reader_search_loaded"
 READER_FIND = "reader_find"
 READER_VISIBLE = "reader_visible"
 READER_LOADED = "reader_loaded"
+READER_RETURN = "reader_return"
+READER_RETURN_SELECTED = "reader_return_selected"
 
 
 def _current(ctx):
@@ -63,28 +64,32 @@ def _index(ctx, service):
     snapshot = service.search(query)
     results = tuple(snapshot.value or ()) if snapshot.has_value else ()
     ctx.state[READER_RESULTS] = results
-    buffer = ctx.input_value
-    filtered = find_results(results, buffer)
+    returning = ctx.state.pop(READER_RETURN, False)
+    saved = ctx.state.pop(READER_RETURN_SELECTED, None)
+    if returning:
+        ctx.values[LINE_FIELD] = query
     reset = ctx.state.pop(READER_RESET, False)
-    pager = ctx.set_pager(
-        len(filtered), PAGE_SIZE, offset=0 if reset else None
+    choice = ctx.set_choice(
+        len(results), PAGE_SIZE,
+        selected=saved if returning else None,
+        reset=reset,
     )
     if snapshot.error is not None and not snapshot.has_value:
         status_text = "SEARCH UNAVAILABLE"
     elif not snapshot.has_value:
         status_text = "SEARCHING..."
-    elif not filtered:
-        status_text = "NO RESULTS"
+    elif not results:
+        status_text = "TYPE TO SEARCH" if not query else "NO RESULTS"
     else:
-        word = "RESULT" if len(filtered) == 1 else "RESULTS"
-        status_text = f"{len(filtered)} {word}"
+        word = "RESULT" if len(results) == 1 else "RESULTS"
+        status_text = f"{len(results)} {word}"
     screen = index_screen(
-        ctx, filtered, pager,
+        ctx, results, choice,
         title="WIKIPEDIA",
         query=query,
         status_text=status_text,
-        hint="TYPE WORDS. ENVOI SEARCHES OR OPENS A UNIQUE RESULT.",
-        source="FIXTURE PAGES. REAL WIKIPEDIA NEXT.",
+        hint="TYPE+ENVOI=SEARCH  SUITE/RETOUR=SELECT",
+        source="WIKIPEDIA. CC BY-SA.",
         page=PAGE,
     )
     if snapshot.has_value and ctx.state.get(READER_SEARCH_LOADED) != query:
@@ -163,19 +168,34 @@ def _render(ctx):
     return _index(ctx, service)
 
 
+def _selected_result(ctx):
+    results = ctx.state.get(READER_RESULTS, ())
+    choice = ctx.choice
+    if choice is None or not choice.total or not results:
+        return None
+    index = choice.selected if choice.selected is not None else 0
+    if not 0 <= index < len(results):
+        return None
+    ctx.state[READER_RETURN] = True
+    ctx.state[READER_RETURN_SELECTED] = index
+    return f"{PAGE}#{results[index].token}"
+
+
 def _submit_index(ctx, line):
     value = line.strip()
+    query = str(ctx.state.get(READER_QUERY, ""))
     if not value:
+        route = _selected_result(ctx)
+        if route is not None:
+            return route
         ctx.state[READER_QUERY] = ""
         ctx.state[READER_RESET] = True
         return PAGE
-    results = ctx.state.get(READER_RESULTS, ())
-    filtered = find_results(results, value)
-    if len(filtered) == 1:
-        return f"{PAGE}#{filtered[0].token}"
-    ctx.state[READER_QUERY] = value
-    ctx.state[READER_RESET] = True
-    return PAGE
+    if value != query:
+        ctx.state[READER_QUERY] = value
+        ctx.state[READER_RESET] = True
+        return PAGE
+    return _selected_result(ctx) or PAGE
 
 
 def _submit_article(ctx, line):
@@ -214,6 +234,7 @@ def _submit(ctx, line):
 
 def _on_key(ctx, key):
     if key == "GUIDE" and ctx.extension:
+        ctx.state[READER_RETURN] = True
         return PAGE
     return None
 

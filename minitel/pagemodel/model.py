@@ -5,6 +5,7 @@ import pkgutil
 from dataclasses import dataclass
 
 from ..design.carousel import Carousel
+from ..design.choice import Choice
 from ..design.field import InputField
 from ..design.pager import Pager
 from ..design.stops import Stops
@@ -32,6 +33,8 @@ class PageContext:
         self._viewport_set = False
         self.stops = session.stops
         self._stops_set = False
+        self.choice = session.choice
+        self._choice_set = False
 
     @property
     def line(self):
@@ -184,6 +187,31 @@ class PageContext:
         ).clamp()
         self._stops_set = True
         return self.stops
+
+    def set_choice(self, total, page_size, *, selected=None, reset=False,
+                   wrap=False):
+        if self._viewport_set or self.pager is not None:
+            raise ValueError(
+                f"page {self.page.number!r} cannot mix a choice with "
+                "a viewport or pager"
+            )
+        total = max(0, int(total))
+        page_size = max(1, int(page_size))
+        current = self.choice
+        if selected is not None:
+            index = selected
+        elif (
+            reset or current is None or current.total != total
+            or current.page_size != page_size
+        ):
+            index = 0 if total else None
+        else:
+            index = current.selected
+        self.choice = Choice(
+            Pager(total, page_size), index, wrap
+        ).clamp()
+        self._choice_set = True
+        return self.choice
 
     @property
     def screensaver(self):

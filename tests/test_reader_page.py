@@ -1,12 +1,13 @@
 import unittest
 
 import pages
-import services
+from minitel.data.services import ServiceRegistry
 from minitel.pagemodel import LINE_FIELD
 from minitel.session import Session
 from minitel.terminal.profiles import M1
 from pages.common.layout import BODY, SECONDARY, WARNING
-from services.wikipedia import DOCUMENTS
+from services.common.reader import SearchResult, StaticReaderService
+from tests.fixtures.wikipedia import DOCUMENTS, RESULTS
 
 ENVOI = bytes([0x13, 0x41])
 RETOUR = bytes([0x13, 0x42])
@@ -14,9 +15,11 @@ GUIDE = bytes([0x13, 0x44])
 SUITE = bytes([0x13, 0x48])
 
 
-def make_session():
+def make_session(results=RESULTS):
     registry = pages.build_registry()
-    service_registry = services.build_registry()
+    service_registry = ServiceRegistry({
+        "wikipedia": StaticReaderService(DOCUMENTS, results),
+    })
     page = registry.get("160")
     session = Session(
         registry,
@@ -50,18 +53,21 @@ class ReaderPageTests(unittest.TestCase):
         self.assertIn("ALPHA PAGE", text)
         self.assertIn("BETA PAGE", text)
         self.assertIn("GAMMA PAGE", text)
-        self.assertIn("FIXTURE PAGES", text)
+        self.assertIn("WIKIPEDIA. CC BY-SA.", text)
         self.assertEqual(session.current.number, "160")
         field = session.active_field
         self.assertEqual(field.name, LINE_FIELD)
         self.assertTrue(field.live)
         self.assertTrue(field.visible)
 
-    def test_index_unique_result_opens_article(self):
+    def test_index_search_then_envoi_opens_selected(self):
         session = make_session()
         session.feed(b"BETA PAGE")
+        self.assertIn("3 RESULTS", row(session, 4))
+        session.feed(ENVOI)  # search
+        self.assertEqual(session.current.number, "160")
         self.assertIn("1 RESULT", row(session, 4))
-        session.feed(ENVOI)
+        session.feed(ENVOI)  # open the selected result
         self.assertEqual(session.current.number, "160#BETA")
         self.assertIn("BETA PAGE", session.screen.to_text())
         self.assertFalse(session.active_field.visible)
@@ -129,12 +135,12 @@ class ReaderPageTests(unittest.TestCase):
         session = make_session()
         session.feed(b"ZZZ")
         self.assertEqual(session.values[LINE_FIELD], "ZZZ")
-        self.assertIn("NO RESULTS", row(session, 4))
-        self.assertTrue(session.screen.rows[6][0].inverse)
+        self.assertIn("3 RESULTS", row(session, 4))
         session.feed(ENVOI)
         self.assertEqual(session.current.number, "160")
         self.assertEqual(session.values[LINE_FIELD], "ZZZ")
         self.assertIn("NO RESULTS", row(session, 4))
+        self.assertTrue(session.screen.rows[6][0].inverse)
 
     def test_links_use_colour_and_inverse(self):
         session = make_session()
@@ -186,6 +192,44 @@ class ReaderPageTests(unittest.TestCase):
         self.assertFalse(quote.inverse)
         self.assertEqual(find_cell(session, "ALPHA").fg, SECONDARY)
         self.assertEqual(find_cell(session, "BETA").fg, SECONDARY)
+
+    def test_index_suite_crosses_the_outer_page(self):
+        results = tuple(
+            SearchResult("ALPHA", f"RESULT {index:02d}")
+            for index in range(1, 11)
+        )
+        session = make_session(results)
+        session.feed(b"RESULT")
+        session.feed(ENVOI)
+        self.assertEqual(session.current.number, "160")
+        self.assertIn("PAGE 1/2", row(session, 20))
+        self.assertTrue(find_cell(session, "RESULT 01").inverse)
+        for _ in range(7):
+            session.feed(SUITE)
+        self.assertIn("PAGE 2/2", row(session, 20))
+        self.assertTrue(find_cell(session, "RESULT 08").inverse)
+        session.feed(ENVOI)
+        self.assertEqual(session.current.number, "160#ALPHA")
+
+    def test_index_empty_envoi_opens_the_selected_result(self):
+        session = make_session()
+        self.assertTrue(find_cell(session, "ALPHA PAGE").inverse)
+        session.feed(ENVOI)
+        self.assertEqual(session.current.number, "160#ALPHA")
+
+    def test_index_guide_restores_query_and_selection(self):
+        session = make_session()
+        session.feed(b"BETA PAGE")
+        session.feed(ENVOI)
+        self.assertIn("1 RESULT", row(session, 4))
+        session.feed(ENVOI)
+        self.assertEqual(session.current.number, "160#BETA")
+        session.feed(GUIDE)
+        self.assertEqual(session.current.number, "160")
+        self.assertEqual(session.values[LINE_FIELD], "BETA PAGE")
+        self.assertIn("1 RESULT", row(session, 4))
+        session.feed(ENVOI)
+        self.assertEqual(session.current.number, "160#BETA")
 
     def test_anchor_text_matches_target(self):
         session = make_session()

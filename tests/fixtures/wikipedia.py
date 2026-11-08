@@ -1,18 +1,11 @@
-"""Temporary fixture source behind the wikipedia service key.
+"""Reader page fixtures used by the public page tests."""
 
-Phase 3 replaces this source with the real Wikipedia API while keeping the
-page/service interface unchanged.
-"""
-
-from minitel.data.services import service
-
-from .common.reader import (
+from services.common.reader import (
     Block,
     Document,
     Link,
     SearchResult,
     Span,
-    StaticReaderService,
 )
 
 FIXTURE_CREDIT = "FIXTURE PAGES. REAL WIKIPEDIA NEXT."
@@ -202,6 +195,3 @@ RESULTS = (
 )
 
 
-@service("wikipedia", description="Wikipedia reader fixture")
-def build_wikipedia_service():
-    return StaticReaderService(DOCUMENTS, RESULTS)

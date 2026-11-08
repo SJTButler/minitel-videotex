@@ -10,6 +10,7 @@ from pages.common.reader import (
     visible_matches,
 )
 from services.common.reader import (
+    ReaderService,
     Block,
     Document,
     Link,
@@ -100,6 +101,20 @@ class ReaderModelTests(unittest.TestCase):
         self.assertEqual(starts_for(stops, (0,), offset=0, height=2), (0, 0))
         self.assertEqual(starts_for(stops, (), offset=0, height=2), (0, 1))
         self.assertEqual(starts_for(stops, (), offset=3, height=2), (0, 1))
+
+    def test_empty_reader_search_does_not_load(self):
+        class Source:
+            label = "test"
+
+            def search(self, query, limit=20):
+                raise AssertionError("empty search must not hit the source")
+
+            def document(self, token):
+                return None
+
+        snapshot = ReaderService(Source()).search("")
+        self.assertTrue(snapshot.has_value)
+        self.assertEqual(snapshot.value, ())
 
     def test_static_service_and_results(self):
         result = SearchResult("ALPHA", "ALPHA PAGE", "SNIPPET", "TAG")

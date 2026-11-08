@@ -48,6 +48,7 @@ class Session(NavigationMixin, EditingMixin, IdleMixin, PowerMixin):
         self.viewport = None
         self.viewports = {}
         self.stops = None
+        self.choice = None
         self._resources = []
         self._closed = False
         self._pager_carousel = None
@@ -95,6 +96,7 @@ class Session(NavigationMixin, EditingMixin, IdleMixin, PowerMixin):
         self.pager = None
         self.viewport = None
         self.stops = None
+        self.choice = None
         self._pager_carousel = None
         self._pager_carousel_next = None
         self._pager_carousel_key = None
@@ -214,6 +216,11 @@ class Session(NavigationMixin, EditingMixin, IdleMixin, PowerMixin):
                 f"page {self.current.number!r} cannot declare both a viewport "
                 "and a pager"
             )
+        if ctx._choice_set and (ctx._viewport_set or ctx.pager is not None):
+            raise ValueError(
+                f"page {self.current.number!r} cannot mix a choice with "
+                "a viewport or pager"
+            )
         if self.current.form and ctx.fields and ctx.pager is not None:
             raise ValueError(
                 f"page {self.current.number!r} cannot declare both form fields "
@@ -227,6 +234,7 @@ class Session(NavigationMixin, EditingMixin, IdleMixin, PowerMixin):
         self._adopt_pager(ctx.pager, ctx.pager_carousel)
         self._adopt_viewport(ctx.viewport if ctx._viewport_set else None)
         self.stops = ctx.stops if ctx._stops_set else None
+        self.choice = ctx.choice if ctx._choice_set else None
         self.fields = ctx.fields
         names = [field.name for field in self.fields]
         self.values = {name: self.values.get(name, "") for name in names}
@@ -271,6 +279,8 @@ class Session(NavigationMixin, EditingMixin, IdleMixin, PowerMixin):
             self._adopt_viewport(ctx.viewport)
         if not self.screensaver_active and ctx._stops_set:
             self.stops = ctx.stops
+        if not self.screensaver_active and ctx._choice_set:
+            self.choice = ctx.choice
         if frame is None:
             return Action()
         if isinstance(frame, (bytes, bytearray)):
@@ -366,6 +376,23 @@ class Session(NavigationMixin, EditingMixin, IdleMixin, PowerMixin):
                     self.active_name = self.fields[self.active].name
                     return self.refresh()
                 return self._back_or_parent()
+
+        if (
+            self.choice is not None
+            and self.choice.total
+            and name in ("SUITE", "RETOUR")
+        ):
+            if name == "SUITE":
+                updated = self.choice.next()
+                if updated != self.choice:
+                    self.choice = updated
+                    self._clear_active_field()
+                    return self.refresh()
+                return Action()
+            if self.choice.selected not in (None, 0):
+                self.choice = self.choice.prev()
+                self._clear_active_field()
+                return self.refresh()
 
         if self.viewport is not None:
             if (

@@ -158,6 +158,8 @@ Every `render`, `on_submit`, `on_form`, and `on_key` receives a
 | `ctx.set_input(row, col, width, *, cursor="visible", live=False, visible=True)` | one-field shorthand |
 | `ctx.set_pager(total, page_size, *, offset=None, carousel=None)` | register a session-owned pager, optionally with timed advance |
 | `ctx.pager` | the `Pager` registered for this render |
+| `ctx.set_choice(total, page_size, *, selected=None, reset=False, wrap=False)` | register a selectable paged list |
+| `ctx.choice` | the active `Choice` for this render, or `None` |
 | `ctx.set_viewport(total, height, *, offset=None, follow=None, step=None)` | register a session-owned viewport over a line buffer |
 | `ctx.viewport` | the active `Viewport` for this render, or `None` before the page sets one |
 | `ctx.set_stops(stops, *, start_next=0, start_prev=0, selected=None, reset=False, wrap=True)` | register viewport match stops |
@@ -284,8 +286,8 @@ The session handles the common keys:
 | `CORRECTION` | remove one character from the active field |
 | `ANNULATION` | clear the active field, rerender |
 | `SOMMAIRE` | go to `INITIAL`, clear history |
-| `SUITE` | form: next field; pager: next page; viewport with 2+ stops: next match; otherwise page `on_key` |
-| `RETOUR` | form: previous field; pager: previous page; viewport with 2+ stops: previous match; otherwise/at the boundary: `back_page` if history isn't already there, then history back |
+| `SUITE` | form: next field; choice: next item; pager: next page; viewport with 2+ stops: next match; otherwise page `on_key` |
+| `RETOUR` | form: previous field; choice: previous item (at the first item: history); pager: previous page; viewport with 2+ stops: previous match; otherwise/at the boundary: `back_page` if history isn't already there, then history back |
 | `GUIDE` | page's `on_key`, then the app's guide page |
 
 `on_submit` can return:
@@ -422,6 +424,14 @@ def render_list(ctx):
   the last page to the first); `RETOUR` moves to the previous page and calls
   `back()` only from page 1. Moving pages clears the active input field unless
   the field is live.
+- For a **selectable** list, use `ctx.set_choice(total, page_size)` instead of
+  a pager. The `Choice` owns both the selected item and the outer page.
+  `SUITE`/`RETOUR` move the selection through all items; when the selection
+  crosses a page boundary the outer page follows. The first item is selected
+  when the list appears; `RETOUR` at the first item follows history and `SUITE`
+  at the last clamps. `ENVOI` reaches `on_submit`, where the page reads
+  `ctx.choice.selected` and opens that item. Do not mix a choice with a pager or
+  viewport.
 - Do not handle `SUITE`/`RETOUR` in `on_key` on a paginated page; the session
   handles them before `on_key`, just as it handles form focus.
 - The offset is remembered per page for the session. Returning from a detail
@@ -529,9 +539,21 @@ selected = stops.selected_stop
 `pages/common/reader.py` owns the shared presentation: `render_lines`,
 `visible_matches`, `build_stops`, `starts_for`, `find_results`,
 `article_screen`, and `index_screen`. Page `160 WIKIPEDIA` is the first caller;
-it currently serves fixture documents from `services/wikipedia.py` through the
-`wikipedia` service key. The real Wikipedia source replaces the service backend
-without changing the page or renderer.
+it serves the live `services/wikipedia/` source through the `wikipedia` service
+key. `services/wikipedia/source.py` calls the MediaWiki action API, resolves
+internal link titles in batches, and encodes pageids as base36 tokens;
+`services/wikipedia/html.py` parses the action HTML into reader blocks. The page
+tests inject `tests/fixtures/wikipedia.py` with a `StaticReaderService`; that
+fixture is not a production service.
+
+The reader index is a live search command plus a `Choice`: typing a new query
+and pressing `ENVOI` searches; pressing `ENVOI` with the unchanged query opens
+the selected result. An empty buffer with a current result selection also opens
+the selected result; an empty query with no results is a prompt. `SUITE`/`RETOUR`
+move the result selection and the outer page follows at the boundary. Returning
+via `GUIDE` or history restores the last query and result selection. The selected
+result title is inverse; the other result titles use the link colour; tags and
+snippets stay normal.
 
 Headings are flush left in v1; `Block.level` is carried for a later hierarchy
 rule. If indentation is added, use h2 flush, h3 +2 columns, and h4 +4 columns.
