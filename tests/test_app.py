@@ -181,6 +181,56 @@ class AppTests(unittest.IsolatedAsyncioTestCase):
 
         self.assertEqual(closed, [True])
 
+    async def test_handle_logs_and_closes_on_session_error(self):
+        messages = []
+        closed = []
+
+        class FakeSession:
+            def echo_override(self):
+                return b""
+
+            def start(self):
+                raise RuntimeError("boom")
+
+            def close(self):
+                closed.append(True)
+
+        class Reader:
+            async def read(self, size):
+                return b""
+
+        class Writer:
+            def get_extra_info(self, name):
+                return None
+
+            def write(self, data):
+                pass
+
+            async def drain(self):
+                pass
+
+            def close(self):
+                pass
+
+            async def wait_closed(self):
+                pass
+
+        app = MinitelApp(
+            self.registry,
+            cps=0,
+            log=lambda peer, message: messages.append(message),
+        )
+        app.new_session = lambda: FakeSession()
+        await app.handle(Reader(), Writer())
+
+        self.assertEqual(closed, [True])
+        self.assertTrue(
+            any(
+                "session error" in message and "RuntimeError" in message
+                for message in messages
+            )
+        )
+
     async def test_handle_asserts_the_local_echo_mode_before_the_first_page(self):
         writes = []
 

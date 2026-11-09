@@ -46,6 +46,10 @@
   the `#` page-number marker and scrolling pages with the `S` page flag.
 - Sports live scores fall back to the next matchday with fixtures when today
   has no matches; the page shows `NEXT FIXTURES` with the date.
+- Added an optional `diagnostics_pages` package (`980`-`984`) for reproducing
+  input latency, full-paint starvation, idle-connection loss, reset signals,
+  and page-handler faults on the Minitel. The app now logs a session traceback
+  when a page handler raises instead of closing silently.
 
 ## 0.3.0 - 2026-11-02
 

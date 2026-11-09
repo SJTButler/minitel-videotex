@@ -3,6 +3,7 @@
 import asyncio
 import socket
 import time
+import traceback
 
 from . import transport
 from .data.services import ServiceRegistry
@@ -152,6 +153,8 @@ class MinitelApp:
                 )
         except (ConnectionResetError, BrokenPipeError):
             pass
+        except Exception:
+            self.log(peer, "session error:\n" + traceback.format_exc().rstrip())
         finally:
             self.log(peer, "disconnect")
             try:
