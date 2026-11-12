@@ -226,6 +226,7 @@ class Session(
             raise TypeError(
                 f"page {self.current.number!r} returned {type(screen)!r}, expected Screen"
             )
+        self.status_text = ctx.status
         if ctx._viewport_set and ctx.pager is not None:
             raise ValueError(
                 f"page {self.current.number!r} cannot declare both a viewport "
@@ -290,6 +291,8 @@ class Session(
             return Action()
         ctx = PageContext(self, page, self.registry)
         frame = page.on_tick(ctx)
+        if ctx.status is not None:
+            self.status_text = ctx.status
         if not self.screensaver_active and ctx.pager is not None:
             self._adopt_pager(ctx.pager, ctx.pager_carousel)
         if not self.screensaver_active and ctx._viewport_set:

@@ -9,6 +9,7 @@ from .common.widgets import page_input
 @page("130", title="ABOUT", aliases=("3",))
 def about(ctx):
     s = Screen()
+    ctx.set_status("PAGE 130")
     status(s, "PAGE 130")
     s.text(1, 0, "ABOUT", inverse=True, size=codec.DOUBLE_WIDTH)
     s.text(3, 0, "3615 KILO IS A")

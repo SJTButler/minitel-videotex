@@ -82,6 +82,7 @@ def screensaver_submit(ctx, line):
       back_page="100")
 def screensaver(ctx):
     s = Screen()
+    ctx.set_status("PAGE 190")
     status(s, "PAGE 190")
     s.text(1, 0, "SCREENSAVER", inverse=True, size=codec.DOUBLE_WIDTH)
     s.text(3, 0, "SCREENSAVER SETTINGS")

@@ -156,6 +156,7 @@ Every `render`, `on_submit`, `on_form`, and `on_key` receives a
 | `ctx.values` | all field values for the current page |
 | `ctx.input_value` | the value of the `PAGE:` field |
 | `ctx.clear_input()` | clear the `PAGE:` field |
+| `ctx.set_status(text)` | declare the row-0 status label for the default header |
 | `ctx.fields` | the registered fields |
 | `ctx.add_field(name, row, col, width, *, cursor="visible", live=False, visible=True)` | register a named field |
 | `ctx.set_input(row, col, width, *, cursor="visible", live=False, visible=True)` | one-field shorthand |
@@ -253,8 +254,20 @@ Select the header at app construction:
 app = MinitelApp(registry, initial="100", header=MyHeader(), ...)
 ```
 
-`run_server.py` uses `pages.HEADER` when the page package defines it. A page can
-override the app header:
+`run_server.py` uses `pages.HEADER` when the page package defines it.
+
+Pages declare the status label for the default header:
+
+```python
+ctx.set_status("PAGE 140")
+```
+
+`StatusHeader` renders it with `pages.common.layout.status`. If a page declares
+no status, the default header preserves a page-painted body row; if the body
+row is blank it falls back to `PAGE <number>`. It passes the screensaver row
+through unchanged.
+
+A page can override the app header:
 
 ```python
 @page("990", header=False)

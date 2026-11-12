@@ -56,6 +56,7 @@ def submit_form(ctx, values):
 )
 def guestbook(ctx):
     s = Screen()
+    ctx.set_status("PAGE 140")
     status(s, "PAGE 140")
     s.text(1, 0, "GUESTBOOK", inverse=True, size=codec.DOUBLE_WIDTH)
 

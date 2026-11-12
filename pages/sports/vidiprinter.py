@@ -118,6 +118,7 @@ def vidiprinter_screen(ctx):
     if feed_snapshot.alerts and not ctx.state.get("vidiprinter_loaded"):
         ctx.state["vidiprinter_loaded"] = True
         screen.force_full = True
+    ctx.set_status(f"PAGE 155 {view.line_number}/{view.total}")
     status(screen, f"PAGE 155 {view.line_number}/{view.total}")
     for row, line in enumerate(view.window(lines), start=1):
         col = 0

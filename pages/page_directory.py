@@ -79,6 +79,7 @@ def page_directory_screen(ctx):
     visible = pager.window(entries)
 
     s = Screen()
+    ctx.set_status("PAGE 199")
     status(s, "PAGE 199")
     s.text(1, 0, "PAGES", inverse=True, size=codec.DOUBLE_WIDTH)
     s.text(2, 0, f"REGISTERED PAGES {pager.label}", fg=SECONDARY)

@@ -250,6 +250,7 @@ def _tick(ctx):
     extensions=True,
     scroll=True,
     tick_interval=1.0,
+    header=False,
     on_submit=_submit,
     on_key=_on_key,
     on_tick=_tick,

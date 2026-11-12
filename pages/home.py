@@ -47,6 +47,7 @@ def welcome(ctx):
     entries, extra = menu_entries(ctx.registry)
 
     s = Screen()
+    ctx.set_status("PAGE 100")
     status(s, "PAGE 100")
     s.text(1, 0, "3615 KILO", inverse=True, size=codec.DOUBLE_WIDTH)
     s.text(CLOCK_ROW, CLOCK_COL, "TIME: " + clock_text())

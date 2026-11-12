@@ -129,6 +129,7 @@ def list_screen(ctx):
 
     s = Screen()
     page_status = _status(snapshot)
+    ctx.set_status(f"111 {pager.label}" if pager.total else "111")
     status(s, f"111 {pager.label}" if pager.total else "111")
     s.text(1, 0, "HACKER NEWS", inverse=True, size=codec.DOUBLE_WIDTH)
     s.text(
@@ -231,6 +232,7 @@ def _comment_lines(ctx, story):
 
 def detail_screen(ctx):
     s = Screen()
+    ctx.set_status("PAGE 112")
     status(s, "PAGE 112")
     s.text(1, 0, "STORY", inverse=True, size=codec.DOUBLE_WIDTH)
 

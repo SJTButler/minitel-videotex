@@ -29,6 +29,7 @@ def status_screen(ctx):
     config = getattr(feed, "config", None)
 
     s = Screen()
+    ctx.set_status("PAGE 154")
     status(s, "PAGE 154")
     s.text(1, 0, "FEED STATUS", inverse=True, size=codec.DOUBLE_WIDTH)
 

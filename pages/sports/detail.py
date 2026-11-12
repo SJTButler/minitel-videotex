@@ -46,6 +46,9 @@ def detail_screen(ctx):
         matches = (match,) if match is not None else ()
 
     s = Screen()
+    ctx.set_status(
+        f"PAGE 151#{ctx.extension}" if ctx.extension else "PAGE 151"
+    )
     status(s, f"PAGE 151#{ctx.extension}" if ctx.extension else "PAGE 151")
     s.text(1, 0, "MATCH", inverse=True, size=codec.DOUBLE_WIDTH)
 

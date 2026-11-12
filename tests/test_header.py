@@ -1,5 +1,7 @@
 import unittest
 
+import pages
+
 from minitel import (
     FunctionPage,
     Header,
@@ -11,6 +13,7 @@ from minitel import (
     page,
 )
 from minitel.session import Screensaver
+from pages.common.header import StatusHeader
 
 
 class FakeClock:
@@ -126,6 +129,29 @@ full_ticking = FunctionPage(
 )
 
 
+@page("710")
+def declared_status(ctx):
+    ctx.set_status("CUSTOM")
+    return body_screen("STATUSBODY")
+
+
+@page("711")
+def blank_status(ctx):
+    screen = Screen()
+    screen.text(1, 0, "BLANK")
+    return screen
+
+
+def _status_tick(ctx):
+    ctx.set_status("TICKSTATUS")
+    return body_screen("TICKSTATUS")
+
+
+status_ticking = FunctionPage(
+    "712", _tick_render, tick_interval=1.0, on_tick=_status_tick
+)
+
+
 @page("720", screensaver="test")
 def saver(ctx):
     screen = Screen()
@@ -137,7 +163,8 @@ def build_registry():
     registry = Registry()
     for value in (
         normal, opt_out, page_header, extension_base, ticking,
-        slow_ticking, full_ticking, saver,
+        slow_ticking, full_ticking, declared_status, blank_status,
+        status_ticking, saver,
     ):
         registry.add(value)
     return registry
@@ -292,6 +319,50 @@ class HeaderTickTests(unittest.TestCase):
         self.assertEqual(
             action.screen.to_text().splitlines()[1].strip(), "FULL"
         )
+
+
+class StatusHeaderTests(unittest.TestCase):
+    def test_declared_status_is_rendered(self):
+        session, _, _ = make_session(
+            build_registry(), "710", header=StatusHeader()
+        )
+        self.assertIn("CUSTOM", row0(session.screen))
+
+    def test_existing_body_status_is_preserved(self):
+        session, _, _ = make_session(
+            build_registry(), "700", header=StatusHeader()
+        )
+        self.assertEqual(row0(session.screen), "BODYSTATUS")
+
+    def test_blank_body_gets_the_default_page_status(self):
+        session, _, _ = make_session(
+            build_registry(), "711", header=StatusHeader()
+        )
+        self.assertIn("PAGE 711", row0(session.screen))
+
+    def test_status_set_on_a_tick_is_captured(self):
+        session, clock, _ = make_session(
+            build_registry(), "712", header=StatusHeader()
+        )
+        clock.advance(1.0)
+        session.on_timeout()
+        self.assertIn("TICKSTATUS", row0(session.screen))
+
+    def test_the_pages_package_exposes_the_default_header(self):
+        self.assertIsInstance(pages.HEADER, StatusHeader)
+
+    def test_the_screensaver_keeps_its_own_status_row(self):
+        registry = build_registry()
+        session, _, _ = make_session(
+            registry,
+            "700",
+            header=StatusHeader(),
+            screensaver=Screensaver.from_spec(
+                registry, (saver,), after=0.0, hold=5.0
+            ),
+        )
+        session.activate_screensaver()
+        self.assertIn("SAVER", row0(session.screen))
 
 
 class HeaderValidationTests(unittest.TestCase):

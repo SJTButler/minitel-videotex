@@ -36,6 +36,7 @@ class PageContext:
         self._stops_set = False
         self.choice = session.choice
         self._choice_set = False
+        self.status = None
 
     @property
     def line(self):
@@ -107,6 +108,11 @@ class PageContext:
             mask=mask, value=value, cursor=cursor,
             live=live, visible=visible,
         )
+
+    def set_status(self, text):
+        if not isinstance(text, str):
+            raise TypeError("status must be a string")
+        self.status = text
 
     def set_pager(self, total, page_size, *, offset=None, carousel=None):
         if self._viewport_set:

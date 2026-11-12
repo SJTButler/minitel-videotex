@@ -226,6 +226,7 @@ def live_screen(ctx):
         )
     if pager.total:
         status_label += f" {pager.label}"
+    ctx.set_status(status_label)
     status(s, status_label)
     prefix = "NEXT FIXTURES" if feed_snapshot.upcoming else "LIVE SCORES"
     title = f"{prefix} - {page.code}" if page is not None else prefix

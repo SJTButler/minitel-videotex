@@ -86,6 +86,7 @@ def tables_screen(ctx):
     status_label = f"153#{ctx.extension}" if ctx.extension else "153"
     if pager.total:
         status_label += f" {pager.label}"
+    ctx.set_status(status_label)
     status(s, status_label)
     s.text(1, 0, "TABLES", inverse=True, size=codec.DOUBLE_WIDTH)
     header = _header(feed, code, standings)

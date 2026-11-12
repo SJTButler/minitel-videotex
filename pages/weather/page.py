@@ -60,6 +60,7 @@ def _direct_codes(service):
 
 def weather_summary(ctx):
     s = Screen()
+    ctx.set_status("PAGE 120")
     status(s, "PAGE 120")
     s.text(1, 0, "WEATHER", inverse=True, size=codec.DOUBLE_WIDTH)
     s.text(2, 0, "CURRENT CONDITIONS", fg=SECONDARY)
@@ -105,6 +106,7 @@ def weather_summary(ctx):
 
 def weather_detail(ctx):
     s = Screen()
+    ctx.set_status(f"PAGE 120#{ctx.extension}")
     status(s, f"PAGE 120#{ctx.extension}")
     s.text(1, 0, "WEATHER", inverse=True, size=codec.DOUBLE_WIDTH)
     s.text(2, 0, "CITY DETAIL", fg=SECONDARY)
