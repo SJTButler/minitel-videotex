@@ -25,14 +25,14 @@ from datetime import datetime
 
 from minitel import Screen, codec, page
 
-from pages.common.layout import footer, status
+from pages.common.layout import footer
 from pages.common.widgets import page_input
 
 
 @page("200", title="HELLO")
 def hello(ctx):
     s = Screen()
-    status(s, "PAGE 200")
+    ctx.set_status("PAGE 200")
     s.text(1, 0, "HELLO", inverse=True, size=codec.DOUBLE_WIDTH)
     s.text(3, 0, "THIS PAGE WAS ADDED IN ONE FILE.")
     s.text(5, 0, datetime.now().strftime("TIME: %H:%M:%S"))
@@ -345,8 +345,11 @@ and the input parser. Most pages should not need it beyond constants.
 under `pages/<feature>/_support/`; the top level of each feature contains only
 page modules. The shared theme is:
 
-- `status(s, "PAGE 200")` paints the full inverse top row and keeps the page
-  number clear of the terminal's `F/C` indicator.
+- `ctx.set_status("PAGE 200")` declares the top-row label; the app header
+  (`pages.HEADER` / `StatusHeader`) paints the full inverse top row and keeps
+  the page number clear of the terminal's `F/C` indicator. Pages should not
+  paint row 0 themselves. `status(s, text)` remains the shared row renderer for
+  a page that opts out with `header=False`.
 - `footer(s)` writes the default key hints at row 22.
 - `key_footer(s, hints, row=22)` joins custom hints with two spaces; pass a
   string or an iterable such as `("SUITE=NEXT", "RETOUR=BACK")`.
@@ -389,7 +392,7 @@ def echo_submit(ctx, line):
 @page("220", title="ECHO", on_submit=echo_submit)
 def echo(ctx):
     s = Screen()
-    status(s, "PAGE 220")
+    ctx.set_status("PAGE 220")
     s.text(3, 0, "LAST: " + ctx.state.get("echo", ""))
     page_input(s, ctx)
     footer(s)
@@ -421,7 +424,7 @@ def submit_form(ctx, values):
 @page("230", title="FORM", form=True, on_form=submit_form)
 def form(ctx):
     s = Screen()
-    status(s, "PAGE 230")
+    ctx.set_status("PAGE 230")
     line_field(s, ctx, "name", 3, 6, 20, label="NAME:")
     line_field(s, ctx, "city", 5, 6, 20, label="CITY:")
 
@@ -435,7 +438,6 @@ def form(ctx):
 with:
 
 ```python
-from pages.common.layout import status
 from pages.common.widgets import form_footer, line_field
 ```
 
@@ -682,7 +684,7 @@ def tick(ctx):
 @page("150", title="DYNAMIC", tick_interval=1.0, on_tick=tick)
 def dynamic(ctx):
     s = Screen()
-    status(s, "PAGE 150")
+    ctx.set_status("PAGE 150")
     s.text(1, 0, "DYNAMIC", inverse=True, size=codec.DOUBLE_WIDTH)
     s.text(3, 0, "VALUE: UPDATED")
     page_input(s, ctx, cursor="auto")
@@ -740,10 +742,11 @@ def shakespeare(ctx):
 
 The page directory flags scrolling pages with the `S` page flag.
 
-- **The hardware scrolls rows 1-24. Row 0 never scrolls.** A normal page can
-  keep the status bar in row 0 with `status(s, ...)`; it stays put without being
-  reprinted. A screensaver scroll page follows the other screensavers instead:
-  a plain black row 0 with a short title, not the inverse status bar.
+- **The hardware scrolls rows 1-24. Row 0 never scrolls.** A normal page
+  declares its status with `ctx.set_status(...)`; the header keeps row 0 fixed
+  without the page reprinting it. A screensaver scroll page follows the other
+  screensavers instead: a plain black row 0 with a short title, not the inverse
+  status bar.
 - **Only row 0 is fixed.** A header or footer below row 0 scrolls with the
   content. To keep one fixed, repaint it after each scroll. A two-row footer
   costs roughly 0.3-0.9 s per new line at 133 cps; four rows cost roughly

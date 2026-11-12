@@ -2,7 +2,7 @@ from minitel.protocol import codec
 from minitel.pagemodel import page
 from minitel.render import Screen
 
-from ..common.layout import ACCENT, footer, status
+from ..common.layout import ACCENT, footer
 from ..common.widgets import page_input
 
 DELAYS = (120.0, 300.0, 600.0, None)
@@ -83,7 +83,6 @@ def screensaver_submit(ctx, line):
 def screensaver(ctx):
     s = Screen()
     ctx.set_status("PAGE 190")
-    status(s, "PAGE 190")
     s.text(1, 0, "SCREENSAVER", inverse=True, size=codec.DOUBLE_WIDTH)
     s.text(3, 0, "SCREENSAVER SETTINGS")
 

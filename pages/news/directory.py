@@ -11,7 +11,6 @@ from ..common.layout import (
     FIELD_ROW,
     SECONDARY,
     key_footer,
-    status,
 )
 from ..common.service_status import describe
 from ..common.widgets import page_input
@@ -33,7 +32,6 @@ NEWS_SERVICES = (
 def directory_screen(ctx):
     s = Screen()
     ctx.set_status("PAGE 110")
-    status(s, "PAGE 110")
     s.text(1, 0, "NEWS", inverse=True, size=codec.DOUBLE_WIDTH)
     s.text(2, 0, "CHOOSE A NEWS SERVICE", fg=SECONDARY)
 

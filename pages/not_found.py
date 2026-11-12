@@ -2,7 +2,7 @@ from minitel.protocol import codec
 from minitel.pagemodel import page
 from minitel.render import Screen
 
-from .common.layout import footer, status
+from .common.layout import footer
 from .common.widgets import page_input
 
 
@@ -10,7 +10,6 @@ from .common.widgets import page_input
 def not_found(ctx):
     s = Screen()
     ctx.set_status("PAGE ?")
-    status(s, "PAGE ?")
     s.text(1, 0, "NOT FOUND", inverse=True, size=codec.DOUBLE_WIDTH)
     safe = "".join(ch for ch in ctx.last_key[:20] if 0x20 <= ord(ch) <= 0x7E)
     s.text(3, 0, f"NO PAGE: {safe}")

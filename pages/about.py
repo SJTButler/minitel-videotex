@@ -2,7 +2,7 @@ from minitel.protocol import codec
 from minitel.pagemodel import page
 from minitel.render import Screen
 
-from .common.layout import footer, status
+from .common.layout import footer
 from .common.widgets import page_input
 
 
@@ -10,7 +10,6 @@ from .common.widgets import page_input
 def about(ctx):
     s = Screen()
     ctx.set_status("PAGE 130")
-    status(s, "PAGE 130")
     s.text(1, 0, "ABOUT", inverse=True, size=codec.DOUBLE_WIDTH)
     s.text(3, 0, "3615 KILO IS A")
     s.text(4, 0, "PRESTEL-STYLE SERVICE")

@@ -5,7 +5,7 @@ from minitel.pagemodel import page
 from minitel.render import Screen
 from minitel.text import fit, wrap
 
-from ..common.layout import ACCENT, SECONDARY, WARNING, key_footer, status
+from ..common.layout import ACCENT, SECONDARY, WARNING, key_footer
 from ..common.widgets import page_input
 from ._support.state import configured, find_match, find_matches, service, snapshot
 from ._support.layout import (
@@ -49,7 +49,6 @@ def detail_screen(ctx):
     ctx.set_status(
         f"PAGE 151#{ctx.extension}" if ctx.extension else "PAGE 151"
     )
-    status(s, f"PAGE 151#{ctx.extension}" if ctx.extension else "PAGE 151")
     s.text(1, 0, "MATCH", inverse=True, size=codec.DOUBLE_WIDTH)
 
     if not configured(feed):

@@ -5,7 +5,7 @@ from minitel.pagemodel import page
 from minitel.render import Screen
 from minitel.text import age, fit, sanitize, wrap
 
-from ..common.layout import SECONDARY, WARNING, key_footer, status
+from ..common.layout import SECONDARY, WARNING, key_footer
 from ..common.widgets import page_input
 from ._support.state import configured, service
 from ._support.layout import clock_label
@@ -30,7 +30,6 @@ def status_screen(ctx):
 
     s = Screen()
     ctx.set_status("PAGE 154")
-    status(s, "PAGE 154")
     s.text(1, 0, "FEED STATUS", inverse=True, size=codec.DOUBLE_WIDTH)
 
     if not configured(feed):

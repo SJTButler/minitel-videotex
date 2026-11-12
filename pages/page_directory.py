@@ -4,7 +4,7 @@ from minitel.protocol import codec
 from minitel.pagemodel import page
 from minitel.render import Screen
 
-from .common.layout import SECONDARY, footer, status
+from .common.layout import SECONDARY, footer
 from .common.widgets import page_input
 
 PAGE_SIZE = 12
@@ -80,7 +80,6 @@ def page_directory_screen(ctx):
 
     s = Screen()
     ctx.set_status("PAGE 199")
-    status(s, "PAGE 199")
     s.text(1, 0, "PAGES", inverse=True, size=codec.DOUBLE_WIDTH)
     s.text(2, 0, f"REGISTERED PAGES {pager.label}", fg=SECONDARY)
     s.text(

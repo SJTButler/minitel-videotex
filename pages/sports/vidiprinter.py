@@ -6,7 +6,7 @@ from minitel.protocol import codec
 from minitel.pagemodel import page
 from minitel.render import Screen
 
-from ..common.layout import SECONDARY, WARNING, status
+from ..common.layout import SECONDARY, WARNING
 from ._support.layout import local_time
 from ._support.labels import alert_text
 from ._support.state import configured, service, snapshot
@@ -119,7 +119,6 @@ def vidiprinter_screen(ctx):
         ctx.state["vidiprinter_loaded"] = True
         screen.force_full = True
     ctx.set_status(f"PAGE 155 {view.line_number}/{view.total}")
-    status(screen, f"PAGE 155 {view.line_number}/{view.total}")
     for row, line in enumerate(view.window(lines), start=1):
         col = 0
         for text, colour in line.segments:

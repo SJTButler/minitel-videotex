@@ -46,6 +46,7 @@ def make_session(services=None):
         fallback=registry.get(pages.NOT_FOUND),
         guide=pages.GUIDE,
         services=services,
+        header=pages.HEADER,
     )
     session.start()
     return session

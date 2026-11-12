@@ -5,7 +5,7 @@ from minitel.pagemodel import page
 from minitel.render import Screen
 from minitel.text import fit
 
-from ..common.layout import SECONDARY, WARNING, footer, key_footer, status
+from ..common.layout import SECONDARY, WARNING, footer, key_footer
 from ..common.service_status import describe_many
 from ..common.widgets import page_input
 from ._support.labels import condition_label
@@ -61,7 +61,6 @@ def _direct_codes(service):
 def weather_summary(ctx):
     s = Screen()
     ctx.set_status("PAGE 120")
-    status(s, "PAGE 120")
     s.text(1, 0, "WEATHER", inverse=True, size=codec.DOUBLE_WIDTH)
     s.text(2, 0, "CURRENT CONDITIONS", fg=SECONDARY)
 
@@ -107,7 +106,6 @@ def weather_summary(ctx):
 def weather_detail(ctx):
     s = Screen()
     ctx.set_status(f"PAGE 120#{ctx.extension}")
-    status(s, f"PAGE 120#{ctx.extension}")
     s.text(1, 0, "WEATHER", inverse=True, size=codec.DOUBLE_WIDTH)
     s.text(2, 0, "CITY DETAIL", fg=SECONDARY)
 

@@ -21,6 +21,7 @@ class PageTests(unittest.TestCase):
             initial=pages.INITIAL,
             fallback=self.fallback,
             guide=pages.GUIDE,
+            header=pages.HEADER,
         )
         self.session.start()
 

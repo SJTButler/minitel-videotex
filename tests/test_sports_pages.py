@@ -123,6 +123,7 @@ def make_session(service=None, initial="150", clock=None):
         guide=pages.GUIDE,
         services={"sports": service} if service is not None else None,
         **kwargs,
+        header=pages.HEADER,
     )
     session.start()
     session.navigate(initial)
@@ -508,6 +509,7 @@ class VidiprinterPageTests(unittest.TestCase):
             initial="155",
             fallback=registry.get(pages.NOT_FOUND),
             services={"sports": FakeSports(loaded_snapshot([]))},
+            header=pages.HEADER,
         )
         session.start()
         session.feed(RETOUR)

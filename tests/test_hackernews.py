@@ -72,6 +72,7 @@ def make_session(service=None, initial="111"):
         fallback=registry.get(pages.NOT_FOUND),
         guide=pages.GUIDE,
         services={"hackernews": service} if service is not None else None,
+        header=pages.HEADER,
     )
     session.start()
     session.navigate(initial)

@@ -10,7 +10,6 @@ from ..common.layout import (
     SECONDARY,
     WARNING,
     key_footer,
-    status,
 )
 from ..common.messages import MessageLatch
 from ..common.service_status import ServiceState, classify, colour_for
@@ -227,7 +226,6 @@ def live_screen(ctx):
     if pager.total:
         status_label += f" {pager.label}"
     ctx.set_status(status_label)
-    status(s, status_label)
     prefix = "NEXT FIXTURES" if feed_snapshot.upcoming else "LIVE SCORES"
     title = f"{prefix} - {page.code}" if page is not None else prefix
     if page is not None and page.count > 1:

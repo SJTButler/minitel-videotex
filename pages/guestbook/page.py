@@ -3,7 +3,6 @@ from minitel.pagemodel import page
 from minitel.render import Screen
 
 from ._support import store as guestbook_store
-from ..common.layout import status
 from ..common.messages import MessageLatch
 from ..common.widgets import form_footer, line_field
 
@@ -57,7 +56,6 @@ def submit_form(ctx, values):
 def guestbook(ctx):
     s = Screen()
     ctx.set_status("PAGE 140")
-    status(s, "PAGE 140")
     s.text(1, 0, "GUESTBOOK", inverse=True, size=codec.DOUBLE_WIDTH)
 
     entries = _store(ctx).recent(ENTRY_LIMIT)

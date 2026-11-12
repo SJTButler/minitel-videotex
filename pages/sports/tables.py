@@ -5,7 +5,7 @@ from minitel.pagemodel import page
 from minitel.render import Screen
 from minitel.text import fit, sanitize
 
-from ..common.layout import SECONDARY, WARNING, key_footer, status
+from ..common.layout import SECONDARY, WARNING, key_footer
 from ..common.messages import MessageLatch
 from ..common.service_status import ServiceState, classify, updated_label
 from ..common.widgets import page_input
@@ -87,7 +87,6 @@ def tables_screen(ctx):
     if pager.total:
         status_label += f" {pager.label}"
     ctx.set_status(status_label)
-    status(s, status_label)
     s.text(1, 0, "TABLES", inverse=True, size=codec.DOUBLE_WIDTH)
     header = _header(feed, code, standings)
     warning = _state(feed, standings) is not ServiceState.READY

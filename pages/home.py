@@ -4,7 +4,7 @@ from minitel.render import Screen
 from minitel.text import fit
 
 from .common.clock import clock_text
-from .common.layout import footer, status
+from .common.layout import footer
 from .common.widgets import page_input
 
 CLOCK_ROW = 3
@@ -48,7 +48,6 @@ def welcome(ctx):
 
     s = Screen()
     ctx.set_status("PAGE 100")
-    status(s, "PAGE 100")
     s.text(1, 0, "3615 KILO", inverse=True, size=codec.DOUBLE_WIDTH)
     s.text(CLOCK_ROW, CLOCK_COL, "TIME: " + clock_text())
     s.text(3, 0, "A SMALL MINITEL SERVICE")
