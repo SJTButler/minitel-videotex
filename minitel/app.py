@@ -7,6 +7,7 @@ import traceback
 
 from . import transport
 from .data.services import ServiceRegistry
+from .pagemodel.header import header_requires
 from .render import render_screen
 from .session import Session
 from .session.screensaver import Screensaver
@@ -18,7 +19,8 @@ class MinitelApp:
     def __init__(self, registry, *, profile=M1, initial="100", fallback=None,
                  guide=None, cps=None, echo=True, log=None, services=None,
                  screensaver=None, screensaver_after=120.0,
-                 screensaver_hold=20.0, power=None, clock=None):
+                 screensaver_hold=20.0, power=None, header=None, clock=None,
+                 wall_clock=None):
         self.registry = registry
         self.profile = profile
         self.initial = initial
@@ -27,6 +29,8 @@ class MinitelApp:
         self.cps = cps if cps is not None else profile.max_speed / 9
         self.echo = echo
         self.log = log or self._default_log
+        self.header = header
+        self.header_requires = header_requires(header)
         self.services = (
             services if isinstance(services, ServiceRegistry)
             else ServiceRegistry(services)
@@ -35,6 +39,7 @@ class MinitelApp:
             power if isinstance(power, PowerSignals) else PowerSignals()
         )
         self.clock = clock or time.monotonic
+        self.wall_clock = wall_clock or time.time
         self.screensaver = (
             Screensaver.from_spec(
                 registry,
@@ -61,7 +66,9 @@ class MinitelApp:
             services=self.services,
             screensaver=self.screensaver,
             power=self.power_signals,
+            header=self.header,
             clock=self.clock,
+            wall_clock=self.wall_clock,
         )
 
     async def send(self, pacer, screen, log, scroll=None):
@@ -170,6 +177,11 @@ class MinitelApp:
             for page in self.registry.all()
             for key in getattr(page, "requires", ())
         }
+        for page in self.registry.all():
+            header = getattr(page, "header", None)
+            if header is not None and header is not False:
+                required.update(header_requires(header))
+        required.update(self.header_requires)
         unrequired = sorted(set(self.services) - required)
         if unrequired:
             self.log(
@@ -179,6 +191,13 @@ class MinitelApp:
             )
 
     async def _start_services(self):
+        missing = [
+            key for key in self.header_requires if key not in self.services
+        ]
+        if missing:
+            raise RuntimeError(
+                "missing services for header: " + ", ".join(missing)
+            )
         self._report_orphan_services()
         await self.services.start()
 

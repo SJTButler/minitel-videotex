@@ -9,23 +9,30 @@ from ..render.render import render_diff, reset
 from ..render.screen import Screen
 from ..terminal.power import Power, PowerSignals, PowerWatcher
 from .action import Action
+from ..pagemodel.header import header_requires
 from .editing import EditingMixin
+from .header import HeaderMixin
 from .idle import IdleMixin
 from .navigation import NavigationMixin
 from .power import PowerMixin
 from .screensaver import Screensaver
 
 
-class Session(NavigationMixin, EditingMixin, IdleMixin, PowerMixin):
+class Session(
+    NavigationMixin, EditingMixin, IdleMixin, PowerMixin, HeaderMixin
+):
     def __init__(self, registry, profile, *, initial="100", fallback=None,
                  guide=None, echo=False, services=None, screensaver=None,
-                 power=None, clock=time.monotonic):
+                 power=None, header=None, clock=time.monotonic,
+                 wall_clock=time.time):
+        header_requires(header)
         self.registry = registry
         self.profile = profile
         self.initial = initial
         self.fallback = fallback or registry.get(initial)
         self.guide = guide
         self.echo = echo
+        self.header = header
         self.services = dict(services or {})
         self.power_signals = (
             power if isinstance(power, PowerSignals) else PowerSignals()
@@ -58,6 +65,11 @@ class Session(NavigationMixin, EditingMixin, IdleMixin, PowerMixin):
         self.scroll_mode = False
         self.screen_scroll_mode = False
         self.clock = clock
+        self.wall_clock = wall_clock
+        self.status_text = None
+        self._body_row = None
+        self._header_next = None
+        self._last_body_tick = self.clock()
         self.screensaver = (
             screensaver
             if isinstance(screensaver, Screensaver)
@@ -100,6 +112,8 @@ class Session(NavigationMixin, EditingMixin, IdleMixin, PowerMixin):
         self._pager_carousel = None
         self._pager_carousel_next = None
         self._pager_carousel_key = None
+        self.status_text = None
+        self._last_body_tick = self.clock()
 
     def add_resource(self, resource):
         if self._closed:
@@ -185,6 +199,7 @@ class Session(NavigationMixin, EditingMixin, IdleMixin, PowerMixin):
         self.power = self._new_power()
         self.screensaver_active = False
         self._extension_pending = False
+        self._last_body_tick = self.clock()
         self._touch()
         return self.render()
 
@@ -257,6 +272,7 @@ class Session(NavigationMixin, EditingMixin, IdleMixin, PowerMixin):
             screen.set_cursor(field.row, col, self._cursor_visible())
         else:
             screen.set_cursor(codec.ROWS - 1, 0, False)
+        screen = self._compose_header(screen, self.current)
         self.screen = screen
         self.screen_scroll_mode = self.scroll_mode
         return screen
@@ -264,6 +280,7 @@ class Session(NavigationMixin, EditingMixin, IdleMixin, PowerMixin):
     def tick(self):
         if self.paused:
             return Action()
+        self._last_body_tick = self.clock()
         page = self.display_page
         self.scroll_mode = bool(page.scroll)
         if self.screensaver_active:
@@ -301,6 +318,7 @@ class Session(NavigationMixin, EditingMixin, IdleMixin, PowerMixin):
                     frame.set_cursor(field.row, col, self._cursor_visible())
                 else:
                     frame.set_cursor(codec.ROWS - 1, 0, False)
+            frame = self._compose_header(frame, page)
             old = self.screen
             if (
                 old is None

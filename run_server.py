@@ -222,6 +222,7 @@ def main():
         screensaver_after=args.screensaver_after,
         screensaver_hold=args.screensaver_hold,
         power=power,
+        header=getattr(pages, "HEADER", None),
     )
     asyncio.run(app.serve(args.host, args.port))
 

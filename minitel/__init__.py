@@ -11,13 +11,15 @@ from .design import Carousel, InputField, Pager, Viewport
 from .pagemodel import (
     LINE_FIELD,
     FunctionPage,
+    Header,
+    HeaderContext,
     Page,
     PageContext,
     Registry,
     page,
 )
 from .protocol import codec
-from .render import Cell, Screen, render_diff, render_screen
+from .render import Cell, Screen, compose_row, render_diff, render_screen
 from .session import Action, Screensaver, Session
 from .terminal.power import PowerSignals
 from .terminal.profiles import (
@@ -40,6 +42,8 @@ __all__ = [
     "Carousel",
     "Cell",
     "FunctionPage",
+    "Header",
+    "HeaderContext",
     "HttpError",
     "InputField",
     "JsonResponse",
@@ -62,6 +66,7 @@ __all__ = [
     "by_type",
     "cache",
     "codec",
+    "compose_row",
     "cps",
     "get_json",
     "get_json_response",

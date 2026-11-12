@@ -69,7 +69,7 @@ The decorator form is the shortest:
       on_tick=None, tick_interval=None, form=False, on_form=None,
       transient=False, back_page=None, extension_back_page=None,
       screensaver=None, no_screensaver=False, scroll=False, requires=(),
-      extensions=False, **meta)
+      extensions=False, header=None, **meta)
 def render(ctx):
     return Screen()
 ```
@@ -112,6 +112,9 @@ def render(ctx):
   automatically the parent. Use it only for a genuine summary/detail pair;
   sibling pages such as `153` and `150` should leave it unset and follow
   history.
+- `header=None` uses the app header. `header=False` means this page owns row 0.
+  A `Header` instance selects a page-specific header. See
+  [Headers](#headers).
 - `meta` is free-form; useful for a custom app.
 
 For stateful or larger pages, subclass `Page`:
@@ -199,6 +202,73 @@ A field can also be `live` and/or hidden:
 
 Without an input field, typing returns `BEL` and the cursor is parked at row
 24, column 0.
+
+## Headers
+
+A header is a row-0 view composed with the body page. It is not a page: it has
+no number, alias, history, fields, or navigation. The app selects one header
+and the session schedules its ticks and composes only its row 0 over the body.
+
+```python
+from minitel import Header, Screen
+
+class MyHeader(Header):
+    tick_interval = 1.0
+    requires = ("clock",)
+
+    def render(self, ctx):
+        screen = Screen()
+        screen.fill(0, 0, 40, " ", inverse=True)
+        screen.text(0, 0, ctx.service("clock").label, inverse=True)
+        return screen
+```
+
+- `render(ctx)` returns a `Screen` whose row 0 is used, or `None` to leave the
+  body's row 0 untouched.
+- `tick_interval` is a positive number of seconds or `None`. The session
+  schedules the tick; the header does not own a timer.
+- `requires` declares services the header needs. They are validated with the
+  page graph and included in the orphan-service report.
+- Header instances are shared across sessions. Keep them stateless; put
+  per-session state in `ctx.state`.
+- A header cannot navigate, submit, or receive keys. Those belong to pages and
+  the session.
+
+`HeaderContext`:
+
+| Member | Meaning |
+|---|---|
+| `ctx.body_page` | the current body page or extension page |
+| `ctx.body_row` | the body's last rendered row 0 as a tuple of cells |
+| `ctx.status_text` | the declared page status, or `None` |
+| `ctx.screensaver_active` | true while the screensaver owns the display |
+| `ctx.state` | the per-session state dict |
+| `ctx.profile` | the active terminal profile |
+| `ctx.service(name, default=None)` | look up a service declared by the page or header |
+| `ctx.now` | wall-clock seconds |
+
+Select the header at app construction:
+
+```python
+app = MinitelApp(registry, initial="100", header=MyHeader(), ...)
+```
+
+`run_server.py` uses `pages.HEADER` when the page package defines it. A page can
+override the app header:
+
+```python
+@page("990", header=False)
+def full_screen(ctx):
+    ...
+```
+
+- `header=None` (default) uses the app header.
+- `header=False` means the page owns row 0; no header is composed.
+- `header=MyHeader()` uses that header for this page only.
+- `ExtensionPage` inherits the base page's header.
+
+Use per-page overrides sparingly: a full-screen page, a test card, or a page
+with a bespoke status row. The app header should cover the normal case.
 
 ## Session resources
 

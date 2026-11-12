@@ -11,6 +11,7 @@ from ..design.pager import Pager
 from ..design.stops import Stops
 from ..design.viewport import Viewport
 from ..render.screen import Screen
+from .header import Header, header_requires
 
 
 CURSOR_MODES = ("visible", "hidden", "auto")
@@ -261,6 +262,7 @@ class Page:
     on_form = None
     requires = ()
     extensions = False
+    header = None
 
     def render(self, ctx: PageContext) -> Screen:
         raise NotImplementedError
@@ -284,7 +286,7 @@ class FunctionPage(Page):
                  on_form=None, transient=False, back_page=None,
                  extension_back_page=None, screensaver=None,
                  no_screensaver=False, scroll=False, requires=(),
-                 extensions=False, meta=None):
+                 extensions=False, header=None, meta=None):
         if screensaver is not None and (
             not isinstance(screensaver, str) or not screensaver
         ):
@@ -295,6 +297,13 @@ class FunctionPage(Page):
         ):
             raise TypeError("requires must be a sequence of service keys")
         requires = tuple(key.strip() for key in requires)
+        if header is not None and header is not False:
+            if not isinstance(header, Header):
+                raise TypeError(
+                    "header must be None, False, or a Header instance"
+                )
+            header_requires(header)
+        self.header = header
         self.number = number
         self._render = render
         self.title = title
@@ -352,6 +361,7 @@ class ExtensionPage(Page):
         self.no_screensaver = base.no_screensaver
         self.scroll = base.scroll
         self.on_form = base.on_form
+        self.header = base.header
         self.meta = {
             **(getattr(base, "meta", {}) or {}),
             "extension": token,
@@ -374,7 +384,7 @@ def page(number, *, title="", aliases=(), on_submit=None, on_key=None,
          on_tick=None, tick_interval=None, form=False, on_form=None,
          transient=False, back_page=None, extension_back_page=None,
          screensaver=None, no_screensaver=False, scroll=False, requires=(),
-         extensions=False, **meta):
+         extensions=False, header=None, **meta):
     def decorator(fn):
         return FunctionPage(
             number,
@@ -395,6 +405,7 @@ def page(number, *, title="", aliases=(), on_submit=None, on_key=None,
             scroll=scroll,
             requires=requires,
             extensions=extensions,
+            header=header,
             meta=meta,
         )
     return decorator
@@ -559,9 +570,15 @@ class Registry:
     def missing_requirements(self, services):
         missing = {}
         for page in self._pages:
-            for key in page.requires:
+            required = list(page.requires)
+            header = getattr(page, "header", None)
+            if header is not None and header is not False:
+                required.extend(header_requires(header))
+            for key in required:
                 if key not in services:
-                    missing.setdefault(key, []).append(page.number)
+                    numbers = missing.setdefault(key, [])
+                    if page.number not in numbers:
+                        numbers.append(page.number)
         return {
             key: tuple(numbers) for key, numbers in missing.items()
         }

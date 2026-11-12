@@ -1,7 +1,7 @@
 import unittest
 
 from minitel.protocol import codec
-from minitel.render import Screen
+from minitel.render import Cell, Screen, compose_row
 
 
 class ScreenTests(unittest.TestCase):
@@ -10,6 +10,46 @@ class ScreenTests(unittest.TestCase):
         s.text(1, 0, "HELLO")
         s.clear()
         self.assertEqual(s.to_text(), "\n".join([" " * codec.COLS] * codec.ROWS))
+
+    def test_clone_is_independent(self):
+        s = Screen()
+        s.text(1, 0, "BODY")
+        s.set_cursor(2, 3, False)
+        s.paint_order = "up"
+        s.force_full = True
+        clone = s.clone()
+        self.assertEqual(clone.to_text(), s.to_text())
+        self.assertEqual((clone.cursor_row, clone.cursor_col), (2, 3))
+        self.assertFalse(clone.cursor_visible)
+        self.assertEqual(clone.paint_order, "up")
+        self.assertTrue(clone.force_full)
+        clone.text(1, 0, "CLONE")
+        self.assertTrue(s.to_text().splitlines()[1].startswith("BODY"))
+
+    def test_compose_row_replaces_only_that_row(self):
+        s = Screen()
+        s.text(1, 0, "BODY")
+        s.set_cursor(2, 3, False)
+        row = [Cell() for _ in range(codec.COLS)]
+        row[0] = Cell(ch="H")
+        composed = compose_row(s, 0, row)
+        self.assertEqual(
+            "".join(cell.ch for cell in composed.rows[0]).strip(), "H"
+        )
+        self.assertTrue(
+            composed.to_text().splitlines()[1].startswith("BODY")
+        )
+        self.assertEqual(
+            (composed.cursor_row, composed.cursor_col), (2, 3)
+        )
+        self.assertEqual(
+            "".join(cell.ch for cell in s.rows[0]).strip(), ""
+        )
+
+    def test_compose_row_rejects_the_wrong_width(self):
+        s = Screen()
+        with self.assertRaises(ValueError):
+            compose_row(s, 0, [Cell()])
 
     def test_text(self):
         s = Screen()

@@ -85,7 +85,9 @@ class IdleMixin:
                 "expected Screen"
             )
         screen.set_cursor(codec.ROWS - 1, 0, False)
+        screen = self._compose_header(screen, page)
         self._screensaver_page = page
+        self._last_body_tick = self.clock()
         self.screen = screen
         self.screen_scroll_mode = self.scroll_mode
         return Action(screen=screen)
@@ -95,6 +97,7 @@ class IdleMixin:
             return Action()
         self.screensaver_active = False
         self._screensaver_page = None
+        self._last_body_tick = self.clock()
         self._touch()
         return Action(screen=self.render())
 
@@ -172,6 +175,9 @@ class IdleMixin:
             return None
         now = self.clock()
         deadlines = []
+        header = self._header_delay(now)
+        if header is not None:
+            deadlines.append(header)
         if self.screensaver_active:
             rotation = self._rotation_delay(now)
             if rotation is not None:
@@ -200,7 +206,11 @@ class IdleMixin:
         if self.screensaver_active:
             if self.display_page is not self._screensaver_page:
                 return self._render_screensaver()
-            return self.tick()
+            if self._body_tick_due(now):
+                return self.tick()
+            if self._header_due(now):
+                return self._refresh_header()
+            return Action()
         idle = self._idle_delay(now)
         if idle is not None and idle <= 0:
             action = self.activate_screensaver()
@@ -208,8 +218,24 @@ class IdleMixin:
                 return action
         pager_carousel = self._pager_carousel_delay(now)
         if pager_carousel is not None and pager_carousel <= 0:
-            return self._advance_pager_carousel(now)
-        return self.tick()
+            action = self._advance_pager_carousel(now)
+            if self._body_tick_due(now):
+                return self.tick()
+            return action
+        if self._body_tick_due(now):
+            return self.tick()
+        if self._header_due(now):
+            return self._refresh_header()
+        return Action()
+
+    def _body_tick_due(self, now):
+        page = self.display_page
+        interval = self._page_tick_interval(
+            page, pause_on_input=not self.screensaver_active
+        )
+        if interval is None:
+            return False
+        return now - self._last_body_tick >= interval
 
     def _page_tick_interval(self, page, *, pause_on_input=True):
         if pause_on_input:

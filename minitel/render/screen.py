@@ -78,6 +78,19 @@ class Screen:
         self.cursor_col = 0
         self.cursor_visible = True
 
+    def clone(self):
+        clone = Screen()
+        clone.rows = [
+            [Cell(**vars(cell)) for cell in row]
+            for row in self.rows
+        ]
+        clone.cursor_row = self.cursor_row
+        clone.cursor_col = self.cursor_col
+        clone.cursor_visible = self.cursor_visible
+        clone.paint_order = self.paint_order
+        clone.force_full = self.force_full
+        return clone
+
     def put(self, row, col, ch, **attrs):
         _check_cell(ch)
         size = attrs.get("size", codec.NORMAL)

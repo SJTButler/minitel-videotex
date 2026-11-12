@@ -17,6 +17,7 @@ class PowerMixin:
         self.paused = False
         self.parser = self._new_parser()
         self.power.reset()
+        self._last_body_tick = now
         self._touch()
         if self.screensaver_active:
             self._screensaver_since = now
