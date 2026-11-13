@@ -26,7 +26,9 @@ class PowerMixin:
             self._screensaver_since = now
             action = self._render_screensaver()
         else:
-            action = Action(screen=self.render())
+            screen = self.render()
+            self._shadow_exact = True
+            action = Action(screen=screen)
         action.raw = self.echo_override() + action.raw
         action.power = True
         return action

@@ -10,7 +10,7 @@ from ..design.field import InputField
 from ..design.pager import Pager
 from ..design.stops import Stops
 from ..design.viewport import Viewport
-from ..render.screen import Screen
+from ..render.screen import Screen, validate_paint
 from .announcement import (
     announcement_channel,
     validate_announcement_declaration,
@@ -269,6 +269,7 @@ class Page:
     screensaver = None
     no_screensaver = False
     scroll = False
+    paint = None
     tick_interval = None
     on_form = None
     requires = ()
@@ -298,7 +299,7 @@ class FunctionPage(Page):
                  on_key=None, on_tick=None, tick_interval=None, form=False,
                  on_form=None, transient=False, back_page=None,
                  extension_back_page=None, screensaver=None,
-                 no_screensaver=False, scroll=False, requires=(),
+                 no_screensaver=False, scroll=False, paint=None, requires=(),
                  extensions=False, header=None, announce=None,
                  announce_channel=None, meta=None):
         if screensaver is not None and (
@@ -333,6 +334,9 @@ class FunctionPage(Page):
         self.screensaver = screensaver or None
         self.no_screensaver = bool(no_screensaver)
         self.scroll = bool(scroll)
+        self.paint = validate_paint(
+            paint, allow_full=True, what="page paint"
+        )
         self.extensions = bool(extensions)
         self._on_submit = on_submit
         self._on_key = on_key
@@ -379,6 +383,7 @@ class ExtensionPage(Page):
         self.tick_interval = base.tick_interval
         self.no_screensaver = base.no_screensaver
         self.scroll = base.scroll
+        self.paint = base.paint
         self.on_form = base.on_form
         self.header = base.header
         self.announce = base.announce
@@ -404,8 +409,8 @@ class ExtensionPage(Page):
 def page(number, *, title="", aliases=(), on_submit=None, on_key=None,
          on_tick=None, tick_interval=None, form=False, on_form=None,
          transient=False, back_page=None, extension_back_page=None,
-         screensaver=None, no_screensaver=False, scroll=False, requires=(),
-         extensions=False, header=None, announce=None,
+         screensaver=None, no_screensaver=False, scroll=False, paint=None,
+         requires=(), extensions=False, header=None, announce=None,
          announce_channel=None, **meta):
     def decorator(fn):
         return FunctionPage(
@@ -425,6 +430,7 @@ def page(number, *, title="", aliases=(), on_submit=None, on_key=None,
             screensaver=screensaver,
             no_screensaver=no_screensaver,
             scroll=scroll,
+            paint=paint,
             requires=requires,
             extensions=extensions,
             header=header,

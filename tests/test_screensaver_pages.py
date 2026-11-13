@@ -1,10 +1,13 @@
+import time
 import unittest
 from types import SimpleNamespace
+from unittest.mock import patch
 
 import pages
 
 from minitel import M1, Session
 from minitel.protocol import codec
+from pages.screensavers import clock as clock_page
 from pages.screensavers import scroll as scroll_page
 from pages.screensavers._support.text import LINES
 
@@ -143,15 +146,24 @@ class ScreensaverPageTests(unittest.TestCase):
         self.assertIn("TYPE A NUMBER", text[12])
 
     def test_clock_page(self):
-        session = Session(
-            self.registry, M1, initial="900",
-            fallback=self.registry.get(pages.NOT_FOUND),
-        )
-        text = session.start().to_text()
+        self.assertEqual(self.registry.get("900").paint, "cell")
+        first = time.localtime(0)
+        second = time.localtime(1)
+        with patch.object(
+            clock_page, "local_now", side_effect=[first, second]
+        ):
+            session = Session(
+                self.registry, M1, initial="900",
+                fallback=self.registry.get(pages.NOT_FOUND),
+            )
+            text = session.start().to_text()
+            action = session.tick()
         self.assertIn("3615 KILO", text)
         self.assertIn("LOCAL TIME", text)
         self.assertIn("PRESS ANY KEY", text)
         self.assertFalse(session.screen.cursor_visible)
+        self.assertIsNone(action.screen)
+        self.assertNotIn(bytes([codec.CAN]), action.raw)
 
     def test_scroll_text_is_wrapped_and_encodable(self):
         self.assertTrue(LINES)
@@ -245,6 +257,7 @@ class ScreensaverPageTests(unittest.TestCase):
             self.assertIn("PRESS ANY KEY", text)
 
     def test_ball_moves_and_stays_inside_the_border(self):
+        self.assertEqual(self.registry.get("903").paint, "cell")
         session = Session(
             self.registry, M1, initial="903",
             fallback=self.registry.get(pages.NOT_FOUND),
@@ -252,8 +265,10 @@ class ScreensaverPageTests(unittest.TestCase):
         session.start()
         state = session.state["screensaver_ball"]
         start = (state["row"], state["col"])
-        session.tick()
+        action = session.tick()
         self.assertNotEqual((state["row"], state["col"]), start)
+        self.assertIsNone(action.screen)
+        self.assertNotIn(bytes([codec.CAN]), action.raw)
 
         for _ in range(80):
             session.tick()

@@ -23,6 +23,6 @@ def clock_tick(ctx):
 
 
 @page("900", title="CLOCK", tick_interval=1.0, on_tick=clock_tick,
-      back_page="190", screensaver="clock")
+      back_page="190", screensaver="clock", paint="cell")
 def clock(ctx):
     return _clock_screen()

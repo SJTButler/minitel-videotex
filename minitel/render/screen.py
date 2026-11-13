@@ -4,6 +4,30 @@ from dataclasses import dataclass
 
 from ..protocol import codec
 
+PAINT_MODES = ("full", "row", "cell")
+DIFF_PAINTS = ("row", "cell")
+
+
+def validate_paint(value, *, allow_full=True, what="paint"):
+    if value is None:
+        return None
+    if not isinstance(value, str):
+        raise TypeError(f"{what} must be a string or None")
+    if value not in PAINT_MODES:
+        raise ValueError(f"{what} must be one of {PAINT_MODES}")
+    if not allow_full and value == "full":
+        raise ValueError(f"{what} cannot be 'full'")
+    return value
+
+
+def resolve_paint(declared, override, *, allow_full=True, what="paint"):
+    if override is not None:
+        return validate_paint(
+            override, allow_full=allow_full, what=f"{what} override"
+        )
+    value = validate_paint(declared, allow_full=allow_full, what=what)
+    return value or "row"
+
 
 @dataclass
 class Cell:
@@ -69,6 +93,7 @@ class Screen:
         self.cursor_visible = True
         self.paint_order = "down"
         self.force_full = False
+        self.paint = None
 
     def clear(self):
         for row in self.rows:
@@ -89,6 +114,7 @@ class Screen:
         clone.cursor_visible = self.cursor_visible
         clone.paint_order = self.paint_order
         clone.force_full = self.force_full
+        clone.paint = self.paint
         return clone
 
     def put(self, row, col, ch, **attrs):

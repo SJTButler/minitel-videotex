@@ -37,13 +37,7 @@ def menu_entries(registry):
     return entries[:MENU_LIMIT], max(0, len(entries) - MENU_LIMIT)
 
 
-def clock_tick(ctx):
-    return codec.pos(CLOCK_ROW, CLOCK_COL + 6) + codec.text(clock_text())
-
-
-@page("100", title="3615 KILO", aliases=("", "0"),
-      tick_interval=1.0, on_tick=clock_tick)
-def welcome(ctx):
+def _screen(ctx):
     entries, extra = menu_entries(ctx.registry)
 
     s = Screen()
@@ -65,3 +59,13 @@ def welcome(ctx):
     page_input(s, ctx, cursor="auto")
     footer(s)
     return s
+
+
+def clock_tick(ctx):
+    return _screen(ctx)
+
+
+@page("100", title="3615 KILO", aliases=("", "0"),
+      tick_interval=1.0, on_tick=clock_tick, paint="cell")
+def welcome(ctx):
+    return _screen(ctx)

@@ -1,7 +1,7 @@
 """Render a Screen to a Videotex byte stream."""
 
 from ..protocol import codec
-from .screen import Cell
+from .screen import Cell, validate_paint
 
 DEFAULT_ATTRS = (codec.WHITE, codec.BLACK, False, False, False, codec.NORMAL)
 DEFAULT_CELL = Cell()
@@ -117,6 +117,69 @@ def _row_has_underline(row):
     return any(cell.underline for cell in row)
 
 
+def _row_has_non_normal_size(row):
+    return any(cell.size != codec.NORMAL for cell in row)
+
+
+def _is_default(cell):
+    return cell == DEFAULT_CELL
+
+
+def cell_diff_row_bytes(row_index, old_row, new_row):
+    if (
+        _row_has_underline(old_row)
+        or _row_has_underline(new_row)
+        or _row_has_non_normal_size(old_row)
+        or _row_has_non_normal_size(new_row)
+    ):
+        raise ValueError(
+            "cell diff requires a row without underline or non-normal size"
+        )
+
+    changed = [
+        col for col in range(codec.COLS)
+        if old_row[col] != new_row[col]
+    ]
+    if not changed:
+        return b""
+
+    tail_start = codec.COLS
+    for col in range(codec.COLS - 1, -1, -1):
+        if _is_default(new_row[col]):
+            tail_start = col
+        else:
+            break
+    clear_start = next(
+        (col for col in changed if col >= tail_start), None
+    )
+
+    out = bytearray()
+    limit = clear_start if clear_start is not None else codec.COLS
+    index = 0
+    while index < len(changed) and changed[index] < limit:
+        start = changed[index]
+        run_attrs = attrs(new_row[start])
+        cols = [start]
+        index += 1
+        while (
+            index < len(changed)
+            and changed[index] == cols[-1] + 1
+            and changed[index] < limit
+            and attrs(new_row[changed[index]]) == run_attrs
+        ):
+            cols.append(changed[index])
+            index += 1
+        out += codec.pos(row_index, start)
+        state = default_state()
+        out += attr_bytes(state, new_row[start])
+        out += encode_run([new_row[col] for col in cols])
+
+    if clear_start is not None:
+        out += codec.pos(row_index, clear_start)
+        out += bytes([codec.CAN])
+    return bytes(out)
+
+
 def diff_row_bytes(row_index, row, *, full=False):
     out = bytearray()
     out += codec.pos(row_index, 0)
@@ -126,6 +189,21 @@ def diff_row_bytes(row_index, row, *, full=False):
         out += bytes([codec.CAN])
     paint_runs(out, row_index, row, include_default=full)
     return bytes(out)
+
+
+def paint_diff_row(out, row_index, old_row, new_row, *, paint, header_paint):
+    mode = header_paint if row_index == 0 else paint
+    underline = (
+        _row_has_underline(old_row) or _row_has_underline(new_row)
+    )
+    sized = (
+        _row_has_non_normal_size(old_row)
+        or _row_has_non_normal_size(new_row)
+    )
+    if mode == "cell" and not underline and not sized:
+        out += cell_diff_row_bytes(row_index, old_row, new_row)
+        return
+    out += diff_row_bytes(row_index, new_row, full=underline)
 
 
 def cursor_bytes(screen):
@@ -150,6 +228,98 @@ def shift_delta(old, new):
     return None
 
 
+def _row_chars(row):
+    return tuple(cell.ch for cell in row)
+
+
+def shift_delta_chars(old, new):
+    """Return a vertical shift when only characters are compared."""
+    for count in range(1, min(SCROLL_MAX, codec.ROWS - 1) + 1):
+        if (
+            tuple(_row_chars(row) for row in new.rows[1:codec.ROWS - count])
+            == tuple(_row_chars(row) for row in old.rows[1 + count:codec.ROWS])
+        ):
+            return "up", count
+        if (
+            tuple(_row_chars(row) for row in new.rows[1 + count:codec.ROWS])
+            == tuple(_row_chars(row) for row in old.rows[1:codec.ROWS - count])
+        ):
+            return "down", count
+    return None
+
+
+def _shift_pairs(direction, count):
+    """Return (target, source) row pairs for the overlapping rows."""
+    if direction == "up":
+        return tuple(
+            (row, row + count)
+            for row in range(1, codec.ROWS - count)
+        )
+    return tuple(
+        (row, row - count)
+        for row in range(1 + count, codec.ROWS)
+    )
+
+
+def _style_shift_supported(old, new, shifted):
+    direction, count = shifted
+    for target, source in _shift_pairs(direction, count):
+        old_row = old.rows[source]
+        new_row = new.rows[target]
+        if old_row == new_row:
+            continue
+        if (
+            _row_has_underline(old_row)
+            or _row_has_underline(new_row)
+            or _row_has_non_normal_size(old_row)
+            or _row_has_non_normal_size(new_row)
+        ):
+            return False
+    return True
+
+
+def _paint_shift(out, old, new, shifted, *, paint, header_paint,
+                 style_changes):
+    direction, count = shifted
+    if direction == "up":
+        out += codec.pos(codec.ROWS - 1, 0)
+        out += reset()
+        out += bytes([codec.LF]) * count
+        for row_index in range(codec.ROWS - count, codec.ROWS):
+            underline = (
+                _row_has_underline(old.rows[row_index])
+                or _row_has_underline(new.rows[row_index])
+            )
+            out += diff_row_bytes(
+                row_index, new.rows[row_index], full=underline
+            )
+    else:
+        out += codec.pos(1, 0)
+        out += reset()
+        out += bytes([codec.VT]) * count
+        for row_index in range(1, 1 + count):
+            underline = (
+                _row_has_underline(old.rows[row_index])
+                or _row_has_underline(new.rows[row_index])
+            )
+            out += diff_row_bytes(
+                row_index, new.rows[row_index], full=underline
+            )
+
+    if style_changes:
+        for target, source in _shift_pairs(direction, count):
+            old_row = old.rows[source]
+            new_row = new.rows[target]
+            if old_row != new_row:
+                out += cell_diff_row_bytes(target, old_row, new_row)
+
+    if old.rows[0] != new.rows[0]:
+        paint_diff_row(
+            out, 0, old.rows[0], new.rows[0],
+            paint=paint, header_paint=header_paint,
+        )
+
+
 def render(screen, scroll=None):
     out = bytearray()
     out += codec.cursor(False)
@@ -171,7 +341,17 @@ def render(screen, scroll=None):
     return bytes(out)
 
 
-def render_diff(old, new, scroll=False):
+def render_diff(old, new, scroll=False, *, paint="row", header_paint=None):
+    if paint is None:
+        paint = "row"
+    paint = validate_paint(paint, allow_full=False, what="paint")
+    if header_paint is None:
+        header_paint = paint
+    else:
+        header_paint = validate_paint(
+            header_paint, allow_full=False, what="header_paint"
+        )
+
     changed = [
         row for row in range(codec.ROWS)
         if old.rows[row] != new.rows[row]
@@ -184,53 +364,41 @@ def render_diff(old, new, scroll=False):
     if not changed and not cursor_changed:
         return b""
 
-    shifted = shift_delta(old, new) if scroll and changed else None
+    exact_shift = shift_delta(old, new) if scroll and changed else None
+    style_shift = None
+    if (
+        scroll
+        and changed
+        and exact_shift is None
+        and paint == "cell"
+    ):
+        candidate = shift_delta_chars(old, new)
+        if candidate is not None and _style_shift_supported(
+            old, new, candidate
+        ):
+            style_shift = candidate
 
     out = bytearray()
     if changed:
         out += codec.cursor(False)
     out += reset()
 
-    if shifted is not None:
-        direction, count = shifted
-        if direction == "up":
-            out += codec.pos(codec.ROWS - 1, 0)
-            out += reset()
-            out += bytes([codec.LF]) * count
-            for row_index in range(codec.ROWS - count, codec.ROWS):
-                full = (
-                    _row_has_underline(old.rows[row_index])
-                    or _row_has_underline(new.rows[row_index])
-                )
-                out += diff_row_bytes(
-                    row_index, new.rows[row_index], full=full
-                )
-        else:
-            out += codec.pos(1, 0)
-            out += reset()
-            out += bytes([codec.VT]) * count
-            for row_index in range(1, 1 + count):
-                full = (
-                    _row_has_underline(old.rows[row_index])
-                    or _row_has_underline(new.rows[row_index])
-                )
-                out += diff_row_bytes(
-                    row_index, new.rows[row_index], full=full
-                )
-        if old.rows[0] != new.rows[0]:
-            full = (
-                _row_has_underline(old.rows[0])
-                or _row_has_underline(new.rows[0])
-            )
-            out += diff_row_bytes(0, new.rows[0], full=full)
+    if exact_shift is not None:
+        _paint_shift(
+            out, old, new, exact_shift,
+            paint=paint, header_paint=header_paint, style_changes=False,
+        )
+    elif style_shift is not None:
+        _paint_shift(
+            out, old, new, style_shift,
+            paint=paint, header_paint=header_paint, style_changes=True,
+        )
     else:
         for row_index in changed:
-            full = (
-                _row_has_underline(old.rows[row_index])
-                or _row_has_underline(new.rows[row_index])
-            )
-            out += diff_row_bytes(
-                row_index, new.rows[row_index], full=full
+            paint_diff_row(
+                out, row_index,
+                old.rows[row_index], new.rows[row_index],
+                paint=paint, header_paint=header_paint,
             )
 
     out += cursor_bytes(new)

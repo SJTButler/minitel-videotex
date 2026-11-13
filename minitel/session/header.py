@@ -3,7 +3,7 @@
 from ..pagemodel.header import Header, HeaderContext, header_requires
 from ..render.overlay import compose_row
 from ..render.render import render_diff
-from ..render.screen import Cell, Screen
+from ..render.screen import Cell, Screen, resolve_paint
 from .action import Action
 
 
@@ -71,6 +71,7 @@ class HeaderMixin:
         header = self._header_for(page)
         if header is None:
             self._header_next = None
+            self.screen_header_paint = self.screen_paint
             return screen
         ctx = HeaderContext(
             self,
@@ -83,12 +84,19 @@ class HeaderMixin:
         result = header.render(ctx)
         self._schedule_header()
         if result is None:
+            self.screen_header_paint = self.screen_paint
             return screen
         if not isinstance(result, Screen):
             raise TypeError(
                 f"header on page {page.number!r} returned {type(result)!r}, "
                 "expected Screen or None"
             )
+        self.screen_header_paint = resolve_paint(
+            getattr(header, "paint", None),
+            result.paint,
+            allow_full=False,
+            what="header paint",
+        )
         return compose_row(screen, 0, result.rows[0])
 
     def _refresh_header(self):
@@ -120,8 +128,31 @@ class HeaderMixin:
         row = self._body_row if result is None else tuple(result.rows[0])
         if row is None:
             row = self._copy_body_row(base)
+        if result is None:
+            header_paint = self.screen_paint
+        else:
+            header_paint = resolve_paint(
+                getattr(header, "paint", None),
+                result.paint,
+                allow_full=False,
+                what="header paint",
+            )
         composed = compose_row(base, 0, row)
+        self.screen_header_paint = header_paint
         self.screen = composed
+        if self.screen_paint == "full":
+            self._shadow_exact = True
+            return Action(screen=composed)
+        paint = self.screen_paint
+        if not self._shadow_exact:
+            paint = "row"
+            header_paint = "row"
         return Action(
-            raw=render_diff(base, composed, scroll=self.scroll_mode)
+            raw=render_diff(
+                base,
+                composed,
+                scroll=self.scroll_mode,
+                paint=paint,
+                header_paint=header_paint,
+            )
         )

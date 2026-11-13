@@ -1,15 +1,28 @@
 import unittest
-from unittest.mock import Mock
+from unittest.mock import Mock, patch
 
 import pages
 
-from minitel import Registry, Screen, page
+from minitel import M1, Registry, Screen, Session, page
+from minitel.protocol import codec
 from pages.home import MENU_LIMIT, menu_entries, welcome
+
+
+class FakeClock:
+    def __init__(self):
+        self.now = 0.0
+
+    def __call__(self):
+        return self.now
+
+    def advance(self, seconds):
+        self.now += seconds
 
 
 def make_ctx(registry):
     ctx = Mock()
     ctx.registry = registry
+    ctx.input_value = ""
     return ctx
 
 
@@ -121,6 +134,38 @@ class HomeMenuTests(unittest.TestCase):
 
         lines = welcome.render(make_ctx(registry)).to_text().splitlines()
         self.assertTrue(any(line.startswith("10 TEN") for line in lines))
+
+    def test_home_declares_cell_paint(self):
+        self.assertEqual(welcome.paint, "cell")
+
+    def test_home_renders_the_current_input_value(self):
+        ctx = make_ctx(pages.build_registry())
+        ctx.input_value = "12"
+        field_row = welcome.render(ctx).to_text().splitlines()[20]
+        self.assertIn("12", field_row)
+
+    def test_clock_tick_uses_cell_diff(self):
+        clock = FakeClock()
+        registry = pages.build_registry()
+        page = registry.get("100")
+        with patch(
+            "pages.home.clock_text",
+            side_effect=["00:00:00", "00:00:01"],
+        ):
+            session = Session(
+                registry,
+                M1,
+                initial="100",
+                fallback=page,
+                clock=clock,
+                wall_clock=clock,
+            )
+            session.start()
+            clock.advance(1.0)
+            action = session.on_timeout()
+        self.assertIsNone(action.screen)
+        self.assertNotIn(bytes([codec.CAN]), action.raw)
+        self.assertIn("00:00:01", session.screen.to_text())
 
 
 if __name__ == "__main__":

@@ -2,7 +2,7 @@
 
 from ..pagemodel.model import PageContext
 from ..protocol import codec
-from ..render.screen import Screen
+from ..render.screen import Screen, resolve_paint
 from .action import Action
 from .screensaver import Screensaver
 
@@ -86,11 +86,18 @@ class IdleMixin:
                 "expected Screen"
             )
         screen.set_cursor(codec.ROWS - 1, 0, False)
+        self.screen_paint = resolve_paint(
+            getattr(page, "paint", None),
+            screen.paint,
+            allow_full=True,
+            what="page paint",
+        )
         screen = self._compose_header(screen, page)
         self._screensaver_page = page
         self._last_body_tick = self.clock()
         self.screen = screen
         self.screen_scroll_mode = self.scroll_mode
+        self._shadow_exact = True
         return Action(screen=screen)
 
     def wake(self):
@@ -104,6 +111,7 @@ class IdleMixin:
             self._reset_announcement_baseline()
             self._reschedule_announcements(self.clock(), immediate=True)
         self._touch()
+        self._shadow_exact = True
         return Action(screen=self.render())
 
     def _wake_from_input(self):

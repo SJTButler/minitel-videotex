@@ -28,7 +28,9 @@ class NavigationMixin:
             self._reset_page()
             self._extension_pending = isinstance(page, ExtensionPage)
             self.current = page
-            return Action(screen=self.render(), page=page)
+            screen = self.render()
+            self._shadow_exact = True
+            return Action(screen=screen, page=page)
         self.current = page
         return self.refresh()
 
@@ -72,7 +74,9 @@ class NavigationMixin:
             self.current = self.registry.resolve(self.initial)
         self._reset_page()
         self._extension_pending = False
-        return Action(screen=self.render(), page=self.current)
+        screen = self.render()
+        self._shadow_exact = True
+        return Action(screen=screen, page=self.current)
 
     def home(self):
         self.screensaver_active = False
@@ -81,4 +85,6 @@ class NavigationMixin:
         self.current = self.registry.resolve(self.initial)
         self._reset_page()
         self._extension_pending = False
-        return Action(screen=self.render(), page=self.current)
+        screen = self.render()
+        self._shadow_exact = True
+        return Action(screen=screen, page=self.current)

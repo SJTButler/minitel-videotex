@@ -17,12 +17,14 @@ class ScreenTests(unittest.TestCase):
         s.set_cursor(2, 3, False)
         s.paint_order = "up"
         s.force_full = True
+        s.paint = "cell"
         clone = s.clone()
         self.assertEqual(clone.to_text(), s.to_text())
         self.assertEqual((clone.cursor_row, clone.cursor_col), (2, 3))
         self.assertFalse(clone.cursor_visible)
         self.assertEqual(clone.paint_order, "up")
         self.assertTrue(clone.force_full)
+        self.assertEqual(clone.paint, "cell")
         clone.text(1, 0, "CLONE")
         self.assertTrue(s.to_text().splitlines()[1].startswith("BODY"))
 
@@ -32,10 +34,12 @@ class ScreenTests(unittest.TestCase):
         s.set_cursor(2, 3, False)
         row = [Cell() for _ in range(codec.COLS)]
         row[0] = Cell(ch="H")
+        s.paint = "cell"
         composed = compose_row(s, 0, row)
         self.assertEqual(
             "".join(cell.ch for cell in composed.rows[0]).strip(), "H"
         )
+        self.assertEqual(composed.paint, "cell")
         self.assertTrue(
             composed.to_text().splitlines()[1].startswith("BODY")
         )

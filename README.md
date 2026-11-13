@@ -196,9 +196,13 @@ the connection ends.
 
 Partial updates use `render.render_diff` and `Session.refresh()`. Field echo,
 corrections, and focus keep the shadow screen in sync; a `Screen` returned by
-`on_tick` is diffed against that shadow. Raw tick frames remain available for
-tiny regions. Form focus re-renders and diffs, so `form_footer(s, ctx, fields)`
-can change its hints per field using `ctx.active_name`.
+`on_tick` is diffed against that shadow. Pages and headers can declare
+`paint="cell"` for changed-cell runs, `paint="row"` for the default changed-row
+diff, or `paint="full"` for every-update full paints; a `Screen.paint` value
+overrides the declaration for one frame. Raw tick frames remain available for
+tiny regions and suppress cell paint until the next full paint. Form focus
+re-renders and diffs, so `form_footer(s, ctx, fields)` can change its hints per
+field using `ctx.active_name`.
 
 The example service's shared presentation helpers are in `pages/common/`
 (`layout`, `widgets`, `service_status`, `messages`, and `clock`). Feature-private

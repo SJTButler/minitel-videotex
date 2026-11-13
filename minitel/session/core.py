@@ -6,7 +6,7 @@ from ..design.stops import reveal_viewport
 from ..pagemodel.model import PageContext
 from ..protocol import codec
 from ..render.render import render_diff, reset
-from ..render.screen import Screen
+from ..render.screen import Screen, resolve_paint
 from ..terminal.power import Power, PowerSignals, PowerWatcher
 from .action import Action
 from ..pagemodel.header import header_requires
@@ -72,6 +72,9 @@ class Session(
         self.screen = None
         self.scroll_mode = False
         self.screen_scroll_mode = False
+        self.screen_paint = "row"
+        self.screen_header_paint = "row"
+        self._shadow_exact = True
         self.clock = clock
         self.wall_clock = wall_clock
         self.status_text = None
@@ -222,6 +225,7 @@ class Session(
         self._reset_announcement_baseline()
         self._reschedule_announcements(self.clock(), immediate=True)
         self._touch()
+        self._shadow_exact = True
         return self.render()
 
     def refresh(self):
@@ -234,9 +238,24 @@ class Session(
             old is None
             or old_scroll != self.screen_scroll_mode
             or getattr(new, "force_full", False)
+            or self.screen_paint == "full"
         ):
+            self._shadow_exact = True
             return Action(screen=new)
-        return Action(raw=render_diff(old, new, scroll=self.scroll_mode))
+        paint = self.screen_paint
+        header_paint = self.screen_header_paint
+        if not self._shadow_exact:
+            paint = "row"
+            header_paint = "row"
+        return Action(
+            raw=render_diff(
+                old,
+                new,
+                scroll=self.scroll_mode,
+                paint=paint,
+                header_paint=header_paint,
+            )
+        )
 
     def render(self):
         self.scroll_mode = bool(self.current.scroll)
@@ -294,6 +313,12 @@ class Session(
             screen.set_cursor(field.row, col, self._cursor_visible())
         else:
             screen.set_cursor(codec.ROWS - 1, 0, False)
+        self.screen_paint = resolve_paint(
+            getattr(self.current, "paint", None),
+            screen.paint,
+            allow_full=True,
+            what="page paint",
+        )
         screen = self._compose_header(screen, self.current)
         self.screen = screen
         self.screen_scroll_mode = self.scroll_mode
@@ -327,6 +352,7 @@ class Session(
         if isinstance(frame, (bytes, bytearray)):
             frame = bytes(frame)
             if frame:
+                self._shadow_exact = False
                 frame = reset() + frame
             if not self.screensaver_active and frame and self.active_field is not None:
                 frame += self._focus_frame()
@@ -342,17 +368,36 @@ class Session(
                     frame.set_cursor(field.row, col, self._cursor_visible())
                 else:
                     frame.set_cursor(codec.ROWS - 1, 0, False)
+            self.screen_paint = resolve_paint(
+                getattr(page, "paint", None),
+                frame.paint,
+                allow_full=True,
+                what="page paint",
+            )
             frame = self._compose_header(frame, page)
             old = self.screen
             if (
                 old is None
                 or self.scroll_mode != self.screen_scroll_mode
                 or getattr(frame, "force_full", False)
+                or self.screen_paint == "full"
             ):
                 self.screen = frame
                 self.screen_scroll_mode = self.scroll_mode
+                self._shadow_exact = True
                 return Action(screen=frame)
-            diff = render_diff(old, frame, scroll=self.scroll_mode)
+            paint = self.screen_paint
+            header_paint = self.screen_header_paint
+            if not self._shadow_exact:
+                paint = "row"
+                header_paint = "row"
+            diff = render_diff(
+                old,
+                frame,
+                scroll=self.scroll_mode,
+                paint=paint,
+                header_paint=header_paint,
+            )
             self.screen = frame
             self.screen_scroll_mode = self.scroll_mode
             return Action(raw=diff)

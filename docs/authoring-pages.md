@@ -68,8 +68,8 @@ The decorator form is the shortest:
 @page(number, title="", aliases=(), on_submit=None, on_key=None,
       on_tick=None, tick_interval=None, form=False, on_form=None,
       transient=False, back_page=None, extension_back_page=None,
-      screensaver=None, no_screensaver=False, scroll=False, requires=(),
-      extensions=False, header=None, announce=None,
+      screensaver=None, no_screensaver=False, scroll=False, paint=None,
+      requires=(), extensions=False, header=None, announce=None,
       announce_channel=None, **meta)
 def render(ctx):
     return Screen()
@@ -106,6 +106,10 @@ def render(ctx):
   complete `Screen` from `render`/`on_tick`; the session owns the mode and the
   renderer turns a one-row shift into `LF` plus a small repaint. See
   [Scrolling text pages](#scrolling-text-pages).
+- `paint` selects the update strategy: `None`/`"row"` (default) repaints
+  changed rows, `"cell"` writes only changed cell runs, and `"full"` full-paints
+  every update. A `Screen` can override it for one frame. See
+  [Update paint modes](#update-paint-modes).
 - `extensions=True` lets the page be addressed as `number#token`, such as
   `120#PAR`; see [Page extension codes](#page-extension-codes).
 - `extension_back_page="120"` sets the logical `RETOUR` parent for extension
@@ -234,6 +238,10 @@ class MyHeader(Header):
   schedules the tick; the header does not own a timer.
 - `requires` declares services the header needs. They are validated with the
   page graph and included in the orphan-service report.
+- `paint` is the row-0 update strategy: `None`/`"row"` (default) or `"cell"`.
+  `"full"` is rejected because a header owns only row 0. A returned `Screen` can
+  set `screen.paint` to override the class value for that frame; `None` keeps
+  the row redraw. See [Update paint modes](#update-paint-modes).
 - Header instances are shared across sessions. Keep them stateless; put
   per-session state in `ctx.state`.
 - A header cannot navigate, submit, or receive keys. Those belong to pages and
@@ -287,13 +295,20 @@ def full_screen(ctx):
 The optional `ChyronHeader` in `pages/common/header.py` is a user-space
 presentation example: it inherits the status behaviour, but when an
 announcement is current it draws a right-to-left ticker using
-`ctx.announcement_elapsed`. Select it with `--chyron`. Its conservative
-defaults are a 1.0 s frame and two columns per frame; tune `tick_interval` and
-`step_columns` with a hardware pacing check. Long text gets a longer display
-time, clamped by `AnnouncementPolicy.max_duration`. The ticker stops at column
-35 and reserves the last four columns for the terminal `F/C` indicator and
-right margin. A page-specific header still wins, so the reader's
+`ctx.announcement_elapsed`. The ticker frame sets `screen.paint = "cell"`, so a
+one-frame move does not clear the inverse row; its idle status fallback leaves
+`paint` unset and keeps the row redraw. Select it with `--chyron`. Its
+conservative defaults are a 1.0 s frame and two columns per frame; tune
+`tick_interval` and `step_columns` with a hardware pacing check. Long text gets
+a longer display time, clamped by `AnnouncementPolicy.max_duration`. The ticker
+stops at column 35 and reserves the last four columns for the terminal `F/C`
+indicator and right margin. A page-specific header still wins, so the reader's
 `AnnouncementHeader` is not replaced by `--chyron`.
+
+`StatusHeader` and `AnnouncementHeader` deliberately keep row paint. The
+full-row redraw, including the black-to-inverse flash, is the visible change
+cue for a status or a static announcement; only the animated chyron ticker and
+page-owned rows opt into cell paint.
 
 Use per-page overrides sparingly: a full-screen page, a test card, or a page
 with a bespoke status row. The app header should cover the normal case.
@@ -421,6 +436,18 @@ the Minitel cannot represent.
 For raw protocol work, `minitel.protocol.codec` exposes `pos`, `home`, `clear`, `fg`,
 `bg`, `inverse`, `flash`, `underline`, `size`, `repeat`, `mosaic`, `cursor`,
 and the input parser. Most pages should not need it beyond constants.
+
+Presentation hints on a `Screen`:
+
+| Attribute | Meaning |
+|---|---|
+| `screen.paint` | per-frame update mode: `None`, `"row"`, `"cell"`, or `"full"` |
+| `screen.paint_order` | `"down"` (default) or `"up"` for the first full paint |
+| `screen.force_full` | force this update to be a full paint |
+
+Use `screen.paint` to choose cell paint for one frame, or `"full"` to force a
+single full paint. A page declaration is usually better for a stable policy;
+see [Update paint modes](#update-paint-modes).
 
 ## Layout helpers
 
@@ -723,6 +750,13 @@ via `GUIDE` or history restores the last query and result selection. The selecte
 result title is inverse; the other result titles use the link colour; tags and
 snippets stay normal.
 
+`article_screen` sets `screen.paint = "cell"` so find highlighting and the
+selected-link inverse update without clearing each link row. The index stays on
+row paint, where its double-size title and selected result are a useful
+full-row change cue. The article remains `scroll=True`; a scroll that also
+restyles links uses the renderer's style-change shift path. Article links use
+colour and inverse, never underline, so they do not hit the underline barrier.
+
 Headings are flush left in v1; `Block.level` is carried for a later hierarchy
 rule. If indentation is added, use h2 flush, h3 +2 columns, and h4 +4 columns.
 Links match both their visible anchor labels and the target title, so a source
@@ -755,32 +789,112 @@ if has_events and not ctx.state.get("loaded"):
     screen.force_full = True
 ```
 
+`screen.force_full` is a one-shot choice. A page that declares
+`paint="full"` chooses a full paint for every update instead; that is usually
+too expensive for a 1 Hz page. `paint_order` applies to either full-paint path.
+
+## Update paint modes
+
+A page or header declares how its updates are painted:
+
+| Mode | Behaviour |
+|---|---|
+| `"full"` | every update is a full-screen paint |
+| `"row"` | repaint changed rows (the default; `None` means row) |
+| `"cell"` | write only changed cell runs; do not clear the row first |
+
+```python
+@page("150", title="LIVE", tick_interval=5.0, on_tick=live_tick,
+      paint="cell")
+def live(ctx):
+    return live_screen(ctx)
+```
+
+Cell paint is for small, frequent changes: a clock digit, a score, a moved
+ball, or a link highlight. It groups adjacent changed cells with the same
+attributes into runs and preserves unchanged cells and their attributes. It
+uses `CAN` only for a trailing default region; an inverse or coloured tail is
+written as runs. It never clears a whole row just to change one cell.
+
+The mode is a declaration, not a page-local renderer:
+
+- The page declaration is the default for body rows 1-24. `screen.paint` on the
+  returned `Screen` overrides it for that frame.
+- A header declaration applies to row 0 only. A header result `Screen.paint`
+  overrides the header's class value for that frame. Headers cannot declare
+  `"full"`.
+- If the header passes through (`render` returns `None`) or the page declares
+  `header=False`, row 0 belongs to the body and uses the page mode.
+- `"full"` on a page full-paints the composed screen on every update. It is
+  useful for authenticity or a page with complex geometry, not for a 1 Hz
+  tick.
+
+Safety barriers are automatic:
+
+- A row containing underline or a non-normal size (`DOUBLE_HEIGHT`,
+  `DOUBLE_WIDTH`, `DOUBLE_SIZE`) never uses cell runs. Underline uses the
+  full-row path because it is line-affecting; non-normal size uses the normal
+  `CAN`-plus-runs row path. Keep inline underline and double-size rows out of
+  cell-paint designs where possible.
+- Rows that the terminal has scrolled are repainted as rows; they are new
+  content.
+
+Scrolling pages still work. If the new screen is an exact vertical shift, the
+normal `LF`/`VT` fast path applies. If the shifted rows keep their characters
+but change attributes (a reader link highlight or selection), the renderer
+emits `LF`/`VT`, repaints the revealed rows, and cell-diffs the restyled
+overlapping rows. If a changed overlapping row is a barrier, the renderer
+falls back to the normal non-shift diff.
+
+Raw tick frames bypass the shadow. If a page returns raw bytes from `on_tick`,
+cell paint is suppressed until the next full paint. Prefer a `Screen` tick for
+a cell-painted page.
+
+Current public callers: `903` bouncing ball, `900` clock screensaver (the
+double-size minute row is a barrier), the home clock, the chyron ticker frame,
+and the reader article. `StatusHeader` and `AnnouncementHeader` stay row on
+purpose; the reader index stays row.
+
 ## Dynamic pages
 
 A page can update a region without repainting the whole screen. Set
-`tick_interval` and provide `on_tick`:
+`tick_interval`, provide `on_tick`, and declare `paint="cell"` for frequent,
+small changes:
 
 ```python
-def tick(ctx):
-    return codec.pos(3, 7) + codec.text("UPDATED")
-
-@page("150", title="DYNAMIC", tick_interval=1.0, on_tick=tick)
-def dynamic(ctx):
+def screen(ctx):
     s = Screen()
     ctx.set_status("PAGE 150")
     s.text(1, 0, "DYNAMIC", inverse=True, size=codec.DOUBLE_WIDTH)
-    s.text(3, 0, "VALUE: UPDATED")
+    s.text(3, 0, "VALUE: " + current_value(ctx))
     page_input(s, ctx, cursor="auto")
     footer(s)
     return s
+
+
+def tick(ctx):
+    return screen(ctx)
+
+
+@page("150", title="DYNAMIC", tick_interval=1.0, on_tick=tick,
+      paint="cell")
+def dynamic(ctx):
+    return screen(ctx)
 ```
 
 - `tick_interval` is in seconds. `None` (the default) means static.
 - `MinitelApp` calls `on_tick` while the page is current. Navigating away stops
   ticks; navigating back paints the full page once and resumes.
-- Return **only the dynamic region** as raw bytes. The session prepends a full
-  attribute reset and appends `pos(input)` plus the current cursor visibility,
-  so the insertion point returns to the `PAGE:` field with a known pen state.
+- **Preferred: return the complete desired `Screen`.** The session diffs it
+  against its shadow. With `paint="cell"`, only the changed cell runs are sent;
+  unchanged cells, inverse backgrounds, and link colours are preserved. Factor
+  the body into a `screen(ctx)` helper used by `render` and `on_tick`, as the
+  home clock, bouncing ball, and clock screensaver do.
+- Use a fixed-width value (for example `time.strftime("%H:%M:%S")`) so the
+  region never changes length and never needs clearing.
+- `page_input` redraws the current field value on every render, matching
+  `line_field`. A Screen tick therefore keeps typed input visible instead of
+  blanking it.
 - If a tick moves the cursor, use `page_input(s, ctx, cursor="auto")`. While
   the page is idle the cursor is hidden and ticks run. The first typed
   character sends `CON`, the cursor appears, and ticks pause while the line is
@@ -793,15 +907,19 @@ def dynamic(ctx):
   the default server echo, the server sends the same cursor commands;
   `--local-echo` keeps terminal echo instead.
 - The initial `render` must draw the same region at the same position, so the
-  first tick overwrites the same cells.
+  first tick finds the same cells.
 - A full page is ~240 bytes (~1.8 s at 1200). A small region is ~15 bytes
-  (~0.11 s). Do not full-repaint at 1 Hz on the M1.
-- If `on_tick` returns a `Screen`, it must be the **complete desired page**;
-  the session diffs it against its shadow screen and places the cursor at the
-  active input field before diffing. For a single region, return raw bytes
-  instead.
-- Use a fixed-width value (for example `time.strftime("%H:%M:%S")`) so the
-  region never changes length and never needs clearing.
+  (~0.11 s). Do not full-repaint at 1 Hz on the M1; `paint="full"` is for
+  deliberate full-screen updates, not frequent ticks.
+
+**Raw tick frames.** A page can still return only a dynamic region as raw
+bytes. The session prepends a full attribute reset and appends `pos(input)`
+plus the current cursor visibility, so the insertion point returns to the
+`PAGE:` field with a known pen state. Raw frames bypass the shadow, so a later
+cell diff cannot know what they touched: cell paint is suppressed until the
+next full paint. Prefer a Screen tick with `paint="cell"` for a cell-painted
+page, and keep raw frames for pages that genuinely own a tiny region and do
+not need cell paint.
 
 The timer is transport-level: `Session.next_timeout()` says how long to wait,
 and `Session.on_timeout()` asks the active page for a tick, activates the
@@ -846,6 +964,11 @@ The page directory flags scrolling pages with the `S` page flag.
   the old screen shifted by one or more rows, the session emits the terminal
   `LF`/`VT` and repaints only the new rows. Otherwise the normal changed-row
   diff applies.
+- A scrolling page may also declare `paint="cell"`. An exact shift still uses
+  `LF`/`VT`. If the shifted rows keep their characters but change attributes
+  (for example a reader link highlight), the renderer shifts, repaints the
+  revealed rows, and cell-diffs the restyled overlapping rows. Barrier rows
+  fall back to the normal non-shift diff.
 - Do not send `LF`, `VT`, or the scroll-mode command from a page. `minitel/`
   owns the mode and the renderer chooses the bytes. Pages must not emit raw
   protocol bytes.
@@ -923,7 +1046,10 @@ Idle means **no input and no navigation**. Page ticks and screensaver repaints
 do not count as activity. While a screensaver is active, the underlying page's
 ticks stop; only the screensaver page's ticks and rotation run. Activation,
 rotation, and wake are full paints, which also avoids stale double-size glyphs
-on wake. Screensaver ticks still use the normal diff.
+on wake. Screensaver ticks use the page's paint mode; `900` CLOCK and `903`
+BOUNCING BALL declare `paint="cell"`. The clock's double-size minute row is a
+barrier and keeps the row path; only its normal-size seconds/date rows use cell
+runs.
 
 Screensaver pages declare their group on the page itself:
 
@@ -1022,16 +1148,29 @@ timer code.
 
 The session keeps a shadow `Screen`. `Session.refresh()` re-renders the current
 page and returns `Action(raw=render_diff(old, new))`. `ANNULATION` uses it, and
-a `Screen` returned by `on_tick` is diffed. `render_diff` repaints **whole
-changed rows**, not individual cells:
+a `Screen` returned by `on_tick` is diffed.
 
-- a footer row is ~40 bytes;
-- a clock row is ~15 bytes;
-- an unchanged page produces no bytes.
+The update mode is per page and per header:
 
-Raw tick frames bypass the shadow screen. A later `refresh()` may repaint rows
-that changed through raw frames; that is correct but less efficient. Use one
-mode per page when it matters.
+- `None`/`"row"` repaints whole changed rows. This is the default and is right
+  for normal page changes.
+- `"cell"` writes adjacent changed cell runs and preserves unchanged cells,
+  including inverse backgrounds and colours. Use it for small, frequent
+  updates; a footer row is still ~40 bytes, but a one-digit clock change is a
+  handful.
+- `"full"` full-paints every update. It is for authenticity or a whole-screen
+  replacement, not a 1 Hz tick.
+- Underline and non-normal-size rows never use cell runs. Scrolled/revealed
+  rows are repainted as rows.
+
+A page declares the body mode with `@page(paint=...)`; a header declares row 0
+with `Header.paint`. A returned `Screen.paint` overrides either for one frame.
+See [Update paint modes](#update-paint-modes).
+
+Raw tick frames bypass the shadow. If a page returns raw bytes from `on_tick`,
+cell paint is suppressed until the next full paint. A later `refresh()` may
+repaint rows that changed through raw frames; that is correct but less
+efficient. Prefer a Screen tick for a cell-painted page.
 
 Form focus uses `refresh()` and the diff, so a footer built from
 `ctx.active_name` updates automatically. Only the footer rows and cursor are

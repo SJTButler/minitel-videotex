@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+- Added update paint modes: pages and headers can declare `paint="cell"` for
+  changed-cell runs, `paint="row"` for the default changed-row diff, or
+  `paint="full"` for every-update full paints, with a per-frame `Screen.paint`
+  override. Cell paint preserves unchanged inverse/colour cells and only uses
+  row clears for underline, non-normal-size, or scrolled rows. The bouncing
+  ball, clock screensaver, home clock, chyron ticker, and reader article opt in;
+  `page_input` now redraws the current field value for Screen ticks, and the
+  reader handles scrolling that also restyles link highlights. The status and
+  static announcement headers deliberately keep row paint; the chyron ticker
+  uses cell paint.
 - Added a row-0 header surface: pages declare their status with
   `ctx.set_status`, a page can opt out or select a page-specific header, and
   the session composes the header over the body. Announcements are session-owned

@@ -5,8 +5,9 @@ from unittest.mock import patch
 
 import minitel
 from minitel.protocol import codec
-from minitel.render.render import render, render_diff
-from minitel.render import Screen
+from minitel.render.render import cell_diff_row_bytes, render, render_diff
+from minitel.render import Cell, Screen
+from minitel.render.screen import validate_paint
 
 
 def load_virtual_minitel():
@@ -249,6 +250,304 @@ class DiffTests(unittest.TestCase):
 
         decoded = apply_diff(old, render_diff(old, new))
         self.assertTrue(decoded.text().splitlines()[0].startswith("PAGE 110"))
+
+
+class CellDiffTests(unittest.TestCase):
+    def test_one_changed_cell_emits_only_that_run(self):
+        old = Screen()
+        old.text(3, 0, "HELLO")
+        new = Screen()
+        new.text(3, 0, "HELLX")
+
+        diff = render_diff(old, new, paint="cell")
+        self.assertNotIn(bytes([codec.CAN]), diff)
+        self.assertIn(codec.pos(3, 4) + b"X", diff)
+        self.assertNotIn(b"HELL", diff)
+        self.assertEqual(apply_diff(old, diff).text(), new.to_text())
+
+    def test_status_digit_preserves_inverse_row(self):
+        old = Screen()
+        old.fill(0, 0, 40, " ", inverse=True)
+        old.text(0, 0, "PAGE 100", inverse=True)
+        new = Screen()
+        new.fill(0, 0, 40, " ", inverse=True)
+        new.text(0, 0, "PAGE 110", inverse=True)
+
+        diff = render_diff(old, new, paint="cell")
+        self.assertNotIn(bytes([codec.CAN]), diff)
+        decoded = apply_diff(old, diff)
+        self.assertTrue(decoded.text().splitlines()[0].startswith("PAGE 110"))
+        self.assertTrue(all(cell.inverse for cell in decoded.rows[0]))
+
+    def test_attribute_only_change_is_emitted(self):
+        old = Screen()
+        old.text(3, 0, "A")
+        new = Screen()
+        new.text(3, 0, "A", inverse=True)
+
+        diff = render_diff(old, new, paint="cell")
+        self.assertIn(codec.inverse(True), diff)
+        self.assertIn(b"A", diff)
+        decoded = apply_diff(old, diff)
+        self.assertTrue(decoded.rows[3][0].inverse)
+        self.assertEqual(decoded.rows[3][0].ch, "A")
+
+    def test_trailing_clear_uses_can(self):
+        old = Screen()
+        old.text(3, 0, "HELLO")
+        new = Screen()
+
+        diff = render_diff(old, new, paint="cell")
+        self.assertIn(bytes([codec.CAN]), diff)
+        self.assertNotIn(b"HELLO", diff)
+        self.assertEqual(apply_diff(old, diff).text(), new.to_text())
+
+    def test_clear_after_inverse_run_uses_default_pen(self):
+        old = Screen()
+        old.fill(3, 0, 40, " ", inverse=True)
+        old.text(3, 0, "PAGE 100", inverse=True)
+        new = Screen()
+        new.fill(3, 0, 6, " ", inverse=True)
+        new.text(3, 0, "PAGE 1", inverse=True)
+
+        diff = render_diff(old, new, paint="cell")
+        self.assertIn(bytes([codec.CAN]), diff)
+        decoded = apply_diff(old, diff)
+        self.assertEqual(decoded.text().splitlines()[3][:8], "PAGE 1  ")
+        self.assertFalse(any(cell.inverse for cell in decoded.rows[3][6:]))
+
+    def test_non_default_tail_does_not_use_can(self):
+        old = Screen()
+        old.fill(3, 0, 40, " ", inverse=True)
+        old.text(3, 0, "AAAAA", inverse=True)
+        new = Screen()
+        new.fill(3, 0, 40, " ", inverse=True)
+        new.text(3, 0, "AAA", inverse=True)
+
+        diff = render_diff(old, new, paint="cell")
+        self.assertNotIn(bytes([codec.CAN]), diff)
+        decoded = apply_diff(old, diff)
+        self.assertEqual(decoded.text().splitlines()[3][:5], "AAA  ")
+        self.assertTrue(all(cell.inverse for cell in decoded.rows[3]))
+
+    def test_adjacent_only_runs(self):
+        old = Screen()
+        old.text(3, 0, "AAAAA")
+        new = Screen()
+        new.text(3, 0, "ABABA")
+
+        diff = render_diff(old, new, paint="cell")
+        self.assertIn(codec.pos(3, 1), diff)
+        self.assertIn(codec.pos(3, 3), diff)
+        self.assertNotIn(codec.pos(3, 2), diff)
+        self.assertEqual(apply_diff(old, diff).text(), new.to_text())
+
+    def test_identical_screens(self):
+        screen = Screen()
+        screen.text(3, 0, "HELLO")
+        self.assertEqual(render_diff(screen, screen, paint="cell"), b"")
+
+    def test_cursor_only_change(self):
+        old = Screen()
+        new = Screen()
+        new.set_cursor(10, 5, True)
+
+        diff = render_diff(old, new, paint="cell")
+        self.assertNotIn(bytes([codec.CAN]), diff)
+        decoded = apply_diff(old, diff)
+        self.assertEqual((decoded.row, decoded.col), (10, 5))
+
+    def test_underline_row_uses_row_path(self):
+        old = Screen()
+        old.text(5, 0, "ONE LINK TWO")
+        old.text(5, 4, "LINK", underline=True)
+        new = Screen()
+        new.text(5, 0, "ONE LANK TWO")
+        new.text(5, 4, "LANK", underline=True)
+
+        with patch("minitel.render.render.cell_diff_row_bytes") as cell:
+            diff = render_diff(old, new, paint="cell")
+        cell.assert_not_called()
+        self.assertEqual(apply_diff(old, diff).text(), new.to_text())
+
+    def test_double_size_row_uses_row_path(self):
+        old = Screen()
+        old.text(5, 0, "BIG", size=codec.DOUBLE_WIDTH)
+        new = Screen()
+        new.text(5, 0, "BAG", size=codec.DOUBLE_WIDTH)
+
+        with patch("minitel.render.render.cell_diff_row_bytes") as cell:
+            diff = render_diff(old, new, paint="cell")
+        cell.assert_not_called()
+        self.assertEqual(apply_diff(old, diff).text(), new.to_text())
+
+    def test_cell_diff_rejects_barrier_rows(self):
+        old = Screen()
+        old.text(5, 0, "LINK", underline=True)
+        new = Screen()
+        new.text(5, 0, "LANK", underline=True)
+        with self.assertRaises(ValueError):
+            cell_diff_row_bytes(5, old.rows[5], new.rows[5])
+
+    def test_header_cell_and_body_row_modes(self):
+        old = Screen()
+        old.fill(0, 0, 40, " ", inverse=True)
+        old.text(0, 0, "PAGE 100", inverse=True)
+        old.text(5, 0, "HELLO")
+        new = Screen()
+        new.fill(0, 0, 40, " ", inverse=True)
+        new.text(0, 0, "PAGE 110", inverse=True)
+        new.text(5, 0, "HELLX")
+
+        diff = render_diff(
+            old, new, paint="row", header_paint="cell"
+        )
+        self.assertNotIn(codec.pos(0, 0), diff)
+        self.assertIn(codec.pos(0, 6), diff)
+        self.assertIn(codec.pos(5, 0), diff)
+        self.assertEqual(apply_diff(old, diff).text(), new.to_text())
+
+    def test_render_diff_rejects_full_modes(self):
+        old = Screen()
+        new = Screen()
+        new.text(3, 0, "X")
+        with self.assertRaises(ValueError):
+            render_diff(old, new, paint="full")
+        with self.assertRaises(ValueError):
+            render_diff(old, new, paint="row", header_paint="full")
+
+    def test_paint_none_defaults_to_row(self):
+        old = Screen()
+        old.text(3, 0, "HELLO")
+        new = Screen()
+        new.text(3, 0, "HELLX")
+        self.assertEqual(
+            render_diff(old, new, paint=None),
+            render_diff(old, new, paint="row"),
+        )
+
+    def test_header_paint_none_falls_back_to_paint(self):
+        old = Screen()
+        old.text(3, 0, "HELLO")
+        new = Screen()
+        new.text(3, 0, "HELLX")
+        self.assertEqual(
+            render_diff(old, new, paint="cell", header_paint=None),
+            render_diff(old, new, paint="cell", header_paint="cell"),
+        )
+
+    def test_validate_paint(self):
+        self.assertIsNone(validate_paint(None))
+        self.assertEqual(validate_paint("cell"), "cell")
+        with self.assertRaises(ValueError):
+            validate_paint("bogus")
+        with self.assertRaises(TypeError):
+            validate_paint(1)
+        with self.assertRaises(ValueError):
+            validate_paint("full", allow_full=False)
+
+
+class StyledShiftDiffTests(unittest.TestCase):
+    def screens(self):
+        old = Screen()
+        old.fill(0, 0, 40, " ", inverse=True)
+        old.text(0, 0, "PAGE 100", inverse=True)
+        for row in range(1, codec.ROWS):
+            old.text(row, 0, f"LINE {row:02d}AAAA")
+            old.put(row, 10, "!")
+
+        new = Screen()
+        new.fill(0, 0, 40, " ", inverse=True)
+        new.text(0, 0, "PAGE 110", inverse=True)
+        new.rows[1:codec.ROWS - 1] = [
+            [Cell(**vars(cell)) for cell in row]
+            for row in old.rows[2:codec.ROWS]
+        ]
+        new.text(codec.ROWS - 1, 0, "NEW LAST")
+        new.rows[5][5] = Cell(
+            ch=old.rows[6][5].ch, inverse=True
+        )
+        return old, new
+
+    def test_scroll_style_change_keeps_the_shift_fast_path(self):
+        old, new = self.screens()
+
+        diff = render_diff(old, new, scroll=True, paint="cell")
+        self.assertIn(bytes([codec.LF]), diff)
+        self.assertNotIn(codec.pos(5, 0), diff)
+        self.assertIn(codec.pos(5, 5), diff)
+        decoded = decode(render(old, scroll=True) + diff)
+        self.assertEqual(decoded.text(), new.to_text())
+        self.assertTrue(decoded.rows[5][5].inverse)
+
+    def test_scroll_style_change_falls_back_for_barrier_rows(self):
+        old, new = self.screens()
+        new.rows[5][5].underline = True
+
+        diff = render_diff(old, new, scroll=True, paint="cell")
+        self.assertNotIn(bytes([codec.LF]), diff)
+        decoded = decode(render(old, scroll=True) + diff)
+        self.assertEqual(decoded.text(), new.to_text())
+
+    def test_down_shift_style_change_keeps_the_shift_fast_path(self):
+        old = Screen()
+        old.fill(0, 0, 40, " ", inverse=True)
+        old.text(0, 0, "PAGE 100", inverse=True)
+        for row in range(1, codec.ROWS):
+            old.text(row, 0, f"LINE {row:02d}AAAA")
+
+        new = Screen()
+        new.fill(0, 0, 40, " ", inverse=True)
+        new.text(0, 0, "PAGE 100", inverse=True)
+        new.text(1, 0, "NEW FIRST")
+        new.rows[2:codec.ROWS] = [
+            [Cell(**vars(cell)) for cell in row]
+            for row in old.rows[1:codec.ROWS - 1]
+        ]
+        new.rows[5][5] = Cell(
+            ch=old.rows[4][5].ch, inverse=True
+        )
+
+        diff = render_diff(old, new, scroll=True, paint="cell")
+        self.assertIn(bytes([codec.VT]), diff)
+        self.assertNotIn(codec.pos(5, 0), diff)
+        self.assertIn(codec.pos(5, 5), diff)
+        decoded = decode(render(old, scroll=True) + diff)
+        self.assertEqual(decoded.text(), new.to_text())
+        self.assertTrue(decoded.rows[5][5].inverse)
+
+    def test_scroll_style_change_is_not_used_in_row_mode(self):
+        old, new = self.screens()
+
+        diff = render_diff(old, new, scroll=True)
+        self.assertNotIn(bytes([codec.LF]), diff)
+        decoded = decode(render(old, scroll=True) + diff)
+        self.assertEqual(decoded.text(), new.to_text())
+
+    def test_exact_shift_row_zero_uses_header_cell_mode(self):
+        old = Screen()
+        old.fill(0, 0, 40, " ", inverse=True)
+        old.text(0, 0, "PAGE 100", inverse=True)
+        for row in range(1, codec.ROWS):
+            old.text(row, 0, f"LINE {row:02d}")
+        new = Screen()
+        new.fill(0, 0, 40, " ", inverse=True)
+        new.text(0, 0, "PAGE 110", inverse=True)
+        new.rows[1:codec.ROWS - 1] = [
+            [Cell(**vars(cell)) for cell in row]
+            for row in old.rows[2:codec.ROWS]
+        ]
+        new.text(codec.ROWS - 1, 0, "NEW LAST")
+
+        diff = render_diff(
+            old, new, scroll=True, paint="cell", header_paint="cell"
+        )
+        self.assertIn(bytes([codec.LF]), diff)
+        self.assertNotIn(codec.pos(0, 0), diff)
+        self.assertIn(codec.pos(0, 6), diff)
+        decoded = decode(render(old, scroll=True) + diff)
+        self.assertEqual(decoded.text(), new.to_text())
+        self.assertTrue(all(cell.inverse for cell in decoded.rows[0]))
 
 
 class ScrollDiffTests(unittest.TestCase):

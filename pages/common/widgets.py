@@ -31,4 +31,9 @@ def line_field(screen, ctx, name, row, col, width, *, label=None,
 def page_input(screen, ctx, *, cursor="visible"):
     screen.text(FIELD_ROW, 0, "PAGE:")
     screen.field(FIELD_ROW, FIELD_COL, FIELD_WIDTH)
+    value = ctx.input_value
+    if value:
+        screen.text(
+            FIELD_ROW, FIELD_COL, value[:FIELD_WIDTH], inverse=True
+        )
     ctx.set_input(FIELD_ROW, FIELD_COL, FIELD_WIDTH, cursor=cursor)

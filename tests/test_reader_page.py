@@ -3,6 +3,7 @@ import unittest
 import pages
 from minitel.data.services import ServiceRegistry
 from minitel.pagemodel import LINE_FIELD
+from minitel.protocol import codec
 from minitel.session import Session
 from minitel.terminal.profiles import M1
 from pages.common.layout import BODY, SECONDARY, WARNING
@@ -251,6 +252,20 @@ class ReaderPageTests(unittest.TestCase):
                         span.text.casefold(), labels,
                         (document.token, span.text),
                     )
+
+    def test_article_uses_cell_paint_and_index_stays_row(self):
+        session = make_session()
+        self.assertIsNone(session.screen.paint)
+        session.navigate("160#BETA")
+        self.assertEqual(session.screen.paint, "cell")
+
+    def test_find_highlight_does_not_clear_link_rows(self):
+        session = make_session()
+        session.navigate("160#BETA")
+        actions = session.feed(b"A")
+        raw = b"".join(action.raw for action in actions)
+        self.assertNotIn(bytes([codec.CAN]), raw)
+        self.assertIn("ALPHA", session.screen.to_text())
 
 
 if __name__ == "__main__":

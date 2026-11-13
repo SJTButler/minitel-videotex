@@ -297,6 +297,7 @@ def _status_row(screen, buffer, view, status_text):
 def article_screen(ctx, lines, view, *, buffer, status_text,
                    matches=(), selected_link=None):
     screen = Screen()
+    screen.paint = "cell"
     _status_row(screen, buffer, view, status_text)
     ctx.set_input(
         FIELD_ROW, 0, FIELD_WIDTH, live=True, visible=False

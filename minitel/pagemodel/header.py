@@ -1,5 +1,7 @@
 """Header API: row-0 chrome composed with a body page."""
 
+from ..render.screen import validate_paint
+
 
 class Header:
     """An app-selected row-0 view.
@@ -11,6 +13,7 @@ class Header:
 
     tick_interval = None
     requires = ()
+    paint = None
 
     def render(self, ctx):
         """Return a Screen whose row 0 is the header, or None to pass through.
@@ -44,6 +47,11 @@ def header_requires(header):
         or interval <= 0
     ):
         raise TypeError("header tick_interval must be a positive number or None")
+    validate_paint(
+        getattr(header, "paint", None),
+        allow_full=False,
+        what="header paint",
+    )
     return tuple(key.strip() for key in requires)
 
 

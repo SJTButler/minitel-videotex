@@ -64,6 +64,7 @@ class PageTests(unittest.TestCase):
     def test_page_input_registers_the_field(self):
         s = Screen()
         ctx = Mock()
+        ctx.input_value = ""
         page_input(s, ctx)
         ctx.set_input.assert_called_once_with(20, 6, 10, cursor="visible")
         self.assertTrue(all(s.rows[20][c].inverse for c in range(6, 16)))
@@ -71,12 +72,14 @@ class PageTests(unittest.TestCase):
     def test_page_input_can_hide_the_cursor(self):
         s = Screen()
         ctx = Mock()
+        ctx.input_value = ""
         page_input(s, ctx, cursor="hidden")
         ctx.set_input.assert_called_once_with(20, 6, 10, cursor="hidden")
 
     def test_page_input_auto_cursor(self):
         s = Screen()
         ctx = Mock()
+        ctx.input_value = ""
         page_input(s, ctx, cursor="auto")
         ctx.set_input.assert_called_once_with(20, 6, 10, cursor="auto")
 

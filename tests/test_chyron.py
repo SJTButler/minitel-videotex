@@ -10,6 +10,7 @@ from minitel import (
     Screen,
     Session,
 )
+from minitel.protocol import codec
 from pages.common.header import CHYRON_WIDTH, ChyronHeader
 
 
@@ -51,6 +52,7 @@ class ChyronRenderTests(unittest.TestCase):
         self.assertEqual(row0(first)[CHYRON_WIDTH - 1], "G")
         self.assertEqual(row0(first)[:CHYRON_WIDTH - 1].strip(), "")
         self.assertEqual(row0(first)[CHYRON_WIDTH:].strip(), "")
+        self.assertEqual(first.paint, "cell")
 
         moved = header.render(
             context(
@@ -61,10 +63,12 @@ class ChyronRenderTests(unittest.TestCase):
         self.assertEqual(row0(moved)[CHYRON_WIDTH - 3], "G")
         self.assertEqual(row0(moved)[:CHYRON_WIDTH - 3].strip(), "")
         self.assertEqual(row0(moved)[CHYRON_WIDTH:].strip(), "")
+        self.assertEqual(moved.paint, "cell")
 
     def test_it_falls_back_to_the_status_when_idle(self):
         screen = ChyronHeader().render(context(status="PAGE 700"))
         self.assertIn("PAGE 700", row0(screen))
+        self.assertIsNone(screen.paint)
 
     def test_duration_covers_the_text_travel(self):
         header = ChyronHeader()
@@ -114,8 +118,10 @@ class ChyronSessionTests(unittest.TestCase):
         self.assertEqual(row0(session.screen)[CHYRON_WIDTH - 1], "G")
 
         clock.advance(1.0)
-        session.on_timeout()
+        action = session.on_timeout()
         self.assertEqual(row0(session.screen)[CHYRON_WIDTH - 3], "G")
+        self.assertIsNone(action.screen)
+        self.assertNotIn(bytes([codec.CAN]), action.raw)
 
 
 if __name__ == "__main__":

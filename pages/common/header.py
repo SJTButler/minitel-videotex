@@ -76,4 +76,5 @@ class ChyronHeader(StatusHeader):
         screen = Screen()
         screen.fill(0, 0, codec.COLS, " ", inverse=True)
         screen.text(0, 0, window, inverse=True)
+        screen.paint = "cell"
         return screen
