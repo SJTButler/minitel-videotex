@@ -1,13 +1,23 @@
+import importlib.util
 import unittest
+from pathlib import Path
 
 import pages
 from minitel.data.services import ServiceRegistry
 from minitel.pagemodel import LINE_FIELD
 from minitel.protocol import codec
+from minitel.render.render import render
 from minitel.session import Session
 from minitel.terminal.profiles import M1
 from pages.common.layout import BODY, SECONDARY, WARNING
-from services.common.reader import SearchResult, StaticReaderService
+from services.common.reader import (
+    Block,
+    Document,
+    Link,
+    SearchResult,
+    Span,
+    StaticReaderService,
+)
 from tests.fixtures.wikipedia import DOCUMENTS, RESULTS
 
 ENVOI = bytes([0x13, 0x41])
@@ -16,10 +26,68 @@ GUIDE = bytes([0x13, 0x44])
 SUITE = bytes([0x13, 0x48])
 
 
-def make_session(results=RESULTS):
+def load_virtual_minitel():
+    path = Path(__file__).resolve().parents[1] / "tools" / "virtual_minitel.py"
+    spec = importlib.util.spec_from_file_location("virtual_minitel", path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+VM = load_virtual_minitel()
+
+
+def decode(data):
+    decoder = VM.Decoder()
+    decoder.feed(data)
+    return decoder.screen
+
+
+FILL = "FILLER TEXT THAT WRAPS ACROSS THE VIEWPORT. " * 2
+
+
+def scroll_document():
+    blocks = [
+        Block("heading", (Span("SCROLL TARGETS"),), 2),
+        Block("paragraph", (Span(FILL * 2),)),
+        Block(
+            "paragraph",
+            (
+                Span("FIRST "),
+                Span("TARGET A", 0),
+                Span(" IS VISIBLE. "),
+                Span(FILL * 2),
+            ),
+        ),
+        Block("paragraph", (Span(FILL * 3),)),
+        Block(
+            "paragraph",
+            (
+                Span("SECOND "),
+                Span("TARGET B", 1),
+                Span(" IS OFF SCREEN."),
+            ),
+        ),
+        Block("paragraph", (Span(FILL * 2),)),
+    ]
+    links = (
+        Link("A", "TARGET A", ("TARGET A",)),
+        Link("B", "TARGET B", ("TARGET B",)),
+    )
+    return Document(
+        token="SCROLL",
+        title="SCROLL TARGETS",
+        revision="1",
+        credit="FIXTURE",
+        links=links,
+        blocks=tuple(blocks),
+    )
+
+
+def make_session(results=RESULTS, documents=None):
     registry = pages.build_registry()
     service_registry = ServiceRegistry({
-        "wikipedia": StaticReaderService(DOCUMENTS, results),
+        "wikipedia": StaticReaderService(documents or DOCUMENTS, results),
     })
     page = registry.get("160")
     session = Session(
@@ -266,6 +334,22 @@ class ReaderPageTests(unittest.TestCase):
         raw = b"".join(action.raw for action in actions)
         self.assertNotIn(bytes([codec.CAN]), raw)
         self.assertIn("ALPHA", session.screen.to_text())
+
+    def test_scroll_with_find_uses_shift_and_cell_runs(self):
+        session = make_session(documents={"SCROLL": scroll_document()})
+        session.navigate("160#SCROLL")
+        session.feed(b"TARGET")
+        self.assertIn("1 ON SCREEN", row(session, 0))
+        session.feed(SUITE)
+        old = session.screen
+        actions = session.feed(SUITE)
+        raw = b"".join(action.raw for action in actions)
+        self.assertIn(bytes([codec.LF]), raw)
+        self.assertNotIn(codec.pos(8, 0), raw)
+        self.assertIn(codec.pos(8, 6), raw)
+        decoded = decode(render(old, scroll=True) + raw)
+        self.assertEqual(decoded.text(), session.screen.to_text())
+        self.assertFalse(decoded.rows[8][6].inverse)
 
 
 if __name__ == "__main__":
