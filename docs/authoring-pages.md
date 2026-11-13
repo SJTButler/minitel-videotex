@@ -284,6 +284,17 @@ def full_screen(ctx):
 - `header=MyHeader()` uses that header for this page only.
 - `ExtensionPage` inherits the base page's header.
 
+The optional `ChyronHeader` in `pages/common/header.py` is a user-space
+presentation example: it inherits the status behaviour, but when an
+announcement is current it draws a right-to-left ticker using
+`ctx.announcement_elapsed`. Select it with `--chyron`. Its conservative
+defaults are a 1.0 s frame and two columns per frame; tune `tick_interval` and
+`step_columns` with a hardware pacing check. Long text gets a longer display
+time, clamped by `AnnouncementPolicy.max_duration`. The ticker stops at column
+35 and reserves the last four columns for the terminal `F/C` indicator and
+right margin. A page-specific header still wins, so the reader's
+`AnnouncementHeader` is not replaced by `--chyron`.
+
 Use per-page overrides sparingly: a full-screen page, a test card, or a page
 with a bespoke status row. The app header should cover the normal case.
 

@@ -10,7 +10,8 @@
   overrides compose across packages, and `--no-announcements` /
   `--no-announcements-on-screensaver` control the feature. The server log
   records the caller for newly seen announcements. Diagnostics page `985`
-  provides a deterministic announcement source for testing.
+  provides a deterministic announcement source for testing. An optional
+  right-to-left chyron header is selectable with `--chyron`.
 - Added extra package composition: `pages.build_registry(*packages)` and
   `services.build_registry(*packages)` discover additional page and service
   packages, and `run_server.py` accepts repeatable `--pages-package`,

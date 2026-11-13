@@ -11,6 +11,7 @@ from minitel.app import MinitelApp
 from minitel.design import AnnouncementPolicy
 from minitel.terminal.power import POWER_OFF, POWER_ON, PowerSignals
 from minitel.terminal.profiles import M1
+from pages.common.header import ChyronHeader
 
 
 def missing_service_message(missing):
@@ -155,6 +156,11 @@ def main():
         help="suppress announcements while the screensaver is active",
     )
     ap.add_argument(
+        "--chyron",
+        action="store_true",
+        help="use the moving announcement chyron instead of the static header",
+    )
+    ap.add_argument(
         "--power-off",
         default=POWER_OFF.hex(),
         help="hex bytes for terminal power-off; empty disables (default: 00)",
@@ -224,6 +230,11 @@ def main():
         if args.screensaver == "off"
         else registry.screensaver_pages(args.screensaver) or None
     )
+    header = (
+        ChyronHeader()
+        if args.chyron
+        else getattr(pages, "HEADER", None)
+    )
     app = MinitelApp(
         registry,
         profile=M1,
@@ -237,7 +248,7 @@ def main():
         screensaver_after=args.screensaver_after,
         screensaver_hold=args.screensaver_hold,
         power=power,
-        header=getattr(pages, "HEADER", None),
+        header=header,
         announcement_policy=AnnouncementPolicy(
             enabled=not args.no_announcements,
             on_screensaver=not args.no_announcements_on_screensaver,
