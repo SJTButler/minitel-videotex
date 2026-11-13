@@ -8,6 +8,7 @@ from minitel.pagemodel import LINE_FIELD, page
 
 from services.common.reader import match_prefix
 
+from .common.header import AnnouncementHeader
 from .common.reader import (
     Line,
     LineSpan,
@@ -250,7 +251,7 @@ def _tick(ctx):
     extensions=True,
     scroll=True,
     tick_interval=1.0,
-    header=False,
+    header=AnnouncementHeader(),
     on_submit=_submit,
     on_key=_on_key,
     on_tick=_tick,

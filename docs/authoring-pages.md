@@ -336,11 +336,21 @@ def live_scores(ctx):
   `--strict-overrides`. Same-package duplicate channels are fatal.
 - The provider runs even when its page is not current, so a source can
   announce on any page. A page can declare one provider.
+- New announcements are queued per session and the active header renders the
+  current one on row 0. The default policy shows for 12 s, waits 4 s, and
+  queues up to 8; a header may override the display time. The page status or a
+  page-owned row returns after the announcement hides.
+- A page with its own row 0 uses `AnnouncementHeader` (announcements only,
+  otherwise pass through). The reader `160` does this. `header=False` opts out
+  of both status and announcements.
+- `--no-announcements` disables polling and display;
+  `--no-announcements-on-screensaver` keeps the screensaver row alone.
 - The server log records a caller only when a poll produces newly seen
   announcements, for example `ANNOUNCE sports <- 150: 2 new`. It shows the
   caller and new count, never the announcement text. The first poll seeds
   existing history without logging, and backfilled timestamps do not count as
-  new. Provider errors are logged with the caller and exception.
+  new. Show and hide also log the caller. Provider errors are logged with the
+  caller and exception.
 - Page `985` in the optional `diagnostics_pages` package is a deterministic
   test source: load the package, open `985`, set `MODE` to `ON`, then navigate
   anywhere. It emits a test announcement every 15 seconds without a live feed.

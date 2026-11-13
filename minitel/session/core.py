@@ -82,6 +82,13 @@ class Session(
         self._announcement_seen = {}
         self._announcement_seeded_channels = set()
         self._announcement_since = self.wall_clock()
+        self.announcement = None
+        self.announcement_channel = None
+        self._announcement_source_page = None
+        self._announcement_started = None
+        self._announcement_show_until = None
+        self._announcement_next_show = None
+        self._announcement_queue = []
         self.screensaver = (
             screensaver
             if isinstance(screensaver, Screensaver)

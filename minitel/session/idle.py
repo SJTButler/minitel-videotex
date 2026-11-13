@@ -72,6 +72,7 @@ class IdleMixin:
             self._screensaver_since = now
         self.screensaver_active = True
         self._screensaver_page = self.display_page
+        self._clear_announcements()
         return self._render_screensaver()
 
     def _render_screensaver(self):
@@ -213,11 +214,12 @@ class IdleMixin:
         if self._announcement_due(now):
             self._poll_announcements()
         if self.screensaver_active:
+            announcement_changed = self._advance_announcements(now)
             if self.display_page is not self._screensaver_page:
                 return self._render_screensaver()
             if self._body_tick_due(now):
                 return self.tick()
-            if self._header_due(now):
+            if self._header_due(now) or announcement_changed:
                 return self._refresh_header()
             return Action()
         idle = self._idle_delay(now)
@@ -225,6 +227,7 @@ class IdleMixin:
             action = self.activate_screensaver()
             if action is not None:
                 return action
+        announcement_changed = self._advance_announcements(now)
         pager_carousel = self._pager_carousel_delay(now)
         if pager_carousel is not None and pager_carousel <= 0:
             action = self._advance_pager_carousel(now)
@@ -233,7 +236,7 @@ class IdleMixin:
             return action
         if self._body_tick_due(now):
             return self.tick()
-        if self._header_due(now):
+        if self._header_due(now) or announcement_changed:
             return self._refresh_header()
         return Action()
 

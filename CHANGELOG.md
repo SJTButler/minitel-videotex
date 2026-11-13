@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+- Added a row-0 header surface: pages declare their status with
+  `ctx.set_status`, a page can opt out or select a page-specific header, and
+  the session composes the header over the body. Announcements are session-owned
+  (sources, channels, queue, watermark) and rendered by the header; live sports
+  goals appear on any page, the reader keeps its `FIND:` row when idle, channel
+  overrides compose across packages, and `--no-announcements` /
+  `--no-announcements-on-screensaver` control the feature. The server log
+  records the caller for newly seen announcements. Diagnostics page `985`
+  provides a deterministic announcement source for testing.
 - Added extra package composition: `pages.build_registry(*packages)` and
   `services.build_registry(*packages)` discover additional page and service
   packages, and `run_server.py` accepts repeatable `--pages-package`,

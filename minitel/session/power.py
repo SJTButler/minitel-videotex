@@ -10,6 +10,7 @@ class PowerMixin:
         self.paused = True
         self.parser = self._new_parser()
         self.power.reset()
+        self._clear_announcements()
         return Action(power=False)
 
     def resume(self):

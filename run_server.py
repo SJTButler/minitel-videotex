@@ -8,6 +8,7 @@ import pages
 import services
 
 from minitel.app import MinitelApp
+from minitel.design import AnnouncementPolicy
 from minitel.terminal.power import POWER_OFF, POWER_ON, PowerSignals
 from minitel.terminal.profiles import M1
 
@@ -144,6 +145,16 @@ def main():
         help="seconds to hold each screensaver page (default: 30)",
     )
     ap.add_argument(
+        "--no-announcements",
+        action="store_true",
+        help="disable announcement polling and banners",
+    )
+    ap.add_argument(
+        "--no-announcements-on-screensaver",
+        action="store_true",
+        help="suppress announcements while the screensaver is active",
+    )
+    ap.add_argument(
         "--power-off",
         default=POWER_OFF.hex(),
         help="hex bytes for terminal power-off; empty disables (default: 00)",
@@ -227,6 +238,10 @@ def main():
         screensaver_hold=args.screensaver_hold,
         power=power,
         header=getattr(pages, "HEADER", None),
+        announcement_policy=AnnouncementPolicy(
+            enabled=not args.no_announcements,
+            on_screensaver=not args.no_announcements_on_screensaver,
+        ),
     )
     asyncio.run(app.serve(args.host, args.port))
 
