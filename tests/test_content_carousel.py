@@ -22,11 +22,14 @@ class FakeClock:
 def build_registry():
     registry = Registry()
 
-    def list_render(ctx, *, total=12, hold=10.0, wrap=True):
+    def list_render(ctx, *, total=12, hold=10.0, wrap=True, pages=None,
+                    offset=None):
         s = Screen()
         s.text(0, 0, "LIST")
         pager = ctx.set_pager(
-            total, 4, carousel=Carousel(hold=hold, wrap=wrap)
+            total, 4,
+            offset=offset,
+            carousel=Carousel(hold=hold, wrap=wrap, pages=pages),
         )
         s.text(1, 0, pager.label)
         return s
@@ -79,6 +82,22 @@ def build_registry():
     def changing_quiet(ctx):
         return list_render(ctx, total=ctx.state.get("total", 12))
 
+    @page("611")
+    def subset(ctx):
+        return list_render(ctx, pages=(0, 2))
+
+    @page("612")
+    def one_subset(ctx):
+        return list_render(ctx, pages=(0,))
+
+    @page("613")
+    def outside_subset(ctx):
+        offset = None
+        if not ctx.state.get("outside_subset_started"):
+            ctx.state["outside_subset_started"] = True
+            offset = 4
+        return list_render(ctx, pages=(0, 2), offset=offset)
+
     @page("700")
     def saver(ctx):
         s = Screen()
@@ -93,7 +112,8 @@ def build_registry():
 
     pages = (
         quiet, ticking, field, single, no_wrap, no_saver, detail,
-        no_saver_list, changing, changing_quiet, saver, home,
+        no_saver_list, changing, changing_quiet, subset, one_subset,
+        outside_subset, saver, home,
     )
     for value in pages:
         registry.add(value)
@@ -218,6 +238,43 @@ class ContentCarouselTests(unittest.TestCase):
         self.clock.advance(10.0)
         self.session.on_timeout()
         self.assertEqual(self.session.pager.offset, 8)
+
+    def test_carousel_visits_only_the_allowed_pages(self):
+        session = self.make_session(initial="611")
+        self.clock.advance(10.0)
+        session.on_timeout()
+        self.assertEqual(session.pager.offset, 8)
+        self.clock.advance(10.0)
+        session.on_timeout()
+        self.assertEqual(session.pager.offset, 0)
+
+    def test_manual_paging_ignores_the_carousel_subset(self):
+        session = self.make_session(initial="611")
+        session.feed(SUITE)
+        self.assertEqual(session.pager.offset, 4)
+
+    def test_one_allowed_page_does_not_schedule_a_carousel(self):
+        session = self.make_session(initial="612")
+        self.assertIsNone(session.next_timeout())
+
+    def test_page_outside_the_subset_jumps_to_the_first_allowed(self):
+        session = self.make_session(initial="613")
+        self.assertEqual(session.pager.offset, 4)
+        self.clock.advance(10.0)
+        session.on_timeout()
+        self.assertEqual(session.pager.offset, 0)
+
+    def test_carousel_pages_must_be_valid_indexes(self):
+        with self.assertRaises(TypeError):
+            Carousel(pages=(-1,))
+        with self.assertRaises(TypeError):
+            Carousel(pages=(True,))
+        self.assertEqual(
+            Carousel(pages=(0, 2)).allowed(3), (0, 2)
+        )
+        self.assertEqual(
+            Carousel(pages=(0, 2)).allowed(2), (0,)
+        )
 
     def test_pager_offset_is_remembered_across_navigation(self):
         self.clock.advance(10.0)

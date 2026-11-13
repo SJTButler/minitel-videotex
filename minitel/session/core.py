@@ -174,22 +174,22 @@ class Session(
         self.pager = pager
         self.pagers[self.current.number] = pager
         key = (pager.page_size, pager.offset, carousel)
+        allowed = (
+            carousel.allowed(pager.page_count)
+            if carousel is not None and carousel.active
+            else ()
+        )
+        needs_carousel = bool(allowed) and (
+            len(allowed) >= 2 or pager.page_index not in allowed
+        )
         if (
             key != self._pager_carousel_key
-            or pager.page_count < 2
-            or (
-                self._pager_carousel_next is None
-                and carousel is not None
-                and carousel.active
-            )
+            or not needs_carousel
+            or self._pager_carousel_next is None
         ):
             self._pager_carousel_key = key
             self._pager_carousel = carousel
-            if (
-                carousel is not None
-                and carousel.active
-                and pager.page_count >= 2
-            ):
+            if needs_carousel:
                 self._pager_carousel_next = self.clock() + carousel.hold
             else:
                 self._pager_carousel_next = None

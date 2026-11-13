@@ -22,6 +22,9 @@
   records the caller for newly seen announcements. Diagnostics page `985`
   provides a deterministic announcement source for testing. An optional
   right-to-left chyron header is selectable with `--chyron`.
+- `Carousel` policies can carry a page subset: timed advances skip pages such
+  as past results or future fixtures while manual paging still visits all
+  pages.
 - Added extra package composition: `pages.build_registry(*packages)` and
   `services.build_registry(*packages)` discover additional page and service
   packages, and `run_server.py` accepts repeatable `--pages-package`,

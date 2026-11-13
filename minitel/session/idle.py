@@ -157,12 +157,22 @@ class IdleMixin:
         carousel = self._pager_carousel
         if carousel is None or not carousel.active:
             return None
-        if self._pager_carousel_next is None or self.pager.page_count < 2:
+        allowed = carousel.allowed(self.pager.page_count)
+        if not allowed:
+            return None
+        current = self.pager.page_index
+        if (
+            len(allowed) < 2
+            and current in allowed
+        ):
             return None
         if (
             not carousel.wrap
-            and self.pager.page_index >= self.pager.page_count - 1
+            and current in allowed
+            and current == allowed[-1]
         ):
+            return None
+        if self._pager_carousel_next is None:
             return None
         if self._has_input_text():
             return None
@@ -172,7 +182,25 @@ class IdleMixin:
         carousel = self._pager_carousel
         if carousel is None or self.pager is None:
             return Action()
-        self.pager = self.pager.next(wrap=carousel.wrap)
+        allowed = carousel.allowed(self.pager.page_count)
+        if not allowed:
+            return Action()
+        current = self.pager.page_index
+        if current in allowed:
+            position = allowed.index(current)
+            if position + 1 < len(allowed):
+                target = allowed[position + 1]
+            elif carousel.wrap:
+                target = allowed[0]
+            else:
+                return Action()
+        else:
+            target = allowed[0]
+        self.pager = type(self.pager)(
+            self.pager.total,
+            self.pager.page_size,
+            target * self.pager.page_size,
+        )
         self.pagers[self.current.number] = self.pager
         self._pager_carousel_key = (
             self.pager.page_size,

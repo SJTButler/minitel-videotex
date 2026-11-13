@@ -1112,6 +1112,12 @@ A page can give its content pager a timed advance policy. It is the same
 a takeover. `Carousel` is exported from `minitel`.
 
 - The page registers the pager with a carousel hold and wrap flag.
+- `Carousel(pages=(0, 2))` restricts timed advances to those zero-based page
+  indexes. `pages=None` visits every page. Manual `SUITE`/`RETOUR` still visits
+  every page; only the timed advance is filtered.
+- If the current page is outside the subset, the next hold moves to the first
+  allowed page. A subset with one page does not auto-advance. Changing the
+  subset restarts the hold.
 - The session owns the deadline and advances the pager when the page is current,
   the field is empty, and the screensaver is not active.
 - Input and navigation reset the interval. Page ticks do **not**.
