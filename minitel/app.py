@@ -7,6 +7,7 @@ import traceback
 
 from . import transport
 from .data.services import ServiceRegistry
+from .design import AnnouncementPolicy
 from .pagemodel.header import header_requires
 from .render import render_screen
 from .session import Session
@@ -19,8 +20,8 @@ class MinitelApp:
     def __init__(self, registry, *, profile=M1, initial="100", fallback=None,
                  guide=None, cps=None, echo=True, log=None, services=None,
                  screensaver=None, screensaver_after=120.0,
-                 screensaver_hold=20.0, power=None, header=None, clock=None,
-                 wall_clock=None):
+                 screensaver_hold=20.0, power=None, header=None,
+                 announcement_policy=None, clock=None, wall_clock=None):
         self.registry = registry
         self.profile = profile
         self.initial = initial
@@ -31,6 +32,9 @@ class MinitelApp:
         self.log = log or self._default_log
         self.header = header
         self.header_requires = header_requires(header)
+        self.announcement_policy = (
+            announcement_policy or AnnouncementPolicy()
+        )
         self.services = (
             services if isinstance(services, ServiceRegistry)
             else ServiceRegistry(services)
@@ -55,7 +59,7 @@ class MinitelApp:
         stamp = time.strftime("%H:%M:%S")
         print(f"[{stamp}] {peer} {message}", flush=True)
 
-    def new_session(self):
+    def new_session(self, log=None):
         return Session(
             self.registry,
             self.profile,
@@ -67,8 +71,10 @@ class MinitelApp:
             screensaver=self.screensaver,
             power=self.power_signals,
             header=self.header,
+            announcement_policy=self.announcement_policy,
             clock=self.clock,
             wall_clock=self.wall_clock,
+            log=log,
         )
 
     async def send(self, pacer, screen, log, scroll=None):
@@ -123,6 +129,7 @@ class MinitelApp:
         log(f"profile {self.profile.name}, cps={self.cps}, echo={self.echo}")
 
         session = self.new_session()
+        session.log = log
         pacer = transport.PacedWriter(writer, self.cps)
         try:
             echo = session.echo_override()

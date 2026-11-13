@@ -98,6 +98,10 @@ class IdleMixin:
         self.screensaver_active = False
         self._screensaver_page = None
         self._last_body_tick = self.clock()
+        policy = getattr(self, "announcement_policy", None)
+        if policy is None or not policy.on_screensaver:
+            self._reset_announcement_baseline()
+            self._reschedule_announcements(self.clock(), immediate=True)
         self._touch()
         return Action(screen=self.render())
 
@@ -178,6 +182,9 @@ class IdleMixin:
         header = self._header_delay(now)
         if header is not None:
             deadlines.append(header)
+        announcement = self._announcement_delay(now)
+        if announcement is not None:
+            deadlines.append(announcement)
         if self.screensaver_active:
             rotation = self._rotation_delay(now)
             if rotation is not None:
@@ -203,6 +210,8 @@ class IdleMixin:
         if self.paused:
             return Action()
         now = self.clock()
+        if self._announcement_due(now):
+            self._poll_announcements()
         if self.screensaver_active:
             if self.display_page is not self._screensaver_page:
                 return self._render_screensaver()

@@ -16,6 +16,7 @@ from ..common.service_status import ServiceState, classify, colour_for
 from ..common.widgets import page_input
 from ._support.state import configured, service, snapshot
 from ._support.labels import alert_text, competition_label
+from ._support.announcements import SPORTS_CHANNEL, collect_goal_alerts
 from ._support.layout import (
     clock_label,
     kickoff_label,
@@ -331,6 +332,8 @@ def submit_live(ctx, line):
     on_tick=live_screen,
     no_screensaver=True,
     extensions=True,
+    announce=collect_goal_alerts,
+    announce_channel=SPORTS_CHANNEL,
 )
 def live_scores(ctx):
     return live_screen(ctx)

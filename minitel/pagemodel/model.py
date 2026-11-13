@@ -11,6 +11,10 @@ from ..design.pager import Pager
 from ..design.stops import Stops
 from ..design.viewport import Viewport
 from ..render.screen import Screen
+from .announcement import (
+    announcement_channel,
+    validate_announcement_declaration,
+)
 from .header import Header, header_requires
 
 
@@ -37,6 +41,7 @@ class PageContext:
         self.choice = session.choice
         self._choice_set = False
         self.status = None
+        self.now = session.wall_clock()
 
     @property
     def line(self):
@@ -269,6 +274,8 @@ class Page:
     requires = ()
     extensions = False
     header = None
+    announce = None
+    announce_channel = None
 
     def render(self, ctx: PageContext) -> Screen:
         raise NotImplementedError
@@ -292,7 +299,8 @@ class FunctionPage(Page):
                  on_form=None, transient=False, back_page=None,
                  extension_back_page=None, screensaver=None,
                  no_screensaver=False, scroll=False, requires=(),
-                 extensions=False, header=None, meta=None):
+                 extensions=False, header=None, announce=None,
+                 announce_channel=None, meta=None):
         if screensaver is not None and (
             not isinstance(screensaver, str) or not screensaver
         ):
@@ -309,6 +317,11 @@ class FunctionPage(Page):
                     "header must be None, False, or a Header instance"
                 )
             header_requires(header)
+        announce_channel = validate_announcement_declaration(
+            announce, announce_channel
+        )
+        self.announce = announce
+        self.announce_channel = announce_channel
         self.header = header
         self.number = number
         self._render = render
@@ -368,6 +381,8 @@ class ExtensionPage(Page):
         self.scroll = base.scroll
         self.on_form = base.on_form
         self.header = base.header
+        self.announce = base.announce
+        self.announce_channel = base.announce_channel
         self.meta = {
             **(getattr(base, "meta", {}) or {}),
             "extension": token,
@@ -390,7 +405,8 @@ def page(number, *, title="", aliases=(), on_submit=None, on_key=None,
          on_tick=None, tick_interval=None, form=False, on_form=None,
          transient=False, back_page=None, extension_back_page=None,
          screensaver=None, no_screensaver=False, scroll=False, requires=(),
-         extensions=False, header=None, **meta):
+         extensions=False, header=None, announce=None,
+         announce_channel=None, **meta):
     def decorator(fn):
         return FunctionPage(
             number,
@@ -412,6 +428,8 @@ def page(number, *, title="", aliases=(), on_submit=None, on_key=None,
             requires=requires,
             extensions=extensions,
             header=header,
+            announce=announce,
+            announce_channel=announce_channel,
             meta=meta,
         )
     return decorator
@@ -448,6 +466,7 @@ class Registry:
         self._by_key = {}
         self._sources = {}
         self._overrides = []
+        self._announcers = {}
 
     def add(self, page: Page, *, source=None, on_conflict="error"):
         if on_conflict not in ("error", "override"):
@@ -465,6 +484,7 @@ class Registry:
                     f"page key {key!r} must not contain an extension "
                     "separator"
                 )
+        self._check_announcer_conflict(page, source, on_conflict)
 
         if on_conflict == "error":
             for key in keys:
@@ -529,7 +549,46 @@ class Registry:
         for key in keys:
             self._by_key[key] = page
         self._sources[id(page)] = source
+        self._register_announcer(page, source, on_conflict)
         return page
+
+    def _check_announcer_conflict(self, page, source, on_conflict):
+        channel = announcement_channel(page)
+        if channel is None:
+            return
+        existing = self._announcers.get(channel)
+        if existing is None:
+            return
+        old_page, _, old_source = existing
+        if old_source == source:
+            raise ValueError(
+                f"announcement channel {channel!r} already registered by "
+                f"page {old_page.number!r} in the same package {source!r}"
+            )
+        if on_conflict == "error":
+            raise ValueError(
+                f"announcement channel {channel!r} already registered by "
+                f"page {old_page.number!r}"
+            )
+
+    def _register_announcer(self, page, source, on_conflict):
+        channel = announcement_channel(page)
+        if channel is None:
+            return
+        existing = self._announcers.get(channel)
+        if existing is not None:
+            old_page, _, old_source = existing
+            self._overrides.append(
+                KeyOverride(
+                    key=channel,
+                    kind="announcement",
+                    old_page=old_page,
+                    new_page=page,
+                    old_source=old_source,
+                    new_source=source,
+                )
+            )
+        self._announcers[channel] = (page, page.announce, source)
 
     def _remove_page(self, page):
         self._pages = [
@@ -539,6 +598,20 @@ class Registry:
             if self._by_key.get(key) is page:
                 del self._by_key[key]
         self._sources.pop(id(page), None)
+        for channel, (owner, _, _) in tuple(self._announcers.items()):
+            if owner is page:
+                del self._announcers[channel]
+
+    def announcers(self):
+        """Return resolved ``(channel, page, provider)`` sources."""
+        return tuple(
+            (
+                channel,
+                self._announcers[channel][0],
+                self._announcers[channel][1],
+            )
+            for channel in sorted(self._announcers)
+        )
 
     @property
     def overrides(self):

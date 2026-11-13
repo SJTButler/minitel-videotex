@@ -10,6 +10,7 @@ from ..render.screen import Screen
 from ..terminal.power import Power, PowerSignals, PowerWatcher
 from .action import Action
 from ..pagemodel.header import header_requires
+from .announcement import AnnouncementMixin
 from .editing import EditingMixin
 from .header import HeaderMixin
 from .idle import IdleMixin
@@ -19,12 +20,17 @@ from .screensaver import Screensaver
 
 
 class Session(
-    NavigationMixin, EditingMixin, IdleMixin, PowerMixin, HeaderMixin
+    NavigationMixin,
+    EditingMixin,
+    IdleMixin,
+    PowerMixin,
+    HeaderMixin,
+    AnnouncementMixin,
 ):
     def __init__(self, registry, profile, *, initial="100", fallback=None,
                  guide=None, echo=False, services=None, screensaver=None,
-                 power=None, header=None, clock=time.monotonic,
-                 wall_clock=time.time):
+                 power=None, header=None, announcement_policy=None,
+                 clock=time.monotonic, wall_clock=time.time, log=None):
         header_requires(header)
         self.registry = registry
         self.profile = profile
@@ -33,6 +39,8 @@ class Session(
         self.guide = guide
         self.echo = echo
         self.header = header
+        self.announcement_policy = announcement_policy
+        self.log = log or (lambda message: None)
         self.services = dict(services or {})
         self.power_signals = (
             power if isinstance(power, PowerSignals) else PowerSignals()
@@ -70,6 +78,10 @@ class Session(
         self._body_row = None
         self._header_next = None
         self._last_body_tick = self.clock()
+        self._announcement_next = None
+        self._announcement_seen = {}
+        self._announcement_seeded_channels = set()
+        self._announcement_since = self.wall_clock()
         self.screensaver = (
             screensaver
             if isinstance(screensaver, Screensaver)
@@ -200,6 +212,8 @@ class Session(
         self.screensaver_active = False
         self._extension_pending = False
         self._last_body_tick = self.clock()
+        self._reset_announcement_baseline()
+        self._reschedule_announcements(self.clock(), immediate=True)
         self._touch()
         return self.render()
 

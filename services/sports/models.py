@@ -95,6 +95,20 @@ class Alert:
     side: str = ""
 
 
+def alert_key(alert):
+    """Stable identity for one alert within the feed."""
+    return (
+        alert.match_id,
+        alert.kind,
+        alert.home,
+        alert.away,
+        alert.home_goals,
+        alert.away_goals,
+        alert.minute,
+        alert.injury_time,
+    )
+
+
 @dataclass(frozen=True)
 class FeedSnapshot:
     matches: tuple[Match, ...] = ()

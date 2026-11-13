@@ -42,6 +42,10 @@ def override_lines(overrides):
             if removed:
                 detail += f"; aliases removed: {', '.join(removed)}"
             lines.append(f"page {event.key}: {old} -> {new}{detail}")
+        elif event.kind == "announcement":
+            lines.append(
+                f"announcement channel {event.key}: {old} -> {new}"
+            )
         else:
             lines.append(f"alias {event.key}: {old} -> {new}")
     return lines

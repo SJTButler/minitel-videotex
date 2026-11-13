@@ -11,7 +11,7 @@ from minitel.data.http import HttpError
 from minitel.data.services import service
 
 from .config import SportsConfig
-from .models import Alert, FeedSnapshot, MatchStatus
+from .models import Alert, FeedSnapshot, MatchStatus, alert_key
 from .source import (
     FetchResult,
     FootballDataSource,
@@ -410,30 +410,8 @@ class SportsService:
                 )
 
     def _alert(self, alert):
-        key = (
-            alert.match_id,
-            alert.kind,
-            alert.home,
-            alert.away,
-            alert.home_goals,
-            alert.away_goals,
-            alert.minute,
-            alert.injury_time,
-        )
-        if any(
-            (
-                existing.match_id,
-                existing.kind,
-                existing.home,
-                existing.away,
-                existing.home_goals,
-                existing.away_goals,
-                existing.minute,
-                existing.injury_time,
-            )
-            == key
-            for existing in self._alerts
-        ):
+        key = alert_key(alert)
+        if any(alert_key(existing) == key for existing in self._alerts):
             return
         self._alerts.insert(0, alert)
         del self._alerts[ALERT_LIMIT:]

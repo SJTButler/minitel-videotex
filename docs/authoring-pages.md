@@ -69,7 +69,8 @@ The decorator form is the shortest:
       on_tick=None, tick_interval=None, form=False, on_form=None,
       transient=False, back_page=None, extension_back_page=None,
       screensaver=None, no_screensaver=False, scroll=False, requires=(),
-      extensions=False, header=None, **meta)
+      extensions=False, header=None, announce=None,
+      announce_channel=None, **meta)
 def render(ctx):
     return Screen()
 ```
@@ -115,6 +116,9 @@ def render(ctx):
 - `header=None` uses the app header. `header=False` means this page owns row 0.
   A `Header` instance selects a page-specific header. See
   [Headers](#headers).
+- `announce=provider` declares a per-session announcement source;
+  `announce_channel` names the channel (default: the page number). See
+  [Announcements](#announcements).
 - `meta` is free-form; useful for a custom app.
 
 For stateful or larger pages, subclass `Page`:
@@ -282,6 +286,64 @@ def full_screen(ctx):
 
 Use per-page overrides sparingly: a full-screen page, a test card, or a page
 with a bespoke status row. The app header should cover the normal case.
+
+## Announcements
+
+A page can declare a source of session announcements:
+
+```python
+from minitel import Announcement
+
+def goal_alerts(ctx):
+    feed = ctx.service("sports")
+    if feed is None or not feed.configured:
+        return ()
+    snapshot = feed.snapshot()
+    return tuple(
+        Announcement(
+            key=("goal", alert.match_id, alert.kind, alert.minute),
+            text=f"GOAL {alert.home} {alert.home_goals}-{alert.away_goals} "
+                 f"{alert.away}",
+            at=alert.at.timestamp(),
+        )
+        for alert in snapshot.alerts
+        if alert.kind == "GOAL"
+    )
+
+@page(
+    "150",
+    title="LIVE SCORES",
+    requires=("sports",),
+    announce=goal_alerts,
+    announce_channel="sports",
+)
+def live_scores(ctx):
+    ...
+```
+
+- The provider receives `AnnounceContext`: `page`, `state`, `now`, and
+  `service(name)` for services declared in `requires`.
+- It is synchronous, read-only, non-blocking, and does no network I/O. The
+  session calls it per connection on its announcement poll (default 5 s); keep
+  the derivation cheap. The shared service owns the expensive fetch and cache.
+- `key` must be stable across polls, because it is the dedupe identity.
+  `text` is sanitized by the session; the active header decides truncation,
+  wrapping, or scrolling. `at` is optional Unix-epoch seconds and should be set
+  by sources that can backfill. `duration` is optional.
+- `announce_channel` defaults to the page number. The composed registry keeps
+  one active source per channel: a later package can replace the source
+  without replacing the page, with a startup report and
+  `--strict-overrides`. Same-package duplicate channels are fatal.
+- The provider runs even when its page is not current, so a source can
+  announce on any page. A page can declare one provider.
+- The server log records a caller only when a poll produces newly seen
+  announcements, for example `ANNOUNCE sports <- 150: 2 new`. It shows the
+  caller and new count, never the announcement text. The first poll seeds
+  existing history without logging, and backfilled timestamps do not count as
+  new. Provider errors are logged with the caller and exception.
+- Page `985` in the optional `diagnostics_pages` package is a deterministic
+  test source: load the package, open `985`, set `MODE` to `ON`, then navigate
+  anywhere. It emits a test announcement every 15 seconds without a live feed.
 
 ## Session resources
 
