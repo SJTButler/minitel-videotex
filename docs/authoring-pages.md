@@ -733,9 +733,10 @@ selected = stops.selected_stop
 
 `pages/common/reader.py` owns the shared presentation: `render_lines`,
 `visible_matches`, `build_stops`, `starts_for`, `find_results`,
-`article_screen`, and `index_screen`. Page `160 WIKIPEDIA` is the first caller;
-it serves the live `services/wikipedia/` source through the `wikipedia` service
-key. `services/wikipedia/source.py` calls the MediaWiki action API, resolves
+`article_screen`, and `index_screen`. Page `160 WIKIPEDIA INDEX` is the pane
+index and page `161 WIKIPEDIA PAGE` is the scroll article reader; both use the
+live `services/wikipedia/` source through the `wikipedia` service key.
+`services/wikipedia/source.py` calls the MediaWiki action API, resolves
 internal link titles in batches, and encodes pageids as base36 tokens;
 `services/wikipedia/html.py` parses the action HTML into reader blocks. The page
 tests inject `tests/fixtures/wikipedia.py` with a `StaticReaderService`; that
@@ -1083,7 +1084,7 @@ ctx.disable_screensaver()
 
 `ctx.start_screensaver()` is a request, not a return value: the session applies
 it after the handler finishes, so return a page key normally. The selector page
-`190` (`7` on the home menu) is the reference implementation. It lets the user
+`190` (`9` on the home menu) is the reference implementation. It lets the user
 choose `900` CLOCK, `901` TEST CARD, `902` SHAKESPEARE, `903` BOUNCING
 BALL, or `910`-`912` CAROUSEL, cycle the auto delay, and activate the current
 choice with `0`.
@@ -1397,7 +1398,10 @@ Keep page numbers stable and descriptive. The example scheme is:
 | `151` | match detail |
 | `153` | league tables, `153#CODE` direct entry |
 | `154` | feed status |
-| `190` | screensaver selector (`7` on the home menu) |
+| `155` | vidiprinter; direct entry from the live-scores page |
+| `160` | Wikipedia search index (`6`) |
+| `161` | Wikipedia article reader, `161#TOKEN` direct entry |
+| `190` | screensaver selector (`9` on the home menu) |
 | `199` | hidden developer page directory; not linked from home |
 | `900` | CLOCK screensaver |
 | `901` | TEST CARD screensaver |
@@ -1417,15 +1421,15 @@ additional package can reserve its own page-number range; see
 A page can expose sub-addresses by declaring `extensions=True`:
 
 ```python
-@page("160", title="DEX", extensions=True)
+@page("161", title="DEX", extensions=True)
 def dex(ctx):
-    token = ctx.extension          # None on 160, "1" on 160#1
+    token = ctx.extension          # None on 161, "1" on 161#1
     ...
 ```
 
 The registry parses the route; pages never split `#` themselves.
 
-- Syntax is `base#token`, for example `120#PAR`, `153#PL`, or `160#151`.
+- Syntax is `base#token`, for example `120#PAR`, `153#PL`, or `161#151`.
   The league tables page is the current reference: `153#PL` selects the
   configured `PL` competition.
 - The base must be a registered page number or alias and must declare

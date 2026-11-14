@@ -60,7 +60,7 @@ class PageDirectoryTests(unittest.TestCase):
         self.assertEqual(
             page_numbers(text),
             [
-                "160", "190", "199", "900", "901", "902",
+                "160", "161", "190", "199", "900", "901", "902",
                 "903", "910", "911", "912",
             ],
         )
@@ -80,6 +80,8 @@ class PageDirectoryTests(unittest.TestCase):
 
         session.feed(SUITE)
         text = session.screen.to_text().splitlines()
+        self.assertTrue(find_line(text, "161").startswith("161#"))
+        self.assertFalse(find_line(text, "160").startswith("160#"))
         line = find_line(text, "900")
         self.assertTrue(line.startswith("900*"))
         self.assertNotIn("#", line)
@@ -106,13 +108,13 @@ class PageDirectoryTests(unittest.TestCase):
         self.assertIn(" 3", find_line(text, "130"))
         self.assertIn(" 4", find_line(text, "140"))
         self.assertIn(" 5", find_line(text, "150"))
-        self.assertIn(" 6", find_line(text, "155"))
         self.assertIn("DN", find_line(text, "111"))
         self.assertIn("F", find_line(text, "140"))
 
         session.feed(SUITE)
         text = session.screen.to_text().splitlines()
-        self.assertIn(" 7", find_line(text, "190"))
+        self.assertIn(" 6", find_line(text, "160"))
+        self.assertIn(" 9", find_line(text, "190"))
         line = find_line(text, "900")
         self.assertTrue(line.startswith("900*"))
         self.assertIn("D", line)
@@ -187,7 +189,7 @@ class PageDirectoryTests(unittest.TestCase):
         self.assertEqual(
             page_numbers(lines),
             [
-                "160", "190", "199", "250", "900", "901",
+                "160", "161", "190", "199", "250", "900", "901",
                 "902", "903", "910", "911", "912",
             ],
         )

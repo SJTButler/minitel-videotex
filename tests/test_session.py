@@ -142,9 +142,9 @@ class SessionTests(unittest.TestCase):
         self.assertEqual(self.session.current.number, "100")
 
     def test_not_found(self):
-        self.feed(b"9" + ENVOI)
+        self.feed(b"99" + ENVOI)
         self.assertEqual(self.session.current.number, pages.NOT_FOUND)
-        self.assertEqual(self.session.last_key, "9")
+        self.assertEqual(self.session.last_key, "99")
 
     def test_correction(self):
         self.feed(b"12")

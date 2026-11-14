@@ -78,7 +78,7 @@ def screensaver_submit(ctx, line):
     return "190"
 
 
-@page("190", title="SCREENSAVER", aliases=("7",), on_submit=screensaver_submit,
+@page("190", title="SCREENSAVER", aliases=("9",), on_submit=screensaver_submit,
       back_page="100")
 def screensaver(ctx):
     s = Screen()

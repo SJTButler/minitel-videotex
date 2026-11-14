@@ -420,7 +420,9 @@ class VidiprinterPageTests(unittest.TestCase):
         self.assertIn("1/1", text[0])
         self.assertIn("15:00 GOAL ARS 2-1 CHE 34'", text[1])
         self.assertEqual(session.screen.paint_order, "up")
-        self.assertEqual(pages.build_registry().get("6").number, "155")
+        registry = pages.build_registry()
+        self.assertEqual(registry.aliases_for(registry.get("155")), ())
+        self.assertEqual(registry.get("155").number, "155")
 
     def test_oldest_alert_first(self):
         older = Alert(KICKOFF, "KO", 1001, "ARS", "CHE")

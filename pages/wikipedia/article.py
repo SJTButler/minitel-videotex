@@ -1,41 +1,32 @@
-"""Page 160: linked reader over the wikipedia service.
-
-Phase 2 serves fixture documents; Phase 3 replaces the service source with the
-real Wikipedia API without changing this page.
-"""
+"""Page 161: linked Wikipedia article reader."""
 
 from minitel.pagemodel import LINE_FIELD, page
 
 from services.common.reader import match_prefix
 
-from .common.header import AnnouncementHeader
-from .common.reader import (
+from ..common.header import AnnouncementHeader
+from ..common.reader import (
     Line,
     LineSpan,
     article_screen,
     build_stops,
-    index_screen,
     render_lines,
     starts_for,
     visible_matches,
 )
-
-PAGE = "160"
-PAGE_SIZE = 7
-READER_QUERY = "reader_query"
-READER_RESET = "reader_reset"
-READER_RESULTS = "reader_results"
-READER_LINES = "reader_lines"
-READER_SEARCH_LOADED = "reader_search_loaded"
-READER_FIND = "reader_find"
-READER_VISIBLE = "reader_visible"
-READER_LOADED = "reader_loaded"
-READER_RETURN = "reader_return"
-READER_RETURN_SELECTED = "reader_return_selected"
+from ._support.state import (
+    ARTICLE_PAGE,
+    INDEX_PAGE,
+    READER_FIND,
+    READER_LINES,
+    READER_LOADED,
+    READER_RETURN,
+    READER_VISIBLE,
+)
 
 
 def _current(ctx):
-    return f"{PAGE}#{ctx.extension}" if ctx.extension else PAGE
+    return f"{ARTICLE_PAGE}#{ctx.extension}" if ctx.extension else ARTICLE_PAGE
 
 
 def _message(ctx, text):
@@ -58,45 +49,6 @@ def _lines(ctx, document):
         while len(cache) > 2:
             cache.pop(next(iter(cache)))
     return lines
-
-
-def _index(ctx, service):
-    query = str(ctx.state.get(READER_QUERY, ""))
-    snapshot = service.search(query)
-    results = tuple(snapshot.value or ()) if snapshot.has_value else ()
-    ctx.state[READER_RESULTS] = results
-    returning = ctx.state.pop(READER_RETURN, False)
-    saved = ctx.state.pop(READER_RETURN_SELECTED, None)
-    if returning:
-        ctx.values[LINE_FIELD] = query
-    reset = ctx.state.pop(READER_RESET, False)
-    choice = ctx.set_choice(
-        len(results), PAGE_SIZE,
-        selected=saved if returning else None,
-        reset=reset,
-    )
-    if snapshot.error is not None and not snapshot.has_value:
-        status_text = "SEARCH UNAVAILABLE"
-    elif not snapshot.has_value:
-        status_text = "SEARCHING..."
-    elif not results:
-        status_text = "TYPE TO SEARCH" if not query else "NO RESULTS"
-    else:
-        word = "RESULT" if len(results) == 1 else "RESULTS"
-        status_text = f"{len(results)} {word}"
-    screen = index_screen(
-        ctx, results, choice,
-        title="WIKIPEDIA",
-        query=query,
-        status_text=status_text,
-        hint="TYPE+ENVOI=SEARCH  SUITE/RETOUR=SELECT",
-        source="WIKIPEDIA. CC BY-SA.",
-        page=PAGE,
-    )
-    if snapshot.has_value and ctx.state.get(READER_SEARCH_LOADED) != query:
-        screen.force_full = True
-        ctx.state[READER_SEARCH_LOADED] = query
-    return screen
 
 
 def _article(ctx, service, token):
@@ -164,42 +116,12 @@ def _render(ctx):
     service = ctx.service("wikipedia")
     if service is None:
         return _message(ctx, "READER NOT CONFIGURED")
-    if ctx.extension:
-        return _article(ctx, service, ctx.extension)
-    return _index(ctx, service)
+    if not ctx.extension:
+        return _message(ctx, "USE 160 TO SEARCH.")
+    return _article(ctx, service, ctx.extension)
 
 
-def _selected_result(ctx):
-    results = ctx.state.get(READER_RESULTS, ())
-    choice = ctx.choice
-    if choice is None or not choice.total or not results:
-        return None
-    index = choice.selected if choice.selected is not None else 0
-    if not 0 <= index < len(results):
-        return None
-    ctx.state[READER_RETURN] = True
-    ctx.state[READER_RETURN_SELECTED] = index
-    return f"{PAGE}#{results[index].token}"
-
-
-def _submit_index(ctx, line):
-    value = line.strip()
-    query = str(ctx.state.get(READER_QUERY, ""))
-    if not value:
-        route = _selected_result(ctx)
-        if route is not None:
-            return route
-        ctx.state[READER_QUERY] = ""
-        ctx.state[READER_RESET] = True
-        return PAGE
-    if value != query:
-        ctx.state[READER_QUERY] = value
-        ctx.state[READER_RESET] = True
-        return PAGE
-    return _selected_result(ctx) or PAGE
-
-
-def _submit_article(ctx, line):
+def _submit(ctx, line):
     current = _current(ctx)
     value = line.strip()
     if not value:
@@ -215,7 +137,7 @@ def _submit_article(ctx, line):
         return current
     selected = ctx.stops.selected_stop if ctx.stops else None
     if selected is not None:
-        return f"{PAGE}#{document.links[selected.link].token}"
+        return f"{ARTICLE_PAGE}#{document.links[selected.link].token}"
     visible_state = ctx.state.get(READER_VISIBLE)
     visible = (
         visible_state[1]
@@ -223,38 +145,30 @@ def _submit_article(ctx, line):
         else ()
     )
     if len(visible) == 1:
-        return f"{PAGE}#{document.links[visible[0]].token}"
+        return f"{ARTICLE_PAGE}#{document.links[visible[0]].token}"
     return current
 
 
-def _submit(ctx, line):
-    if ctx.extension:
-        return _submit_article(ctx, line)
-    return _submit_index(ctx, line)
-
-
 def _on_key(ctx, key):
-    if key == "GUIDE" and ctx.extension:
+    if key == "GUIDE":
         ctx.state[READER_RETURN] = True
-        return PAGE
+        return INDEX_PAGE
     return None
 
 
-def _tick(ctx):
-    return _render(ctx)
-
-
 @page(
-    PAGE,
+    ARTICLE_PAGE,
     title="WIKIPEDIA",
     requires=("wikipedia",),
     extensions=True,
     scroll=True,
     tick_interval=1.0,
     header=AnnouncementHeader(),
+    back_page=INDEX_PAGE,
+    extension_back_page=INDEX_PAGE,
     on_submit=_submit,
     on_key=_on_key,
-    on_tick=_tick,
+    on_tick=_render,
 )
-def wikipedia(ctx):
+def wikipedia_article(ctx):
     return _render(ctx)

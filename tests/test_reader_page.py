@@ -115,6 +115,19 @@ def find_cell(session, text):
 
 
 class ReaderPageTests(unittest.TestCase):
+    def test_index_and_article_are_separate_modes(self):
+        registry = pages.build_registry()
+        index = registry.get("160")
+        article = registry.get("161")
+        self.assertFalse(index.scroll)
+        self.assertFalse(index.extensions)
+        self.assertIn("6", registry.aliases_for(index))
+        self.assertTrue(article.scroll)
+        self.assertTrue(article.extensions)
+        self.assertEqual(article.back_page, "160")
+        self.assertEqual(article.extension_back_page, "160")
+        self.assertIsNone(registry.get("160#BETA"))
+
     def test_index_renders_fixture_results(self):
         session = make_session()
         text = session.screen.to_text()
@@ -137,7 +150,7 @@ class ReaderPageTests(unittest.TestCase):
         self.assertEqual(session.current.number, "160")
         self.assertIn("1 RESULT", row(session, 4))
         session.feed(ENVOI)  # open the selected result
-        self.assertEqual(session.current.number, "160#BETA")
+        self.assertEqual(session.current.number, "161#BETA")
         self.assertIn("BETA PAGE", session.screen.to_text())
         self.assertFalse(session.active_field.visible)
         self.assertTrue(session.active_field.live)
@@ -146,28 +159,28 @@ class ReaderPageTests(unittest.TestCase):
 
     def test_article_one_visible_link_follows(self):
         session = make_session()
-        session.navigate("160#BETA")
+        session.navigate("161#BETA")
         session.feed(b"GAMMA")
         self.assertIn("1 ON SCREEN", row(session, 0))
         session.feed(ENVOI)
-        self.assertEqual(session.current.number, "160#GAMMA")
+        self.assertEqual(session.current.number, "161#GAMMA")
         self.assertIn("GAMMA PAGE", session.screen.to_text())
 
     def test_article_multiple_visible_needs_selection(self):
         session = make_session()
-        session.navigate("160#BETA")
+        session.navigate("161#BETA")
         session.feed(b"A")
         self.assertIn("2 ON SCREEN", row(session, 0))
         session.feed(ENVOI)
-        self.assertEqual(session.current.number, "160#BETA")
+        self.assertEqual(session.current.number, "161#BETA")
         session.feed(SUITE)
         self.assertIn("1/2", row(session, 0))
         session.feed(ENVOI)
-        self.assertEqual(session.current.number, "160#ALPHA")
+        self.assertEqual(session.current.number, "161#ALPHA")
 
     def test_article_cycle_wraps(self):
         session = make_session()
-        session.navigate("160#BETA")
+        session.navigate("161#BETA")
         session.feed(b"A")
         session.feed(SUITE)
         self.assertIn("1/2", row(session, 0))
@@ -180,7 +193,7 @@ class ReaderPageTests(unittest.TestCase):
 
     def test_article_rolls_back_invalid_suffix(self):
         session = make_session()
-        session.navigate("160#BETA")
+        session.navigate("161#BETA")
         session.feed(b"GAMMZ")
         self.assertEqual(session.values[LINE_FIELD], "GAMM")
         self.assertIn("1 ON SCREEN", row(session, 0))
@@ -189,14 +202,14 @@ class ReaderPageTests(unittest.TestCase):
 
     def test_article_guide_returns_to_index(self):
         session = make_session()
-        session.navigate("160#BETA")
+        session.navigate("161#BETA")
         session.feed(GUIDE)
         self.assertEqual(session.current.number, "160")
         self.assertIn("WIKIPEDIA", session.screen.to_text())
 
     def test_article_retour_returns_to_index_history(self):
         session = make_session()
-        session.navigate("160#ALPHA")
+        session.navigate("161#ALPHA")
         session.feed(RETOUR)
         self.assertEqual(session.current.number, "160")
 
@@ -213,7 +226,7 @@ class ReaderPageTests(unittest.TestCase):
 
     def test_links_use_colour_and_inverse(self):
         session = make_session()
-        session.navigate("160#BETA")
+        session.navigate("161#BETA")
         alpha = find_cell(session, "ALPHA")
         self.assertFalse(alpha.underline)
         self.assertEqual(alpha.fg, SECONDARY)
@@ -252,7 +265,7 @@ class ReaderPageTests(unittest.TestCase):
 
     def test_article_colour_is_only_on_links(self):
         session = make_session()
-        session.navigate("160#GAMMA")
+        session.navigate("161#GAMMA")
         heading = find_cell(session, "GAMMA")
         self.assertTrue(heading.inverse)
         self.assertEqual(heading.fg, BODY)
@@ -278,13 +291,13 @@ class ReaderPageTests(unittest.TestCase):
         self.assertIn("PAGE 2/2", row(session, 20))
         self.assertTrue(find_cell(session, "RESULT 08").inverse)
         session.feed(ENVOI)
-        self.assertEqual(session.current.number, "160#ALPHA")
+        self.assertEqual(session.current.number, "161#ALPHA")
 
     def test_index_empty_envoi_opens_the_selected_result(self):
         session = make_session()
         self.assertTrue(find_cell(session, "ALPHA PAGE").inverse)
         session.feed(ENVOI)
-        self.assertEqual(session.current.number, "160#ALPHA")
+        self.assertEqual(session.current.number, "161#ALPHA")
 
     def test_index_guide_restores_query_and_selection(self):
         session = make_session()
@@ -292,21 +305,21 @@ class ReaderPageTests(unittest.TestCase):
         session.feed(ENVOI)
         self.assertIn("1 RESULT", row(session, 4))
         session.feed(ENVOI)
-        self.assertEqual(session.current.number, "160#BETA")
+        self.assertEqual(session.current.number, "161#BETA")
         session.feed(GUIDE)
         self.assertEqual(session.current.number, "160")
         self.assertEqual(session.values[LINE_FIELD], "BETA PAGE")
         self.assertIn("1 RESULT", row(session, 4))
         session.feed(ENVOI)
-        self.assertEqual(session.current.number, "160#BETA")
+        self.assertEqual(session.current.number, "161#BETA")
 
     def test_anchor_text_matches_target(self):
         session = make_session()
-        session.navigate("160#ALPHA")
+        session.navigate("161#ALPHA")
         session.feed(b"LINK TO GAMMA")
         self.assertIn("1 ON SCREEN", row(session, 0))
         session.feed(ENVOI)
-        self.assertEqual(session.current.number, "160#GAMMA")
+        self.assertEqual(session.current.number, "161#GAMMA")
 
     def test_fixture_labels_cover_anchor_text(self):
         for document in DOCUMENTS.values():
@@ -324,12 +337,12 @@ class ReaderPageTests(unittest.TestCase):
     def test_article_uses_cell_paint_and_index_stays_row(self):
         session = make_session()
         self.assertIsNone(session.screen.paint)
-        session.navigate("160#BETA")
+        session.navigate("161#BETA")
         self.assertEqual(session.screen.paint, "cell")
 
     def test_find_highlight_does_not_clear_link_rows(self):
         session = make_session()
-        session.navigate("160#BETA")
+        session.navigate("161#BETA")
         actions = session.feed(b"A")
         raw = b"".join(action.raw for action in actions)
         self.assertNotIn(bytes([codec.CAN]), raw)
@@ -337,7 +350,7 @@ class ReaderPageTests(unittest.TestCase):
 
     def test_scroll_with_find_uses_shift_and_cell_runs(self):
         session = make_session(documents={"SCROLL": scroll_document()})
-        session.navigate("160#SCROLL")
+        session.navigate("161#SCROLL")
         session.feed(b"TARGET")
         self.assertIn("1 ON SCREEN", row(session, 0))
         session.feed(SUITE)

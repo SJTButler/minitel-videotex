@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Split the Wikipedia reader into a `160 WIKIPEDIA INDEX` pane page (home
+  alias `6`) and a `161 WIKIPEDIA PAGE` scroll article reader (`161#TOKEN`),
+  keeping the shared reader helpers and moving the article to hardware scroll.
+  Home aliases were renumbered: the screensaver moves to `9`, the vidiprinter
+  alias is removed (direct entry from `150` remains), and the old combined
+  `160#TOKEN` route is gone.
 - Added update paint modes: pages and headers can declare `paint="cell"` for
   changed-cell runs, `paint="row"` for the default changed-row diff, or
   `paint="full"` for every-update full paints, with a per-frame `Screen.paint`

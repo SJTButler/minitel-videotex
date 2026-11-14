@@ -133,7 +133,6 @@ def vidiprinter_screen(ctx):
 @page(
     VIDIPRINTER_PAGE,
     title="VIDIPRINTER",
-    aliases=("6",),
     requires=("sports",),
     back_page="150",
     tick_interval=5.0,

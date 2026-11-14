@@ -141,8 +141,8 @@ class ScreensaverPageTests(unittest.TestCase):
         )
         text = session.start().to_text().splitlines()
         self.assertEqual(text[9].strip(), "5  LIVE SCORES")
-        self.assertEqual(text[10].strip(), "6  VIDIPRINTER")
-        self.assertEqual(text[11].strip(), "7  SCREENSAVER")
+        self.assertEqual(text[10].strip(), "6  WIKIPEDIA")
+        self.assertEqual(text[11].strip(), "9  SCREENSAVER")
         self.assertIn("TYPE A NUMBER", text[12])
 
     def test_clock_page(self):

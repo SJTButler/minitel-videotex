@@ -61,7 +61,9 @@ pages/         example site, auto-discovered
     reader.py  shared reader lines, stops, article/index screens
   home.py      page 100
   about.py     page 130
-  wikipedia.py page 160, linked reader over the wikipedia service
+  wikipedia/
+    index.py    page 160, search index over the wikipedia service
+    article.py  page 161, linked article reader
   not_found.py fallback
   page_directory.py page 199, hidden developer directory
   news/
@@ -301,8 +303,9 @@ The linked reader is the third source example:
   `WIKIPEDIA_USER_AGENT`, and `WIKIPEDIA_TIMEOUT`. The page tests use
   `tests/fixtures/wikipedia.py`; that fixture is not a production service.
 - `pages/common/reader.py` owns the shared `render_lines`, matching, stops,
-  article-screen, and index-screen helpers. Page `160 WIKIPEDIA` wires them to
-  the live service; `160#TOKEN` is an article, `160` is the search/index.
+  article-screen, and index-screen helpers. Page `160 WIKIPEDIA INDEX` wires
+  them to the live service; page `161 WIKIPEDIA PAGE` is the article reader and
+  `161#TOKEN` is an article.
 - The article's find field is hidden and live: typing highlights matches and
   rolls an invalid suffix back to the last matching prefix. `ENVOI` follows the
   only visible match or an explicit `SUITE`/`RETOUR` selection; several visible
@@ -323,8 +326,7 @@ The linked reader is the third source example:
   session cycles all matching targets, starts at the topmost visible match,
   wraps, and reveals off-screen selections. The page still has one viewport and
   one field; stops are viewport metadata, not a second cursor.
-- The home alias `6` and the two-column/block menu are separate pending work;
-  use direct page `160` until then.
+- The two-column/block menu is separate pending work.
 
 `on_tick` may return a complete `Screen`; the session diffs it against the
 shadow screen and restores the input cursor. Raw bytes remain the cheaper choice
@@ -349,7 +351,7 @@ shell. The key is never logged or rendered.
   -> 151 MATCH detail (151#<TEAM> or 151#<HOMEAWAY>)
   -> 153 TABLES
   -> 154 FEED STATUS
-6 VIDIPRINTER (page 155), the full-screen alert history
+  -> 155 VIDIPRINTER, the full-screen alert history
 ```
 
 - `pages/sports/live.py` shows one league per page with the league in the title,
@@ -370,8 +372,9 @@ shell. The key is never logged or rendered.
   configured competition codes in one request, derives goal/FT/KO/HT alerts, and
   keeps an immutable `FeedSnapshot`. A failed refresh keeps the last good
   snapshot and turns the pages into `DATA STALE` rather than blanking them.
-- `pages/sports/vidiprinter.py` is the full-screen `155` feed (alias `6`). It
-  shows the last 200 KO/HT/FT/GOAL alerts oldest-first, follows the tail, and
+- `pages/sports/vidiprinter.py` is the full-screen `155` feed, reachable by
+  direct entry from the live-scores page. It shows the last 200 KO/HT/FT/GOAL
+  alerts oldest-first, follows the tail, and
   steps one line per `SUITE`/`RETOUR`. It shows the competition and highlights
   the event team's abbreviation. Page `150` keeps its two-row alert preview.
   On the first load of a matchday the service backfills the day's
@@ -414,7 +417,7 @@ delay in seconds; `0` disables automatic activation but leaves manual
 activation available. `--screensaver-hold` sets the seconds per page for a
 multi-page screensaver.
 
-Page `190` (`7` on the home menu) is the selector. Type `1`-`4` to choose CLOCK,
+Page `190` (`9` on the home menu) is the selector. Type `1`-`4` to choose CLOCK,
 TEST CARD, BOUNCING BALL, or CAROUSEL, `6` to cycle the auto delay, and `0` to
 activate immediately. The screensaver pages are `900` CLOCK, `901` TEST CARD,
 `902` SHAKESPEARE (scrolling text), `903` BOUNCING BALL, and the `910`-`912`
@@ -472,7 +475,7 @@ The full guide is in [`docs/authoring-pages.md`](docs/authoring-pages.md).
 Short version: create `pages/your_page.py`, use `@page(...)`, return a `Screen`,
 and call `page_input(s, ctx)` if you want typing. Restart the server; pages are
 discovered automatically. Add a 1-2 digit numeric alias
-(`aliases=("6",)`) to put the page on the home menu.
+(`aliases=("10",)`) to put the page on the home menu.
 
 To load pages or services from another package:
 
