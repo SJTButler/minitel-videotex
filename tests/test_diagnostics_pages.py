@@ -68,10 +68,14 @@ class DiagnosticsPageTests(unittest.TestCase):
         session = make_session("982")
         self.assertIn(codec.REP, render_screen(session.screen))
 
-    def test_fault_page_raises_on_confirmation(self):
+    def test_fault_page_enters_the_error_boundary(self):
         session = make_session("984")
-        with self.assertRaises(RuntimeError):
-            session.feed(b"CRASH" + ENVOI)
+        actions = session.feed(b"CRASH" + ENVOI)
+        self.assertIn("PAGE ERROR", actions[-1].screen.to_text())
+        self.assertEqual(session.page_error, "submit")
+        session.feed(bytes([0x13, 0x46]))
+        self.assertIsNone(session.page_error)
+        self.assertIn("FAULT INJECTION", session.screen.to_text())
 
 
 if __name__ == "__main__":

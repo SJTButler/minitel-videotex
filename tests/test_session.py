@@ -384,6 +384,11 @@ class SessionTests(unittest.TestCase):
         self.assertEqual(self.session.on_timeout().raw, b"")
         self.assertEqual(self.session.line, "AB")
 
+    def test_power_off_then_on_in_one_chunk_ends_powered_on(self):
+        actions = self.feed(POWER_OFF + POWER_ON)
+        self.assertFalse(self.session.paused)
+        self.assertTrue(any(action.power is True for action in actions))
+
     def test_power_on_repaints_and_preserves_input(self):
         self.feed(b"AB")
         self.feed(POWER_OFF)

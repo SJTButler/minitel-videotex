@@ -14,6 +14,7 @@ class NavigationMixin:
 
     def navigate(self, value, *, push=True):
         self.screensaver_active = False
+        self._clear_page_error()
         self._touch()
         page = self.resolve_page(value)
         if page is None:
@@ -35,14 +36,19 @@ class NavigationMixin:
         return self.refresh()
 
     def submit(self):
+        if self.page_error is not None:
+            return Action()
         line = self.line.strip()
         self.last_key = line
         ctx = PageContext(self, self.current, self.registry)
         values = dict(self.values)
-        if callable(self.current.on_form):
-            result = self.current.on_form(ctx, values)
-        else:
-            result = self.current.on_submit(ctx, line)
+        try:
+            if callable(self.current.on_form):
+                result = self.current.on_form(ctx, values)
+            else:
+                result = self.current.on_submit(ctx, line)
+        except Exception:
+            return Action(screen=self._fail_page("submit"))
         requested = self._take_screensaver_request()
         if requested is not None:
             return requested
@@ -67,6 +73,7 @@ class NavigationMixin:
 
     def back(self):
         self.screensaver_active = False
+        self._clear_page_error()
         self._touch()
         if self.history:
             self.current = self.history.pop()
@@ -80,6 +87,7 @@ class NavigationMixin:
 
     def home(self):
         self.screensaver_active = False
+        self._clear_page_error()
         self._touch()
         self.history.clear()
         self.current = self.registry.resolve(self.initial)

@@ -10,6 +10,7 @@ from ..design.field import InputField
 from ..design.pager import Pager
 from ..design.stops import Stops
 from ..design.viewport import Viewport
+from ..protocol import codec
 from ..render.screen import Screen, validate_paint
 from .announcement import (
     announcement_channel,
@@ -24,11 +25,29 @@ EXTENSION_SEPARATORS = ("#", "£")
 MAX_EXTENSION_LENGTH = 6
 
 
+def _check_field_placement(row, col, width):
+    if not all(isinstance(value, int) for value in (row, col, width)):
+        raise TypeError("field row, col, and width must be integers")
+    if width < 1:
+        raise ValueError("field width must be at least 1")
+    if not 0 <= row < codec.ROWS:
+        raise ValueError(f"field row must be between 0 and {codec.ROWS - 1}")
+    if not 0 <= col < codec.COLS:
+        raise ValueError(f"field col must be between 0 and {codec.COLS - 1}")
+    if col + width > codec.COLS:
+        raise ValueError(
+            f"field width {width} at col {col} exceeds {codec.COLS} columns"
+        )
+
+
 class PageContext:
-    def __init__(self, session, page, registry):
+    def __init__(self, session, page, registry, *, tick=False):
         self._session = session
         self.page = page
         self.registry = registry
+        self._tick = tick
+        self._tick_fields = tuple(session.fields) if tick else ()
+        self._tick_field_index = 0
         self.fields = []
         self.values = session.values
         self.focus_name = None
@@ -85,19 +104,50 @@ class PageContext:
     def active_name(self):
         return self._session.requested_focus or self._session.active_name
 
-    def add_field(self, name, row, col, width, *, mask=None, value="",
+    def add_field(self, name, row, col, width, *, value="",
                   cursor="visible", live=False, visible=True):
         if cursor not in CURSOR_MODES:
             raise ValueError(f"cursor must be one of {CURSOR_MODES}")
+        if self._tick:
+            return self._redeclare_tick_field(
+                name, row, col, width, value=value, cursor=cursor,
+                live=live, visible=visible,
+            )
+        if self.page.form and self._choice_set:
+            raise ValueError(
+                f"page {self.page.number!r} cannot declare both form fields "
+                "and a choice"
+            )
+        _check_field_placement(row, col, width)
         if any(field.name == name for field in self.fields):
             raise ValueError(f"duplicate field name {name!r}")
         field = InputField(
-            name, row, col, width, mask=mask, value=value, cursor=cursor,
+            name, row, col, width, value=value, cursor=cursor,
             live=live, visible=visible,
         )
         self.fields.append(field)
         self.values.setdefault(name, value)
         return field
+
+    def _redeclare_tick_field(self, name, row, col, width, **attrs):
+        if self._tick_field_index >= len(self._tick_fields):
+            raise ValueError(
+                "a page tick cannot add input fields"
+            )
+        existing = self._tick_fields[self._tick_field_index]
+        declared = (name, row, col, width,
+                    attrs["value"], attrs["cursor"],
+                    attrs["live"], attrs["visible"])
+        current = (existing.name, existing.row, existing.col, existing.width,
+                   existing.value, existing.cursor,
+                   existing.live, existing.visible)
+        if declared != current:
+            raise ValueError(
+                "a page tick cannot change input fields"
+            )
+        self._tick_field_index += 1
+        self.fields.append(existing)
+        return existing
 
     @property
     def input_value(self):
@@ -106,12 +156,11 @@ class PageContext:
     def clear_input(self):
         self.values[LINE_FIELD] = ""
 
-    def set_input(self, row, col, width, *, mask=None, value="",
+    def set_input(self, row, col, width, *, value="",
                   cursor="visible", live=False, visible=True):
         return self.add_field(
             LINE_FIELD, row, col, width,
-            mask=mask, value=value, cursor=cursor,
-            live=live, visible=visible,
+            value=value, cursor=cursor, live=live, visible=visible,
         )
 
     def set_status(self, text):
@@ -207,6 +256,11 @@ class PageContext:
                 f"page {self.page.number!r} cannot mix a choice with "
                 "a viewport or pager"
             )
+        if self.page.form and self.fields:
+            raise ValueError(
+                f"page {self.page.number!r} cannot mix form fields with "
+                "a choice"
+            )
         total = max(0, int(total))
         page_size = max(1, int(page_size))
         current = self.choice
@@ -251,6 +305,8 @@ class PageContext:
         return None
 
     def focus(self, name):
+        if self._tick:
+            raise ValueError("a page tick cannot change field focus")
         self._session.requested_focus = name
 
     def page_for(self, key):
@@ -326,6 +382,7 @@ class FunctionPage(Page):
         self.header = header
         self.number = number
         self._render = render
+        self.defined_in = getattr(render, "__module__", "")
         self.title = title
         self.aliases = tuple(aliases)
         self.requires = requires
@@ -373,6 +430,7 @@ class ExtensionPage(Page):
         self.base = base
         self.extension = token
         self.number = f"{base.number}#{token}"
+        self.defined_in = getattr(base, "defined_in", type(base).__module__)
         self.title = base.title
         self.aliases = ()
         self.back_page = base.extension_back_page
@@ -411,7 +469,7 @@ def page(number, *, title="", aliases=(), on_submit=None, on_key=None,
          transient=False, back_page=None, extension_back_page=None,
          screensaver=None, no_screensaver=False, scroll=False, paint=None,
          requires=(), extensions=False, header=None, announce=None,
-         announce_channel=None, **meta):
+         announce_channel=None, meta=None):
     def decorator(fn):
         return FunctionPage(
             number,
@@ -710,6 +768,11 @@ class Registry:
             module = importlib.import_module(f"{package_name}.{module_info.name}")
             for value in vars(module).values():
                 if isinstance(value, Page):
+                    owner = getattr(value, "defined_in", None)
+                    if owner is None:
+                        owner = type(value).__module__
+                    if owner != module.__name__:
+                        continue
                     self.add(
                         value,
                         source=source,

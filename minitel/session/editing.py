@@ -82,6 +82,8 @@ class EditingMixin:
         self.screen.set_cursor(field.row, col, self._cursor_visible())
 
     def text_event(self, event):
+        if self.page_error is not None:
+            return Action(raw=bytes([codec.BEL]))
         field = self.active_field
         if field is None:
             return Action(raw=bytes([codec.BEL]))

@@ -1,6 +1,7 @@
 """Transport-neutral session orchestration."""
 
 import time
+import traceback
 
 from ..design.stops import reveal_viewport
 from ..pagemodel.model import PageContext
@@ -48,6 +49,8 @@ class Session(
         self.power = PowerWatcher(self.power_signals)
         self.parser = codec.InputParser()
         self.paused = False
+        self.page_error = None
+        self._ticks_disabled = set()
         self.last_key = ""
         self.state = {}
         self.history = []
@@ -114,6 +117,56 @@ class Session(
         self.last_activity = now
         if self._pager_carousel is not None and self._pager_carousel.active:
             self._pager_carousel_next = now + self._pager_carousel.hold
+
+    def _clear_page_error(self):
+        self.page_error = None
+
+    def _clear_page_cursors(self):
+        self.fields = []
+        self.values = {}
+        self.active = 0
+        self.active_name = None
+        self.requested_focus = None
+        self.pager = None
+        self.viewport = None
+        self.stops = None
+        self.choice = None
+
+    def _error_screen(self):
+        screen = Screen()
+        screen.force_full = True
+        screen.text(0, 0, "PAGE ERROR", inverse=True)
+        screen.text(2, 0, "THIS PAGE COULD NOT BE SHOWN.")
+        screen.text(4, 0, "RETOUR=BACK  SOMMAIRE=HOME")
+        screen.set_cursor(codec.ROWS - 1, 0, False)
+        return screen
+
+    def _render_error(self):
+        self.scroll_mode = False
+        self.status_text = None
+        self.screen_paint = "full"
+        self.screen_header_paint = "full"
+        self.screen_scroll_mode = False
+        self._shadow_exact = True
+        self.screen = self._error_screen()
+        return self.screen
+
+    def _fail_page(self, where, *, disable_tick=False):
+        try:
+            self.log(
+                f"page error ({where}) on {self.current.number}:\n"
+                + traceback.format_exc().rstrip()
+            )
+        except Exception:
+            pass
+        self.page_error = where
+        if disable_tick:
+            self._ticks_disabled.add(self.current.number)
+        self._clear_page_cursors()
+        self.screensaver_active = False
+        self._pager_carousel = None
+        self._pager_carousel_next = None
+        return self._render_error()
 
     def _new_parser(self):
         return codec.InputParser()
@@ -217,6 +270,8 @@ class Session(
 
     def start(self):
         self.paused = False
+        self._clear_page_error()
+        self._ticks_disabled = set()
         self.parser = self._new_parser()
         self.power = self._new_power()
         self.screensaver_active = False
@@ -258,73 +313,102 @@ class Session(
         )
 
     def render(self):
+        if self.page_error is not None:
+            return self._render_error()
         self.scroll_mode = bool(self.current.scroll)
-        ctx = PageContext(self, self.current, self.registry)
-        screen = self.current.render(ctx)
-        self._extension_pending = False
-        if not isinstance(screen, Screen):
-            raise TypeError(
-                f"page {self.current.number!r} returned {type(screen)!r}, expected Screen"
-            )
-        self.status_text = ctx.status
-        if ctx._viewport_set and ctx.pager is not None:
-            raise ValueError(
-                f"page {self.current.number!r} cannot declare both a viewport "
-                "and a pager"
-            )
-        if ctx._choice_set and (ctx._viewport_set or ctx.pager is not None):
-            raise ValueError(
-                f"page {self.current.number!r} cannot mix a choice with "
-                "a viewport or pager"
-            )
-        if self.current.form and ctx.fields and ctx.pager is not None:
-            raise ValueError(
-                f"page {self.current.number!r} cannot declare both form fields "
-                "and a pager"
-            )
-        if self.current.form and ctx.fields and ctx._viewport_set:
-            raise ValueError(
-                f"page {self.current.number!r} cannot declare both form fields "
-                "and a viewport"
-            )
-        self._adopt_pager(ctx.pager, ctx.pager_carousel)
-        self._adopt_viewport(ctx.viewport if ctx._viewport_set else None)
-        self.stops = ctx.stops if ctx._stops_set else None
-        self.choice = ctx.choice if ctx._choice_set else None
-        self.fields = ctx.fields
-        names = [field.name for field in self.fields]
-        self.values = {name: self.values.get(name, "") for name in names}
+        try:
+            ctx = PageContext(self, self.current, self.registry)
+            screen = self.current.render(ctx)
+            self._extension_pending = False
+            if not isinstance(screen, Screen):
+                raise TypeError(
+                    f"page {self.current.number!r} returned "
+                    f"{type(screen)!r}, expected Screen"
+                )
+            self.status_text = ctx.status
+            if ctx._viewport_set and ctx.pager is not None:
+                raise ValueError(
+                    f"page {self.current.number!r} cannot declare both a "
+                    "viewport and a pager"
+                )
+            if ctx._choice_set and (ctx._viewport_set or ctx.pager is not None):
+                raise ValueError(
+                    f"page {self.current.number!r} cannot mix a choice with "
+                    "a viewport or pager"
+                )
+            if self.current.form and ctx.fields and ctx.pager is not None:
+                raise ValueError(
+                    f"page {self.current.number!r} cannot declare both form "
+                    "fields and a pager"
+                )
+            if self.current.form and ctx.fields and ctx._viewport_set:
+                raise ValueError(
+                    f"page {self.current.number!r} cannot declare both form "
+                    "fields and a viewport"
+                )
+            if self.current.form and ctx.fields and ctx._choice_set:
+                raise ValueError(
+                    f"page {self.current.number!r} cannot declare both form "
+                    "fields and a choice"
+                )
+            self._adopt_pager(ctx.pager, ctx.pager_carousel)
+            self._adopt_viewport(ctx.viewport if ctx._viewport_set else None)
+            self.stops = ctx.stops if ctx._stops_set else None
+            self.choice = ctx.choice if ctx._choice_set else None
+            self.fields = ctx.fields
+            names = [field.name for field in self.fields]
+            self.values = {name: self.values.get(name, "") for name in names}
 
-        focus = self.requested_focus
-        self.requested_focus = None
-        if focus and focus in names:
-            self.active = names.index(focus)
-            self.active_name = focus
-        elif self.active_name and self.active_name in names:
-            self.active = names.index(self.active_name)
-        else:
-            self.active = 0
-            self.active_name = names[0] if names else None
+            focus = self.requested_focus
+            self.requested_focus = None
+            if focus and focus in names:
+                self.active = names.index(focus)
+                self.active_name = focus
+            elif self.active_name and self.active_name in names:
+                self.active = names.index(self.active_name)
+            else:
+                self.active = 0
+                self.active_name = names[0] if names else None
 
-        field = self.active_field
-        if field is not None and field.visible:
-            value = self.values.get(field.name, "")
-            col = field.col + min(len(value), field.width)
-            screen.set_cursor(field.row, col, self._cursor_visible())
-        else:
-            screen.set_cursor(codec.ROWS - 1, 0, False)
-        self.screen_paint = resolve_paint(
-            getattr(self.current, "paint", None),
-            screen.paint,
-            allow_full=True,
-            what="page paint",
-        )
-        screen = self._compose_header(screen, self.current)
+            field = self.active_field
+            if field is not None and field.visible:
+                value = self.values.get(field.name, "")
+                col = field.col + min(len(value), field.width)
+                screen.set_cursor(field.row, col, self._cursor_visible())
+            else:
+                screen.set_cursor(codec.ROWS - 1, 0, False)
+            self.screen_paint = resolve_paint(
+                getattr(self.current, "paint", None),
+                screen.paint,
+                allow_full=True,
+                what="page paint",
+            )
+        except (KeyError, ValueError, TypeError):
+            raise
+        except Exception:
+            return self._fail_page("render")
+        try:
+            screen = self._compose_header(screen, self.current)
+        except (KeyError, ValueError, TypeError):
+            raise
+        except Exception:
+            return self._fail_page("header")
+        self._clear_page_error()
         self.screen = screen
         self.screen_scroll_mode = self.scroll_mode
         return screen
 
     def tick(self):
+        if self.paused or self.page_error is not None:
+            return Action()
+        try:
+            return self._tick_page()
+        except Exception:
+            return Action(
+                screen=self._fail_page("tick", disable_tick=True)
+            )
+
+    def _tick_page(self):
         if self.paused:
             return Action()
         self._last_body_tick = self.clock()
@@ -335,7 +419,7 @@ class Session(
                 return Action()
         elif self.next_tick_delay() is None:
             return Action()
-        ctx = PageContext(self, page, self.registry)
+        ctx = PageContext(self, page, self.registry, tick=True)
         frame = page.on_tick(ctx)
         if ctx.status is not None:
             self.status_text = ctx.status
@@ -411,6 +495,15 @@ class Session(
             if self._is_user_input(event):
                 return self._wake_from_input()
             return Action()
+        if self.page_error is not None:
+            if (
+                isinstance(event, codec.Function)
+                and event.name in ("RETOUR", "SOMMAIRE")
+            ):
+                return self.function(event.name)
+            if isinstance(event, codec.Text):
+                return Action(raw=bytes([codec.BEL]))
+            return Action()
         self._touch()
         if isinstance(event, codec.Text):
             return self.text_event(event)
@@ -427,7 +520,10 @@ class Session(
                 self.viewports[self.current.number] = self.viewport
                 return self.refresh()
             ctx = PageContext(self, self.current, self.registry)
-            result = self.current.on_key(ctx, event.name)
+            try:
+                result = self.current.on_key(ctx, event.name)
+            except Exception:
+                return Action(screen=self._fail_page("key"))
             requested = self._take_screensaver_request()
             if requested is not None:
                 return requested
@@ -438,6 +534,13 @@ class Session(
         return Action()
 
     def function(self, name):
+        if self.page_error is not None:
+            if name == "SOMMAIRE":
+                return self.home()
+            if name == "RETOUR":
+                return self._back_or_parent()
+            return Action()
+
         if name == "ENVOI":
             return self.submit()
 
@@ -527,7 +630,10 @@ class Session(
             return self._back_or_parent()
 
         ctx = PageContext(self, self.current, self.registry)
-        result = self.current.on_key(ctx, name)
+        try:
+            result = self.current.on_key(ctx, name)
+        except Exception:
+            return Action(screen=self._fail_page("key"))
         requested = self._take_screensaver_request()
         if requested is not None:
             return requested
@@ -568,17 +674,21 @@ class Session(
         if not data:
             return []
         actions = []
+        transitioned = False
         for token in self.power.feed(data):
             if isinstance(token, Power):
+                transitioned = True
                 if token.on:
                     actions.append(self.resume())
                 else:
                     action = self.pause()
                     if action.power is not None:
                         actions.append(action)
-                break
+                continue
+            if transitioned:
+                continue
             if self.paused:
                 actions.append(self.resume())
-                break
+                continue
             actions.extend(self._feed_bytes(token))
         return actions

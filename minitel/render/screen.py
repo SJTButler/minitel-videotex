@@ -96,6 +96,12 @@ class Screen:
         self.paint = None
 
     def clear(self):
+        """Clear cells and reset the cursor, not the frame presentation hints.
+
+        ``paint``, ``paint_order``, and ``force_full`` describe the next frame,
+        so they survive a content clear. Construct a new ``Screen`` or reset
+        those attributes explicitly when a fresh presentation is wanted.
+        """
         for row in self.rows:
             for i in range(codec.COLS):
                 row[i] = Cell()

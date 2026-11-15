@@ -184,7 +184,7 @@ class SportsService:
 
     def _apply(self, result, *, match_date=None, upcoming=False):
         matches = tuple(result.value)
-        now = datetime.now(timezone.utc)
+        now = datetime.fromtimestamp(self.wall_clock(), timezone.utc)
         if upcoming:
             self._alerts = []
             self._backfilled = False
@@ -428,7 +428,7 @@ class SportsService:
         if any(match.is_live for match in snapshot.matches):
             return self.config.live_interval
         if now is None:
-            now = datetime.now(timezone.utc)
+            now = datetime.fromtimestamp(self.wall_clock(), timezone.utc)
         upcoming = [
             match.kickoff for match in snapshot.matches
             if match.is_scheduled and match.kickoff > now

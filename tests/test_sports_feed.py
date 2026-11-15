@@ -280,6 +280,24 @@ class FeedTests(unittest.TestCase):
         self.assertEqual(alerts[0].competition, "PL")
         self.assertEqual(alerts[0].side, "home")
 
+    def test_goal_alert_uses_injected_wall_clock(self):
+        source = FakeSource([
+            FetchResult((match(home_goals=1),)),
+            FetchResult((match(home_goals=2, minute=40),)),
+        ])
+        feed = service(source)
+        asyncio.run(feed.refresh_once())
+        asyncio.run(feed.refresh_once())
+
+        goal = next(
+            alert for alert in feed.snapshot().alerts
+            if alert.kind == "GOAL"
+        )
+        self.assertEqual(
+            goal.at,
+            datetime.fromtimestamp(1000.0, timezone.utc),
+        )
+
     def test_backfills_finished_match_history(self):
         finished = Match(
             id=1001,

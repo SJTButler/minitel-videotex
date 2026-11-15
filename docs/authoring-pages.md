@@ -70,7 +70,7 @@ The decorator form is the shortest:
       transient=False, back_page=None, extension_back_page=None,
       screensaver=None, no_screensaver=False, scroll=False, paint=None,
       requires=(), extensions=False, header=None, announce=None,
-      announce_channel=None, **meta)
+      announce_channel=None, meta=None)
 def render(ctx):
     return Screen()
 ```
@@ -123,7 +123,8 @@ def render(ctx):
 - `announce=provider` declares a per-session announcement source;
   `announce_channel` names the channel (default: the page number). See
   [Announcements](#announcements).
-- `meta` is free-form; useful for a custom app.
+- `meta` is an explicit dict for a custom app; unknown keyword arguments are
+  rejected, so a misspelled option fails at import time.
 
 For stateful or larger pages, subclass `Page`:
 
@@ -555,7 +556,14 @@ from pages.common.widgets import form_footer, line_field
   the field. It keeps the draw and registration coordinates in one call.
 - For custom drawing, use `ctx.add_field(...)` plus `s.field`/`s.text`
   yourself. Use identical row/column values in both places; a mismatch is the
-  usual one-column cursor bug.
+  usual one-column cursor bug. Field placement is validated: `row` is 0-24,
+  `col` is 0-39, `width` is at least 1, and `col + width` is at most 40.
+- `mask` is not part of the field API. Masks, validators, and cursor/insert
+  editing are deferred until the field-editing model lands; the old inert
+  parameter has been removed rather than left as a promise.
+- A `form=True` page with fields cannot also declare a `Choice`, `Pager`, or
+  `Viewport`. Use `form=False` for the reader-style single live field, which
+  may coexist with a viewport or pager (D035).
 - Draw the field bar and its value with the same attributes. The renderer
   leaves the terminal pen set to the cursor cell at the end of a paint, and
   focus moves do the same, so typed text matches the field style. An inverse
@@ -909,6 +917,12 @@ def dynamic(ctx):
   `--local-echo` keeps terminal echo instead.
 - The initial `render` must draw the same region at the same position, so the
   first tick finds the same cells.
+- **The tick may re-declare the same fields, but it may not change them.** A
+  tick can call `set_input`/`add_field` again with identical name, position,
+  width, cursor, live, visible, and initial value. Added or changed fields,
+  `ctx.focus`, and focus changes are rejected; the session logs the violation,
+  paints its error screen, and disables that page's ticks so it cannot repeat.
+  Do not move form geometry from a timer.
 - A full page is ~240 bytes (~1.8 s at 1200). A small region is ~15 bytes
   (~0.11 s). Do not full-repaint at 1 Hz on the M1; `paint="full"` is for
   deliberate full-screen updates, not frequent ticks.
@@ -1478,6 +1492,31 @@ session.navigate("120#PAR")
 assert session.current.number == "120#PAR"
 ```
 
+## Page failures
+
+A page exception in `render`, `on_submit`/`on_form`, `on_key`, `on_tick`, or a
+header render is isolated by the session. It logs the traceback once, paints a
+dependency-free `PAGE ERROR` screen, suspends page ticks, the screensaver, the
+content carousel, and announcement polling, and keeps the connection alive.
+`RETOUR` goes back (or home with no history) and `SOMMAIRE` goes home; typed
+text is `BEL`. The error screen does not use the registry, services, or page
+helpers. A successful render clears the error. Do not expect an automatic
+retry.
+
+A tick that adds or changes fields, or changes focus, is a tick-contract
+violation: the session paints the error screen and disables that page's ticks
+for the rest of the session. A tick may re-declare identical fields so a shared
+`screen(ctx)` helper can be reused.
+
+Announcement providers are isolated per channel: a provider exception is logged
+and that channel is skipped, so one bad source does not blank the page.
+
+Page **declaration** errors are different: `ValueError`, `TypeError`, and an
+undeclared service `KeyError` from `ctx.set_input`, `add_field`, `set_choice`,
+`set_pager`, `set_viewport`, or `ctx.service` are development errors. They
+still raise, so page tests fail at the declaration site instead of silently
+showing the error screen. The same applies to a page returning a non-`Screen`.
+
 ## Testing a page
 
 The session is transport-neutral, so a page can be tested without a socket:
@@ -1631,7 +1670,8 @@ The library boundaries are deliberate:
   feed. A shared scheduler, a multi-user hub, and push updates are still future
   work above `Session`.
 - **Forms**: multi-field focus and `on_form` are implemented. Field masks,
-  validators, and cursor/insert editing are natural extensions of `Session`.
+  validators, cursor/insert editing, and multi-line values are not implemented;
+  see `.kilo/plans/deferred/field-editing.md`.
 - **Themes**: copy `pages/common/` or create another layout package. The core
   renderer does not contain the `3615 KILO` status bar.
 

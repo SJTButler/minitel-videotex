@@ -86,6 +86,7 @@ class ReaderService:
     def __init__(self, source, *, ttl=3600.0, retry_delay=300.0,
                  max_entries=64, clock=time.monotonic, thread_factory=None):
         self.source = source
+        self.clock = clock
         self.cache = ResourceCache(
             ttl, retry_delay, max_entries=max_entries,
             clock=clock, thread_factory=thread_factory,
@@ -103,7 +104,7 @@ class ReaderService:
         query = " ".join(str(query or "").split())
         limit = max(1, int(limit))
         if not query:
-            return Snapshot(value=(), loaded_at=time.monotonic())
+            return Snapshot(value=(), loaded_at=self.clock())
         return self.cache.get(
             ("search", query.casefold(), limit),
             lambda: tuple(self.source.search(query, limit)),
@@ -113,16 +114,16 @@ class ReaderService:
 class StaticReaderService:
     """A synchronous reader service for fixtures and local sources."""
 
-    def __init__(self, documents, results=()):
+    def __init__(self, documents, results=(), *, clock=time.monotonic):
+        self.clock = clock
         self._documents = {
             str(token).upper(): document
             for token, document in documents.items()
         }
         self._results = tuple(results)
 
-    @staticmethod
-    def _snapshot(value):
-        return Snapshot(value=value, loaded_at=time.monotonic())
+    def _snapshot(self, value):
+        return Snapshot(value=value, loaded_at=self.clock())
 
     def document(self, token):
         return self._snapshot(

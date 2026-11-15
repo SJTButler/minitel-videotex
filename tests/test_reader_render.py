@@ -112,9 +112,16 @@ class ReaderModelTests(unittest.TestCase):
             def document(self, token):
                 return None
 
-        snapshot = ReaderService(Source()).search("")
+        snapshot = ReaderService(Source(), clock=lambda: 42.0).search("")
         self.assertTrue(snapshot.has_value)
         self.assertEqual(snapshot.value, ())
+        self.assertEqual(snapshot.loaded_at, 42.0)
+
+    def test_static_service_uses_injected_clock(self):
+        service = StaticReaderService(
+            {"ALPHA": DOCUMENT}, (), clock=lambda: 43.0
+        )
+        self.assertEqual(service.document("ALPHA").loaded_at, 43.0)
 
     def test_static_service_and_results(self):
         result = SearchResult("ALPHA", "ALPHA PAGE", "SNIPPET", "TAG")

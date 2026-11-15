@@ -212,7 +212,7 @@ class IdleMixin:
         return self.refresh()
 
     def next_timeout(self):
-        if self.paused:
+        if self.paused or self.page_error is not None:
             return None
         now = self.clock()
         deadlines = []
@@ -244,6 +244,14 @@ class IdleMixin:
         return min(deadlines) if deadlines else None
 
     def on_timeout(self):
+        if self.paused or self.page_error is not None:
+            return Action()
+        try:
+            return self._on_timeout()
+        except Exception:
+            return Action(screen=self._fail_page("timeout"))
+
+    def _on_timeout(self):
         if self.paused:
             return Action()
         now = self.clock()
@@ -286,6 +294,8 @@ class IdleMixin:
         return now - self._last_body_tick >= interval
 
     def _page_tick_interval(self, page, *, pause_on_input=True):
+        if page.number in self._ticks_disabled:
+            return None
         if pause_on_input:
             field = self.active_field
             if field and field.cursor == "auto" and self.values.get(field.name, ""):
