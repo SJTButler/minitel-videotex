@@ -7,6 +7,8 @@
   out-of-bounds fields, defined the tick field/focus contract, fixed clock
   injection and same-chunk power transitions, and added a session-owned error
   screen that keeps the connection alive and disables a faulting page's ticks.
+- Made the `981` full-paint flood diagnostic auto-stop after three passes and
+  made session close tolerate a broken pipe.
 - Split the Wikipedia reader into a `160 WIKIPEDIA INDEX` pane page (home
   alias `6`) and a `161 WIKIPEDIA PAGE` scroll article reader (`161#TOKEN`),
   keeping the shared reader helpers and moving the article to hardware scroll.

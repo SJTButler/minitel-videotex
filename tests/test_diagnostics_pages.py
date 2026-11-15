@@ -58,6 +58,21 @@ class DiagnosticsPageTests(unittest.TestCase):
         self.assertTrue(action.screen.force_full)
         self.assertEqual(session.state[flood_page.PASSES], 1)
 
+    def test_flood_page_stops_after_the_cap(self):
+        session = make_session("981")
+        session.feed(b"ON" + ENVOI)
+        self.assertTrue(session.state[flood_page.FLOOD])
+
+        for _ in range(flood_page.MAX_PASSES):
+            session.tick()
+
+        self.assertFalse(session.state[flood_page.FLOOD])
+        self.assertEqual(
+            session.state[flood_page.PASSES],
+            flood_page.MAX_PASSES,
+        )
+        self.assertIsNone(session.tick().screen)
+
     def test_idle_page_has_no_deadline(self):
         session = make_session("983")
         self.assertIsNone(session.current.tick_interval)

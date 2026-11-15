@@ -175,8 +175,11 @@ class MinitelApp:
                 session.close()
             except Exception as exc:
                 self.log(peer, f"session close error: {exc!r}")
-            writer.close()
-            await writer.wait_closed()
+            try:
+                writer.close()
+                await writer.wait_closed()
+            except (ConnectionResetError, BrokenPipeError):
+                pass
 
     def _report_orphan_services(self):
         required = {

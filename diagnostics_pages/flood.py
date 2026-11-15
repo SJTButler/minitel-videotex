@@ -3,7 +3,8 @@
 Turn the flood on and the page forces a full 40x25 paint every tick. At the M1
 serial rate one paint takes several seconds, during which the server is writing
 and the dongle is blocked on its UART. Use it to reproduce delayed or lost
-keypresses, then press GUIDE (or submit OFF) to stop.
+keypresses. The flood auto-stops after a few passes so the terminal cannot be
+stranded; GUIDE also stops it early.
 """
 
 from minitel.pagemodel import page
@@ -16,6 +17,7 @@ from pages.common.widgets import form_footer, line_field
 PAGE = "981"
 FLOOD = "flood_on"
 PASSES = "flood_passes"
+MAX_PASSES = 3
 ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789+-*/"
 
 
@@ -34,12 +36,16 @@ def _screen(ctx):
     status(s, f"PAGE {PAGE}")
     for row in range(1, 19):
         s.text(row, 0, _row(row + passes))
-    s.text(19, 0, "TYPE ON OR OFF THEN ENVOI")
+    s.text(19, 0, "TYPE ON/OFF  GUIDE=STOP  3 PASSES")
     line_field(s, ctx, "mode", 20, 9, 16, label="MODE:")
     s.text(
         21,
         0,
-        fit(f"FLOOD {'ON' if flood else 'OFF'}  PASS {passes}", 40),
+        fit(
+            f"FLOOD {'ON' if flood else 'OFF'}  "
+            f"PASS {passes}/{MAX_PASSES}",
+            40,
+        ),
     )
     form_footer(s, ctx, [("mode", "MODE")])
     if flood:
@@ -51,6 +57,7 @@ def submit(ctx, values):
     value = values.get("mode", "").strip().upper()
     if value in ("ON", "GO", "START", "FLOOD"):
         ctx.state[FLOOD] = True
+        ctx.state[PASSES] = 0
     elif value in ("OFF", "STOP", "QUIT"):
         ctx.state[FLOOD] = False
     ctx.values["mode"] = ""
@@ -59,14 +66,20 @@ def submit(ctx, values):
 
 def on_key(ctx, key):
     if key == "GUIDE":
-        ctx.state[FLOOD] = not ctx.state.get(FLOOD, False)
+        flood = not ctx.state.get(FLOOD, False)
+        ctx.state[FLOOD] = flood
+        if flood:
+            ctx.state[PASSES] = 0
     return PAGE
 
 
 def tick(ctx):
     if not ctx.state.get(FLOOD, False):
         return None
-    ctx.state[PASSES] = ctx.state.get(PASSES, 0) + 1
+    passes = ctx.state.get(PASSES, 0) + 1
+    ctx.state[PASSES] = passes
+    if passes >= MAX_PASSES:
+        ctx.state[FLOOD] = False
     return _screen(ctx)
 
 

@@ -181,6 +181,48 @@ class AppTests(unittest.IsolatedAsyncioTestCase):
 
         self.assertEqual(closed, [True])
 
+    async def test_handle_ignores_a_broken_pipe_while_closing(self):
+        class FakeSession:
+            def start(self):
+                return Screen()
+
+            def echo_override(self):
+                return b""
+
+            def next_timeout(self):
+                return None
+
+            def close(self):
+                pass
+
+        class Reader:
+            async def read(self, size):
+                return b""
+
+        class Writer:
+            def get_extra_info(self, name):
+                return None
+
+            def write(self, data):
+                pass
+
+            async def drain(self):
+                pass
+
+            def close(self):
+                pass
+
+            async def wait_closed(self):
+                raise BrokenPipeError("closed by peer")
+
+        app = MinitelApp(
+            self.registry,
+            cps=0,
+            log=lambda peer, message: None,
+        )
+        app.new_session = lambda: FakeSession()
+        await app.handle(Reader(), Writer())
+
     async def test_handle_logs_and_closes_on_session_error(self):
         messages = []
         closed = []
