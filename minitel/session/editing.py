@@ -84,6 +84,8 @@ class EditingMixin:
     def text_event(self, event):
         if self.page_error is not None:
             return Action(raw=bytes([codec.BEL]))
+        if self.regions and not self._named_form_focused():
+            return Action(raw=bytes([codec.BEL]))
         field = self.active_field
         if field is None:
             return Action(raw=bytes([codec.BEL]))

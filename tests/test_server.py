@@ -33,7 +33,7 @@ class PageTests(unittest.TestCase):
         self.assertIs(self.registry.get("2"), self.registry.get("120"))
         self.assertIs(self.registry.get("3"), self.registry.get("130"))
         self.assertIs(self.registry.get("6"), self.registry.get("160"))
-        self.assertIsNone(self.registry.get("7"))
+        self.assertIs(self.registry.get("7"), self.registry.get("170"))
         self.assertIs(self.registry.get("9"), self.registry.get("190"))
         self.assertIsNone(self.registry.get("999"))
 

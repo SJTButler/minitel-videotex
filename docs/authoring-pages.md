@@ -642,8 +642,72 @@ def render_list(ctx):
 - Page-specific error text is the page's responsibility. If it should disappear
   when the page changes, store the offset with the error and clear it when the
   pager offset differs, as `pages/news/hackernews.py` does.
-- Use one cursor style per page: multi-field form focus, a pager, or a viewport,
-  not more than one.
+- A single-region page uses one cursor style: multi-field form focus, a pager,
+  choice, or a viewport. A named-region pane page has one cursor per region;
+  see **Pane regions** below.
+
+## Pane regions
+
+A pane page may declare named focusable regions when it needs two interactions
+at once: a search form and a paged result list, for example. The first slice
+supports **one form region and one pager region**; named `Choice` and
+`Viewport` regions, `Region.commit`, and `wrap` are not enabled yet.
+
+```python
+from minitel import Region
+
+@page("170", form=True, on_form=submit, on_tick=render)
+def train_times(ctx):
+    query = ctx.state.get("query")
+    ctx.set_regions(
+        Region("form", next="results"),
+        Region("results", prev="form", activate="stay", key=query),
+    )
+    ...
+    line_field(s, ctx, "origin", 2, 2, 3, label="FROM:", region="form")
+    line_field(s, ctx, "to", 2, 12, 3, label="TO:", region="form")
+    pager = ctx.set_pager(len(departures), 8, region="results")
+    ...
+```
+
+- `ctx.set_regions(*regions, default_focus=None)` declares the graph. The first
+  region is the default focus. Call it once per render, before the region's
+  cursors.
+- Each `Region(name, next=None, prev=None, activate="submit", key=None)` has
+  at most one cursor. `next`/`prev` name the region to focus when the cursor
+  cannot move; the root has no `prev` and its `RETOUR` follows history.
+- `ctx.add_field(..., region="form")` and
+  `ctx.set_pager(..., region="results")` must name their region. `line_field`
+  takes a `region=` pass-through.
+- `SUITE`/`RETOUR` first try the focused cursor. A form moves fields; at the
+  last field `SUITE` follows `next`, and at the first field `RETOUR` follows
+  `prev` or history. A pager moves pages; at its first page `RETOUR` follows
+  `prev`, and at its last page `SUITE` stays.
+- `ENVOI` runs the region's `activate`: `submit` uses the page submit path
+  (`on_form` on a form page), `stay` refreshes without submitting. In a form
+  page, submit the query, then call `ctx.focus_region("results")` from
+  `on_form` to hand over focus.
+- `ctx.region(name)` returns a read-only view (`cursor`, `key`, `focused`);
+  `ctx.focused_region` is the current name. Use it to style the active pane.
+  The page owns the rectangles; the session knows only the regions and the
+  cursor state.
+- `Region.key` scopes remembered pager state. A changed key resets the pager to
+  page 1. Focus is remembered per page; pager offsets are remembered per
+  page and content key.
+- The session places the terminal cursor only in a focused form field. A
+  focused pager hides it; the page draws its own selection/page label.
+- A page with no `set_regions` keeps the implicit `"main"` region and all
+  existing behavior. A named-region page must use `region=` for every cursor
+  and cannot mix in an implicit cursor.
+- On a tick the page may re-declare the identical region graph and identical
+  fields; a changed or added region/field/focus is a tick-contract violation
+  (the error screen and tick disabling apply). A tick does not steal focus.
+- Pane regions and scroll pages are mutually exclusive (D047). A named-region
+  page cannot use `set_viewport`/`set_stops`; a scroll page cannot declare
+  regions.
+
+The synthetic and caller tests live in `tests/test_regions.py`; the first real
+caller is the train times page plan.
 
 ## Scroll viewports
 
@@ -1415,6 +1479,7 @@ Keep page numbers stable and descriptive. The example scheme is:
 | `155` | vidiprinter; direct entry from the live-scores page |
 | `160` | Wikipedia search index (`6`) |
 | `161` | Wikipedia article reader, `161#TOKEN` direct entry |
+| `170` | train times, form + paged departures (`7`); `170#FROMTO` direct entry |
 | `190` | screensaver selector (`9` on the home menu) |
 | `199` | hidden developer page directory; not linked from home |
 | `900` | CLOCK screensaver |

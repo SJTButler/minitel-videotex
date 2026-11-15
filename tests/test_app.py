@@ -53,6 +53,7 @@ class AppTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("hackernews", service_registry)
         self.assertIn("weather", service_registry)
         self.assertIn("sports", service_registry)
+        self.assertIn("train", service_registry)
 
     def test_screensaver_config_propagates_to_sessions(self):
         app = MinitelApp(

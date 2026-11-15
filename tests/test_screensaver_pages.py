@@ -130,7 +130,7 @@ class ScreensaverPageTests(unittest.TestCase):
             for page in self.registry.all()
             if page.no_screensaver
         }
-        self.assertEqual(opted_out, {"111", "150", "155"})
+        self.assertEqual(opted_out, {"111", "150", "155", "170"})
 
     def test_home_links_to_veille(self):
         session = Session(
@@ -142,8 +142,9 @@ class ScreensaverPageTests(unittest.TestCase):
         text = session.start().to_text().splitlines()
         self.assertEqual(text[9].strip(), "5  LIVE SCORES")
         self.assertEqual(text[10].strip(), "6  WIKIPEDIA")
-        self.assertEqual(text[11].strip(), "9  SCREENSAVER")
-        self.assertIn("TYPE A NUMBER", text[12])
+        self.assertEqual(text[11].strip(), "7  TRAIN TIMES")
+        self.assertEqual(text[12].strip(), "9  SCREENSAVER")
+        self.assertIn("TYPE A NUMBER", text[13])
 
     def test_clock_page(self):
         self.assertEqual(self.registry.get("900").paint, "cell")

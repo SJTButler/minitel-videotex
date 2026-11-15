@@ -60,8 +60,8 @@ class PageDirectoryTests(unittest.TestCase):
         self.assertEqual(
             page_numbers(text),
             [
-                "160", "161", "190", "199", "900", "901", "902",
-                "903", "910", "911", "912",
+                "160", "161", "170", "190", "199", "900", "901",
+                "902", "903", "910", "911", "912",
             ],
         )
 
@@ -114,6 +114,8 @@ class PageDirectoryTests(unittest.TestCase):
         session.feed(SUITE)
         text = session.screen.to_text().splitlines()
         self.assertIn(" 6", find_line(text, "160"))
+        self.assertIn(" 7", find_line(text, "170"))
+        self.assertTrue(find_line(text, "170").startswith("170#"))
         self.assertIn(" 9", find_line(text, "190"))
         line = find_line(text, "900")
         self.assertTrue(line.startswith("900*"))
@@ -179,20 +181,24 @@ class PageDirectoryTests(unittest.TestCase):
 
         registry.add(extra)
         session = make_session(registry)
-        self.assertIn("REGISTERED PAGES 1/2", session.screen.to_text())
+        self.assertIn("REGISTERED PAGES 1/3", session.screen.to_text())
         lines = session.screen.to_text().splitlines()
         self.assertTrue(lines[16].startswith("155"))
         session.feed(SUITE)
         text = session.screen.to_text()
-        self.assertIn("REGISTERED PAGES 2/2", text)
+        self.assertIn("REGISTERED PAGES 2/3", text)
         lines = text.splitlines()
         self.assertEqual(
             page_numbers(lines),
             [
-                "160", "161", "190", "199", "250", "900", "901",
-                "902", "903", "910", "911", "912",
+                "160", "161", "170", "190", "199", "250", "900",
+                "901", "902", "903", "910", "911",
             ],
         )
+        session.feed(SUITE)
+        text = session.screen.to_text()
+        self.assertIn("REGISTERED PAGES 3/3", text)
+        self.assertEqual(page_numbers(text.splitlines()), ["912"])
 
 
 if __name__ == "__main__":

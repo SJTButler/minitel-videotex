@@ -16,7 +16,7 @@ def form_footer(screen, ctx, fields):
 
 
 def line_field(screen, ctx, name, row, col, width, *, label=None,
-               label_col=0, value="", cursor="visible"):
+               label_col=0, value="", cursor="visible", region=None):
     if label:
         screen.text(row, label_col, label)
     screen.field(row, col, width)
@@ -24,7 +24,8 @@ def line_field(screen, ctx, name, row, col, width, *, label=None,
     if current:
         screen.text(row, col, current[:width], inverse=True)
     return ctx.add_field(
-        name, row, col, width, value=value, cursor=cursor
+        name, row, col, width, value=value, cursor=cursor,
+        region=region,
     )
 
 

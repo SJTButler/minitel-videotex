@@ -26,9 +26,12 @@ class NavigationMixin:
                         self.history.pop()
                 else:
                     self.history.append(self.current)
+            if self.regions:
+                self._focus_memory[self.current.number] = self.focused_region
             self._reset_page()
             self._extension_pending = isinstance(page, ExtensionPage)
             self.current = page
+            self.focused_region = self._focus_memory.get(page.number)
             screen = self.render()
             self._shadow_exact = True
             return Action(screen=screen, page=page)
@@ -75,11 +78,14 @@ class NavigationMixin:
         self.screensaver_active = False
         self._clear_page_error()
         self._touch()
+        if self.regions:
+            self._focus_memory[self.current.number] = self.focused_region
         if self.history:
             self.current = self.history.pop()
         else:
             self.current = self.registry.resolve(self.initial)
         self._reset_page()
+        self.focused_region = self._focus_memory.get(self.current.number)
         self._extension_pending = False
         screen = self.render()
         self._shadow_exact = True
@@ -89,9 +95,12 @@ class NavigationMixin:
         self.screensaver_active = False
         self._clear_page_error()
         self._touch()
+        if self.regions:
+            self._focus_memory[self.current.number] = self.focused_region
         self.history.clear()
         self.current = self.registry.resolve(self.initial)
         self._reset_page()
+        self.focused_region = self._focus_memory.get(self.current.number)
         self._extension_pending = False
         screen = self.render()
         self._shadow_exact = True

@@ -13,7 +13,7 @@ class DiscoveryTests(unittest.TestCase):
         self.assertIsInstance(registry, ServiceRegistry)
         self.assertEqual(
             list(registry),
-            ["hackernews", "sports", "weather", "wikipedia"],
+            ["hackernews", "sports", "train", "weather", "wikipedia"],
         )
 
     def test_services_expose_their_read_apis(self):
@@ -21,6 +21,7 @@ class DiscoveryTests(unittest.TestCase):
         self.assertTrue(hasattr(registry["hackernews"], "front_page"))
         self.assertTrue(hasattr(registry["weather"], "weather"))
         self.assertTrue(hasattr(registry["sports"], "snapshot"))
+        self.assertTrue(hasattr(registry["train"], "departures"))
         self.assertTrue(hasattr(registry["wikipedia"], "document"))
         self.assertTrue(hasattr(registry["wikipedia"], "search"))
 

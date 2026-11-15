@@ -39,6 +39,7 @@ class HomeMenuTests(unittest.TestCase):
                 ("4", "140"),
                 ("5", "150"),
                 ("6", "160"),
+                ("7", "170"),
                 ("9", "190"),
             ],
         )
@@ -52,8 +53,9 @@ class HomeMenuTests(unittest.TestCase):
         self.assertEqual(lines[8].strip(), "4  GUESTBOOK")
         self.assertEqual(lines[9].strip(), "5  LIVE SCORES")
         self.assertEqual(lines[10].strip(), "6  WIKIPEDIA")
-        self.assertEqual(lines[11].strip(), "9  SCREENSAVER")
-        self.assertEqual(lines[12].strip(), "TYPE A NUMBER, THEN ENVOI:")
+        self.assertEqual(lines[11].strip(), "7  TRAIN TIMES")
+        self.assertEqual(lines[12].strip(), "9  SCREENSAVER")
+        self.assertEqual(lines[13].strip(), "TYPE A NUMBER, THEN ENVOI:")
 
     def test_menu_skips_home_non_numeric_and_zero_aliases(self):
         registry = Registry()

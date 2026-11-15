@@ -50,6 +50,7 @@ class RegistryTests(unittest.TestCase):
         self.assertIn("hackernews", registry)
         self.assertIn("weather", registry)
         self.assertIn("sports", registry)
+        self.assertIn("train", registry)
 
 
 class LifecycleTests(unittest.IsolatedAsyncioTestCase):

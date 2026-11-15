@@ -13,6 +13,7 @@ from .design import (
     Carousel,
     InputField,
     Pager,
+    Region,
     Viewport,
 )
 from .pagemodel import (
@@ -64,6 +65,7 @@ __all__ = [
     "PageContext",
     "Pager",
     "PowerSignals",
+    "Region",
     "Registry",
     "ResourceCache",
     "Screen",

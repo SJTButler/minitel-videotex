@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- Added pane regions: named form and pager regions with declared
+  `next`/`prev` boundaries, focus handover, content-keyed pager memory, and
+  tick re-declaration. Pages without regions keep the implicit `"main"` path.
+- Added the `170 TRAIN TIMES` page (home alias `7`), the first pane-regions
+  caller: a `FROM`/`TO` CRS form and a paged departure board, with
+  `170#FROMTO` direct entry. Added the Realtime Trains NG service with
+  refresh-token exchange, reference station-name resolution, a 60-second cache,
+  stale-on-error, and London-local time formatting.
 - Hardened page declarations and failure handling: removed the inert field
   `mask`, made `@page` metadata explicit, rejected form/choice conflicts and
   out-of-bounds fields, defined the tick field/focus contract, fixed clock

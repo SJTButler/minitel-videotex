@@ -56,6 +56,10 @@ services/      background services, auto-discovered
     __init__.py  service builder and Wikipedia config
     html.py      action HTML -> reader blocks
     source.py    action API, base36 tokens, link resolution
+  train/
+    models.py    Departure and DepartureBoard
+    source.py    Realtime Trains NG source, token refresh, parser
+    service.py   cached train service and environment builder
 pages/         example site, auto-discovered
   common/      shared presentation: layout, widgets, status, messages, clock
     reader.py  shared reader lines, stops, article/index screens
@@ -64,6 +68,7 @@ pages/         example site, auto-discovered
   wikipedia/
     index.py    page 160, search index over the wikipedia service
     article.py  page 161, linked article reader
+  train.py      page 170, train departure board over the train service
   not_found.py fallback
   page_directory.py page 199, hidden developer directory
   news/
@@ -394,6 +399,45 @@ shell. The key is never logged or rendered.
 
 `docs/authoring-pages.md` documents the page contract and the `.env`/service
 pattern.
+
+## Train times
+
+Page `170` (`7` on the home menu) is the train departure board. `FROM` and
+optional `TO` are three-letter CRS codes, for example `PAD` and `KGX`; `ENVOI`
+loads the board, `SUITE`/`RETOUR` page it, and `RETOUR` from the form goes
+home. The page is the first caller of pane regions: a form region and a pager
+region with declared boundaries.
+
+`TO` filters **direct** services that call at the destination after the origin;
+it is not a journey planner. If there is no direct service, the page says
+`NO DIRECT TO <CODE>` and suggests clearing `TO`; a journey with a change needs
+the origin departure board plus the connection, not this page.
+
+Direct entry can prefill the query: `170#WATHXX` means Waterloo to Heathrow
+Central, and `170#WAT` is the origin only. The token is the 3-letter origin or
+the 6-letter origin+destination concatenation because page extensions are
+capped at six characters. The form fields and results are populated on entry.
+
+The service uses the [Realtime Trains NG API](https://realtimetrains.github.io/api-specification).
+The portal issues a refresh token; put it in `.env` (ignored by Git):
+
+```sh
+TRAINS_REFRESH_TOKEN=...
+# TRAINS_API_KEY=...   # only for a long-life access token
+```
+
+`services/train/source.py` exchanges the refresh token at
+`GET https://data.rtt.io/api/get_access_token`, caches the access token until
+shortly before `validUntil`, and calls `/gb-nr/location`. A long-life access
+token can be supplied as `TRAINS_API_KEY` instead. The token stays server-side
+and is never logged or rendered. The free personal tier is rate-limited; the
+service caches one board per `(from, to)` for 60 seconds and keeps the last good
+board on an upstream error. The page polls that cache once a second, so a
+completed load appears without waiting for the next cache refresh.
+
+`TRAINS_TIMEOUT` is optional (default 10 seconds). The page shows
+`SOURCE: REALTIME TRAINS`; keep the RTT/Network Rail attribution in any
+redistribution.
 
 ## Screensavers
 
