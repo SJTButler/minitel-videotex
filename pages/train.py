@@ -129,7 +129,7 @@ def _screen(ctx):
     screen.text(4, 0, state.text[:40], fg=state.colour)
     screen.text(
         5, 0,
-        f"{'TIME':<5} {'DESTINATION':<18} {'PLT':>3} STATUS",
+        f"{'TIME':<5} {'DESTINATION':<21} {'PLT':>3} STATUS",
         fg=SECONDARY,
     )
     for row, departure in enumerate(pager.window(departures)):
@@ -139,7 +139,7 @@ def _screen(ctx):
             0,
             (
                 f"{departure.scheduled} "
-                f"{departure.destination[:18]:<18} "
+                f"{departure.destination[:21]:<21} "
                 f"{platform:>3} {departure.status[:8]}"
             )[:40],
         )

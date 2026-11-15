@@ -118,7 +118,8 @@ class TrainPageTests(unittest.TestCase):
         lines = session.screen.to_text().splitlines()
 
         self.assertEqual(lines[5].index("DESTINATION"), 6)
-        self.assertEqual(lines[5].index("PLT"), 25)
+        self.assertEqual(lines[5].index("PLT"), 28)
+        self.assertEqual(lines[5].index("STATUS"), 32)
         self.assertEqual(lines[6].index("DEST 0"), 6)
 
     def test_destination_name_is_resolved(self):
