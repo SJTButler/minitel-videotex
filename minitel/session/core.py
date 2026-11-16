@@ -206,7 +206,11 @@ class Session(
                         (page_key, name, key)
                     )
                     cursor = replace(
-                        cursor, offset=remembered or 0
+                        cursor,
+                        offset=(
+                            remembered
+                            if isinstance(remembered, int) else 0
+                        ),
                     ).clamp()
             fields = (
                 tuple(ctx.fields)
@@ -274,10 +278,16 @@ class Session(
     def _remember_region_offsets(self):
         page_key = self.current.number
         for name, state in self.regions.items():
-            if state.cursor is not None:
-                self._region_memory[
-                    (page_key, name, state.key)
-                ] = state.cursor.offset
+            cursor = state.cursor
+            if cursor is None:
+                continue
+            if isinstance(cursor, Choice):
+                remembered = (cursor.offset, cursor.selected)
+            else:
+                remembered = cursor.offset
+            self._region_memory[
+                (page_key, name, state.key)
+            ] = remembered
         while len(self._region_memory) > 64:
             self._region_memory.pop(next(iter(self._region_memory)))
         while len(self._focus_memory) > 32:

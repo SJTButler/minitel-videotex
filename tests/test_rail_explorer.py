@@ -139,6 +139,33 @@ def make_session(service):
     return session
 
 
+class ReturnTripService(FakeTrainService):
+    def departures(self, origin, destination=None, *, time_from=None):
+        if origin == "ANG":
+            self.departure_calls.append((origin, destination))
+            self.time_from_calls.append(time_from)
+            board = _board(
+                "ANGMERING",
+                _departure("gb-nr:P1:2026-11-15", "17:45", "EXETER"),
+                _departure("gb-nr:P2:2026-11-15", "17:50", "PLYMOUTH"),
+            )
+            if time_from is not None:
+                board = DepartureBoard(
+                    board.station,
+                    board.filter_to,
+                    tuple(
+                        departure for departure in board.departures
+                        if departure.scheduled_at is None
+                        or departure.scheduled_at >= time_from
+                    ),
+                    board.degraded,
+                )
+            return Snapshot(value=board, loaded_at=time.monotonic())
+        return super().departures(
+            origin, destination, time_from=time_from
+        )
+
+
 class MidnightService(FakeTrainService):
     def departures(self, origin, destination=None, *, time_from=None):
         self.departure_calls.append((origin, destination))
@@ -329,6 +356,28 @@ class RailExplorerTests(unittest.TestCase):
         self.assertIn(
             "PICK A TRAIN FROM FTN", self.session.screen.to_text()
         )
+
+    def test_back_stack_restores_cursor_highlights(self):
+        session = make_session(ReturnTripService())
+        session.navigate("171#FTN")
+
+        session.feed(ENVOI)  # pick T1
+        session.feed(SUITE)  # calls: HAV -> ANG
+        session.feed(ENVOI)  # alight ANG, focus trains
+        self.assertEqual(session.focused_region, "trains")
+
+        session.feed(SUITE)  # trains: EXETER -> PLYMOUTH
+        session.feed(ENVOI)  # take Plymouth
+        self.assertEqual(session.state["rail_base"], "ANG")
+        self.assertEqual(session.state["rail_alight"], None)
+
+        session.feed(RETOUR)
+
+        self.assertEqual(session.focused_region, "trains")
+        self.assertEqual(session.state["rail_alight"], "ANG")
+        self.assertEqual(session.regions["calls"].cursor.selected, 1)
+        self.assertEqual(session.regions["trains"].cursor.selected, 1)
+        self.assertIn("PLYMOUTH", session.screen.to_text())
 
     def test_empty_stack_falls_back_to_170(self):
         self.session.feed(RETOUR)

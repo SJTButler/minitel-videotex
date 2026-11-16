@@ -365,9 +365,10 @@ class PageContext:
             ):
                 offset = previous.cursor.offset
             else:
-                offset = self._session._region_memory.get(
-                    (self.page.number, region, key), 0
+                remembered = self._session._region_memory.get(
+                    (self.page.number, region, key)
                 )
+                offset = remembered if isinstance(remembered, int) else 0
         self._region_pagers[region] = Pager(
             total, page_size, offset or 0
         ).clamp()
@@ -397,21 +398,28 @@ class PageContext:
             and previous.key == key
             and isinstance(previous.cursor, Choice)
         )
+        remembered = self._session._region_memory.get(
+            (self.page.number, region, key)
+        )
         if selected is not None:
             index = selected
-        elif (
-            reset
-            or not same_key
-            or previous.cursor.total != total
-            or previous.cursor.page_size != page_size
-        ):
+            offset = (
+                previous.cursor.offset
+                if same_key and not reset else 0
+            )
+        elif reset:
             index = 0 if total else None
-        else:
+            offset = 0
+        elif same_key:
             index = previous.cursor.selected
-        offset = (
-            previous.cursor.offset
-            if same_key and not reset else 0
-        )
+            offset = previous.cursor.offset
+        elif isinstance(remembered, tuple) and (
+            previous is None or previous.key != key
+        ):
+            offset, index = remembered
+        else:
+            index = 0 if total else None
+            offset = 0
         choice = Choice(
             Pager(total, page_size, offset), index
         ).clamp()
