@@ -8,7 +8,7 @@ from ..design.carousel import Carousel
 from ..design.choice import Choice
 from ..design.field import InputField
 from ..design.pager import Pager
-from ..design.region import Region
+from ..design.region import PAGE_BACK, Region
 from ..design.stops import Stops
 from ..design.viewport import Viewport
 from ..protocol import codec
@@ -45,9 +45,10 @@ def _check_field_placement(row, col, width):
 class RegionView:
     name: str
     definition: Region
-    cursor: Pager | None
+    cursor: Choice | Pager | None
     focused: bool
     key: object | None
+    committed: object | None = None
 
 
 class PageContext:
@@ -74,6 +75,8 @@ class PageContext:
         self._region_order = []
         self._region_pagers = {}
         self._region_pager_explicit = {}
+        self._region_choices = {}
+        self._region_committed = {}
         self._form_region_name = None
         self._default_focus = None
         self._requested_focus_region = None
@@ -134,7 +137,9 @@ class PageContext:
             names.append(region.name)
         for region in regions:
             for edge in (region.next, region.prev):
-                if edge is not None and edge not in names:
+                if edge is None or edge == PAGE_BACK:
+                    continue
+                if edge not in names:
                     raise ValueError(
                         f"region {region.name!r} points at unknown "
                         f"region {edge!r}"
@@ -147,7 +152,13 @@ class PageContext:
             if set(previous) != set(names):
                 raise ValueError("a page tick cannot change regions")
             for name in names:
-                if previous[name].definition != regions[names.index(name)]:
+                old = previous[name].definition
+                new = regions[names.index(name)]
+                if (
+                    old.name, old.next, old.prev, old.activate, old.key
+                ) != (
+                    new.name, new.next, new.prev, new.activate, new.key
+                ):
                     raise ValueError("a page tick cannot change regions")
 
         self._region_defs = {region.name: region for region in regions}
@@ -160,12 +171,19 @@ class PageContext:
             definition = self._region_defs.get(name)
             if definition is None:
                 raise KeyError(f"unknown region {name!r}")
+            committed = self._region_committed.get(name)
+            if committed is None:
+                previous = self._session.regions.get(name)
+                if previous is not None:
+                    committed = previous.committed
             return RegionView(
                 name,
                 definition,
-                self._region_pagers.get(name),
+                self._region_pagers.get(name)
+                or self._region_choices.get(name),
                 self.focused_region == name,
                 definition.key,
+                committed,
             )
         state = self._session.regions.get(name)
         if state is None:
@@ -176,6 +194,7 @@ class PageContext:
             state.cursor,
             self._session.focused_region == name,
             state.key,
+            state.committed,
         )
 
     @property
@@ -243,8 +262,8 @@ class PageContext:
             raise ValueError("a named-region page must pass region=")
         if region not in self._region_defs:
             raise ValueError(f"unknown region {region!r}")
-        if region in self._region_pagers:
-            raise ValueError(f"region {region!r} already has a pager")
+        if region in self._region_pagers or region in self._region_choices:
+            raise ValueError(f"region {region!r} already has a cursor")
         if not self.page.form:
             raise ValueError("a named form region requires form=True")
         if self._form_region_name not in (None, region):
@@ -329,8 +348,8 @@ class PageContext:
             raise ValueError("a named-region page must pass region=")
         if region not in self._region_defs:
             raise ValueError(f"unknown region {region!r}")
-        if region in self._region_pagers:
-            raise ValueError(f"region {region!r} already has a pager")
+        if region in self._region_pagers or region in self._region_choices:
+            raise ValueError(f"region {region!r} already has a cursor")
         if region == self._form_region_name:
             raise ValueError(f"region {region!r} already has form fields")
         if carousel is not None:
@@ -354,6 +373,52 @@ class PageContext:
         ).clamp()
         self._region_pager_explicit[region] = explicit
         return self._region_pagers[region]
+
+    def _set_region_choice(self, region, total, page_size, *, selected,
+                           reset, wrap):
+        if not self._regions_declared:
+            raise ValueError("page has not declared regions")
+        if region is None:
+            raise ValueError("a named-region page must pass region=")
+        if region not in self._region_defs:
+            raise ValueError(f"unknown region {region!r}")
+        if region in self._region_pagers or region in self._region_choices:
+            raise ValueError(f"region {region!r} already has a cursor")
+        if region == self._form_region_name:
+            raise ValueError(f"region {region!r} already has form fields")
+        if wrap:
+            raise ValueError("named choice regions do not support wrap yet")
+        total = max(0, int(total))
+        page_size = max(1, int(page_size))
+        key = self._region_defs[region].key
+        previous = self._session.regions.get(region)
+        same_key = (
+            previous is not None
+            and previous.key == key
+            and isinstance(previous.cursor, Choice)
+        )
+        if selected is not None:
+            index = selected
+        elif (
+            reset
+            or not same_key
+            or previous.cursor.total != total
+            or previous.cursor.page_size != page_size
+        ):
+            index = 0 if total else None
+        else:
+            index = previous.cursor.selected
+        offset = (
+            previous.cursor.offset
+            if same_key and not reset else 0
+        )
+        choice = Choice(
+            Pager(total, page_size, offset), index
+        ).clamp()
+        self._region_choices[region] = choice
+        if same_key:
+            self._region_committed[region] = previous.committed
+        return choice
 
     def set_viewport(self, total, height, *, offset=None, follow=None, step=None):
         if self._regions_declared:
@@ -417,9 +482,12 @@ class PageContext:
         return self.stops
 
     def set_choice(self, total, page_size, *, selected=None, reset=False,
-                   wrap=False):
-        if self._regions_declared:
-            raise ValueError("named regions do not support choices yet")
+                   wrap=False, region=None):
+        if region is not None or self._regions_declared:
+            return self._set_region_choice(
+                region, total, page_size,
+                selected=selected, reset=reset, wrap=wrap,
+            )
         if self._viewport_set or self.pager is not None:
             raise ValueError(
                 f"page {self.page.number!r} cannot mix a choice with "
@@ -497,6 +565,7 @@ class Page:
     paint = None
     tick_interval = None
     on_form = None
+    on_back = None
     requires = ()
     extensions = False
     header = None
@@ -515,6 +584,9 @@ class Page:
     def on_tick(self, ctx):
         return None
 
+    def on_back(self, ctx):
+        return None
+
     def matches(self, key: str) -> bool:
         return key == self.number or key in self.aliases
 
@@ -522,7 +594,7 @@ class Page:
 class FunctionPage(Page):
     def __init__(self, number, render, *, title="", aliases=(), on_submit=None,
                  on_key=None, on_tick=None, tick_interval=None, form=False,
-                 on_form=None, transient=False, back_page=None,
+                 on_form=None, on_back=None, transient=False, back_page=None,
                  extension_back_page=None, screensaver=None,
                  no_screensaver=False, scroll=False, paint=None, requires=(),
                  extensions=False, header=None, announce=None,
@@ -570,6 +642,8 @@ class FunctionPage(Page):
         self.tick_interval = tick_interval
         self.form = form
         self.on_form = on_form
+        if on_back is not None:
+            self.on_back = on_back
         self.transient = transient
         self.meta = dict(meta or {})
 
@@ -632,10 +706,13 @@ class ExtensionPage(Page):
     def on_tick(self, ctx):
         return self.base.on_tick(ctx)
 
+    def on_back(self, ctx):
+        return self.base.on_back(ctx)
+
 
 def page(number, *, title="", aliases=(), on_submit=None, on_key=None,
          on_tick=None, tick_interval=None, form=False, on_form=None,
-         transient=False, back_page=None, extension_back_page=None,
+         on_back=None, transient=False, back_page=None, extension_back_page=None,
          screensaver=None, no_screensaver=False, scroll=False, paint=None,
          requires=(), extensions=False, header=None, announce=None,
          announce_channel=None, meta=None):
@@ -651,6 +728,7 @@ def page(number, *, title="", aliases=(), on_submit=None, on_key=None,
             tick_interval=tick_interval,
             form=form,
             on_form=on_form,
+            on_back=on_back,
             transient=transient,
             back_page=back_page,
             extension_back_page=extension_back_page,

@@ -15,7 +15,7 @@ from .source import RttSource
 class TrainSource(Protocol):
     configured: bool
 
-    def departures(self, origin, destination=None): ...
+    def departures(self, origin, destination=None, *, time_from=None): ...
 
 
 class TrainService:
@@ -38,14 +38,30 @@ class TrainService:
             max_entries=max_entries,
             clock=clock,
         )
+        self.service_cache = ResourceCache(
+            300.0,
+            retry_delay,
+            max_entries=max_entries,
+            clock=clock,
+        )
 
-    def departures(self, origin, destination=None):
+    def departures(self, origin, destination=None, *, time_from=None):
         if not self.configured:
             raise RuntimeError("TRAIN DATA NOT CONFIGURED")
-        key = (origin, destination)
+        key = (origin, destination, time_from)
         return self.cache.get(
             key,
-            lambda: self.source.departures(origin, destination),
+            lambda: self.source.departures(
+                origin, destination, time_from=time_from
+            ),
+        )
+
+    def service(self, unique_identity):
+        if not self.configured:
+            raise RuntimeError("TRAIN DATA NOT CONFIGURED")
+        return self.service_cache.get(
+            unique_identity,
+            lambda: self.source.service(unique_identity),
         )
 
     def station_name(self, code):

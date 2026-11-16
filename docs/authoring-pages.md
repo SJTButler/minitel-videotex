@@ -649,9 +649,10 @@ def render_list(ctx):
 ## Pane regions
 
 A pane page may declare named focusable regions when it needs two interactions
-at once: a search form and a paged result list, for example. The first slice
-supports **one form region and one pager region**; named `Choice` and
-`Viewport` regions, `Region.commit`, and `wrap` are not enabled yet.
+at once: a search form and a paged result list, or two selectable lists. Named
+regions support a **form**, a **pager**, or a **choice**; `Region.commit`,
+`prev="page_back"`, and a page `on_back` hook are available. Named viewport
+regions and `wrap` are not enabled.
 
 ```python
 from minitel import Region
@@ -670,38 +671,62 @@ def train_times(ctx):
     ...
 ```
 
+For two selectable lists, declare Choice regions and read their committed
+values in the page hook:
+
+```python
+ctx.set_regions(
+    Region("calls", next="trains", prev=PAGE_BACK,
+           commit=lambda choice: calls[choice.selected].code,
+           key=train.unique_identity),
+    Region("trains", prev=PAGE_BACK,
+           commit=lambda choice: trains[choice.selected].unique_identity,
+           key=alight),
+)
+calls_view = ctx.set_choice(len(calls), 12, region="calls")
+trains_view = ctx.set_choice(len(trains), 12, region="trains")
+```
+
+The page pushes a snapshot before a state-changing `ENVOI`; `on_back` pops it
+and calls `ctx.focus_region(saved_focus)`. This is page history, not a third
+trail cursor. Keep the snapshots to page content, focus, and region keys; the
+session restores cursor selection/page from its keyed memory.
+
 - `ctx.set_regions(*regions, default_focus=None)` declares the graph. The first
   region is the default focus. Call it once per render, before the region's
   cursors.
-- Each `Region(name, next=None, prev=None, activate="submit", key=None)` has
-  at most one cursor. `next`/`prev` name the region to focus when the cursor
-  cannot move; the root has no `prev` and its `RETOUR` follows history.
-- `ctx.add_field(..., region="form")` and
-  `ctx.set_pager(..., region="results")` must name their region. `line_field`
-  takes a `region=` pass-through.
-- `SUITE`/`RETOUR` first try the focused cursor. A form moves fields; at the
-  last field `SUITE` follows `next`, and at the first field `RETOUR` follows
-  `prev` or history. A pager moves pages; at its first page `RETOUR` follows
-  `prev`, and at its last page `SUITE` stays.
-- `ENVOI` runs the region's `activate`: `submit` uses the page submit path
-  (`on_form` on a form page), `stay` refreshes without submitting. In a form
-  page, submit the query, then call `ctx.focus_region("results")` from
-  `on_form` to hand over focus.
-- `ctx.region(name)` returns a read-only view (`cursor`, `key`, `focused`);
-  `ctx.focused_region` is the current name. Use it to style the active pane.
-  The page owns the rectangles; the session knows only the regions and the
-  cursor state.
-- `Region.key` scopes remembered pager state. A changed key resets the pager to
-  page 1. Focus is remembered per page; pager offsets are remembered per
-  page and content key.
+- Each `Region(name, next=None, prev=None, activate="submit", commit=None,
+  key=None)` has at most one cursor. `next`/`prev` name the region to focus
+  when the cursor cannot move. `prev=PAGE_BACK` calls the page's `on_back(ctx)`
+  hook; if it returns true, the page has restored a state snapshot, otherwise
+  the session follows history.
+- `ctx.add_field(..., region="form")`, `ctx.set_pager(..., region="results")`,
+  and `ctx.set_choice(..., region="choices")` must name their region.
+  `line_field` takes a `region=` pass-through.
+- `SUITE`/`RETOUR` first try the focused cursor. A form moves fields; a pager
+  moves pages; a choice moves its selected item and follows pages when the
+  selection crosses a page. At the cursor boundary the region's `next`/`prev`
+  policy runs.
+- `ENVOI` runs the region's `commit` (if any), then `activate`: `submit` uses
+  the page submit path (`on_form` on a form page), `stay` refreshes. The page
+  hook can read `ctx.region(name).committed` and hand over focus with
+  `ctx.focus_region`.
+- `ctx.region(name)` returns a read-only view (`cursor`, `key`, `focused`,
+  `committed`); `ctx.focused_region` is the current name. Use it to style the
+  active pane. The page owns the rectangles; the session knows only the
+  regions and the cursor state.
+- `Region.key` scopes remembered pager/choice state. A changed key resets the
+  selection and page. Focus is remembered per page; choice/pager state is
+  remembered per page and content key.
 - The session places the terminal cursor only in a focused form field. A
-  focused pager hides it; the page draws its own selection/page label.
+  focused pager or choice hides it; the page draws its own selection/page label.
 - A page with no `set_regions` keeps the implicit `"main"` region and all
   existing behavior. A named-region page must use `region=` for every cursor
   and cannot mix in an implicit cursor.
-- On a tick the page may re-declare the identical region graph and identical
-  fields; a changed or added region/field/focus is a tick-contract violation
-  (the error screen and tick disabling apply). A tick does not steal focus.
+- On a tick the page may re-declare the identical region graph (names, edges,
+  activate, key) and identical fields. The `commit` callable may be re-created
+  so it closes over refreshed content; changing the graph, adding a field, or
+  changing focus is a tick-contract violation. A tick does not steal focus.
 - Pane regions and scroll pages are mutually exclusive (D047). A named-region
   page cannot use `set_viewport`/`set_stops`; a scroll page cannot declare
   regions.
@@ -1480,6 +1505,7 @@ Keep page numbers stable and descriptive. The example scheme is:
 | `160` | Wikipedia search index (`6`) |
 | `161` | Wikipedia article reader, `161#TOKEN` direct entry |
 | `170` | train times, form + paged departures (`7`); `170#FROMTO` direct entry |
+| `171` | rail explorer, Choice+Choice calls/onward departures; `171#FROM` direct entry |
 | `190` | screensaver selector (`9` on the home menu) |
 | `199` | hidden developer page directory; not linked from home |
 | `900` | CLOCK screensaver |

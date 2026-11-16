@@ -1,6 +1,6 @@
 import unittest
 
-from minitel import M1, Registry, Region, Screen, Session, page
+from minitel import M1, PAGE_BACK, Registry, Region, Screen, Session, page
 from minitel.protocol import codec
 
 from pages.common.widgets import line_field
@@ -97,6 +97,43 @@ def implicit_pager(ctx):
     screen = Screen()
     pager = ctx.set_pager(4, 2)
     screen.text(0, 0, f"P{pager.page_number}")
+    return screen
+
+
+@page("970")
+def choice_region(ctx):
+    ctx.set_regions(Region("choices"))
+    choice = ctx.set_choice(3, 2, region="choices")
+    screen = Screen()
+    screen.text(0, 0, f"SEL {choice.selected}")
+    return screen
+
+
+def _choice_submit(ctx, line):
+    ctx.state["committed"] = ctx.region("choices").committed
+    return "971"
+
+
+def _choice_back(ctx):
+    ctx.state["back"] = True
+    return True
+
+
+@page(
+    "971",
+    on_submit=_choice_submit,
+    on_back=_choice_back,
+)
+def choice_commit(ctx):
+    ctx.set_regions(
+        Region(
+            "choices", prev=PAGE_BACK, activate="submit",
+            commit=lambda choice: choice.selected,
+        )
+    )
+    choice = ctx.set_choice(3, 2, region="choices")
+    screen = Screen()
+    screen.text(0, 0, f"SEL {choice.selected}")
     return screen
 
 
@@ -202,6 +239,24 @@ class RegionTests(unittest.TestCase):
             self.session.regions["results"].cursor.page_number, 2
         )
 
+    def test_named_choice_moves_selection(self):
+        session = make_session(home, choice_region)
+        session.navigate("970")
+        self.assertEqual(session.regions["choices"].cursor.selected, 0)
+
+        session.feed(SUITE)
+        self.assertEqual(session.regions["choices"].cursor.selected, 1)
+        self.assertIn("SEL 1", session.screen.to_text())
+
+    def test_choice_commit_and_page_back(self):
+        session = make_session(home, choice_commit)
+        session.navigate("971")
+        session.feed(ENVOI)
+        self.assertEqual(session.state["committed"], 0)
+
+        session.feed(RETOUR)
+        self.assertTrue(session.state["back"])
+
     def test_implicit_pager_still_wraps(self):
         session = make_session(home, implicit_pager)
         session.navigate("968")
@@ -285,7 +340,7 @@ class RegionValidationTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             self._start(bad)
 
-    def test_named_choice_is_not_enabled(self):
+    def test_named_page_requires_an_explicit_choice_region(self):
         @page("967")
         def bad(ctx):
             ctx.set_regions(Region("results"))

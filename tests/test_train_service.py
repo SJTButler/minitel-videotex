@@ -1,4 +1,6 @@
 import unittest
+from datetime import datetime
+from zoneinfo import ZoneInfo
 
 from minitel.data.http import HttpError
 
@@ -61,9 +63,10 @@ def _payload(*services, realtime="OK", core="OK"):
 
 
 class FakeJson:
-    def __init__(self, payloads, reference=None):
+    def __init__(self, payloads, reference=None, detail=None):
         self.payloads = list(payloads)
         self.reference = reference or {"locations": []}
+        self.detail = detail or {"service": {"locations": []}}
         self.calls = []
 
     def __call__(self, url, headers=None, timeout=10.0):
@@ -75,10 +78,77 @@ class FakeJson:
             }
         if url.endswith("/data/locations_ungrouped"):
             return self.reference
+        if url.startswith(f"{BASE}/gb-nr/service"):
+            return self.detail
         result = self.payloads.pop(0)
         if isinstance(result, BaseException):
             raise result
         return result
+
+
+def _service_detail():
+    return {
+        "service": {
+            "locations": [
+                {
+                    "location": {
+                        "description": "London Paddington",
+                        "shortCodes": ["PAD"],
+                    },
+                    "temporalData": {
+                        "displayAs": "STARTS",
+                        "departure": {
+                            "scheduleAdvertised": "2026-11-15T17:45:00Z",
+                            "isCancelled": False,
+                        },
+                    },
+                    "locationMetadata": {"platform": {"planned": "A"}},
+                },
+                {
+                    "location": {
+                        "description": "Havant",
+                        "shortCodes": ["HAV"],
+                    },
+                    "temporalData": {
+                        "displayAs": "CALL",
+                        "departure": {
+                            "scheduleAdvertised": "2026-11-15T18:22:00Z",
+                            "realtimeAdvertisedLateness": 2,
+                        },
+                        "arrival": {
+                            "scheduleAdvertised": "2026-11-15T18:20:00Z",
+                        },
+                    },
+                    "locationMetadata": {
+                        "platform": {"planned": "1", "actual": "2"}
+                    },
+                },
+                {
+                    "location": {
+                        "description": "Passed Halt",
+                        "shortCodes": ["PAS"],
+                    },
+                    "temporalData": {
+                        "displayAs": "PASS",
+                        "pass": {"scheduleAdvertised": "2026-11-15T18:30:00Z"},
+                    },
+                },
+                {
+                    "location": {
+                        "description": "Angmering",
+                        "shortCodes": ["ANG"],
+                    },
+                    "temporalData": {
+                        "displayAs": "TERMINATES",
+                        "arrival": {
+                            "scheduleAdvertised": "2026-11-15T18:41:00Z",
+                        },
+                    },
+                    "locationMetadata": {"platform": {"planned": "2"}},
+                },
+            ]
+        }
+    }
 
 
 class RttSourceTests(unittest.TestCase):
@@ -110,6 +180,20 @@ class RttSourceTests(unittest.TestCase):
         self.assertEqual(
             fake.calls[1][1]["Authorization"], "Bearer ACCESS"
         )
+
+    def test_time_from_is_sent_for_an_onward_board(self):
+        fake = FakeJson([_payload(_departure(
+            when="2026-11-16T00:43:00Z"
+        ))])
+        source = RttSource(access_token="LONG", get_json=fake)
+        when = datetime(
+            2026, 11, 16, 0, 20, tzinfo=ZoneInfo("Europe/London")
+        )
+
+        board = source.departures("BAA", time_from=when)
+
+        self.assertIn("timeFrom=2026-11-16T00%3A20%3A00", fake.calls[0][0])
+        self.assertEqual(board.departures[0].scheduled_at.hour, 0)
 
     def test_long_life_access_token_skips_the_exchange(self):
         fake = FakeJson([_payload(_departure())])
@@ -213,6 +297,39 @@ class RttSourceTests(unittest.TestCase):
                 if url.endswith("/data/locations_ungrouped")),
             1,
         )
+
+    def test_service_detail_strips_namespace_and_parses_calls(self):
+        fake = FakeJson([], detail=_service_detail())
+        source = RttSource(access_token="LONG", get_json=fake)
+
+        detail = source.service("gb-nr:C36803:2026-11-15")
+
+        self.assertEqual(detail.unique_identity, "gb-nr:C36803:2026-11-15")
+        self.assertEqual([stop.code for stop in detail.stops],
+                         ["PAD", "HAV", "ANG"])
+        self.assertEqual(detail.stops[1].name, "Havant")
+        self.assertEqual(detail.stops[1].scheduled, "18:22")
+        self.assertEqual(detail.stops[1].arrival, "18:20")
+        self.assertEqual(detail.stops[1].arrival_at.hour, 18)
+        self.assertEqual(detail.stops[1].platform, "2")
+        self.assertEqual(detail.stops[2].scheduled, "18:41")
+        self.assertIn(
+            "uniqueIdentity=C36803%3A2026-11-15",
+            fake.calls[0][0],
+        )
+        self.assertNotIn("gb-nr%3A", fake.calls[0][0])
+        self.assertEqual(
+            fake.calls[0][1]["Authorization"], "Bearer LONG"
+        )
+
+    def test_train_service_caches_service_detail(self):
+        fake = FakeJson([], detail=_service_detail())
+        source = RttSource(access_token="LONG", get_json=fake)
+        service = TrainService(source)
+
+        snapshot = service.service("gb-nr:C36803:2026-11-15")
+
+        self.assertIsNotNone(snapshot)
 
     def test_missing_token_is_not_configured(self):
         source = RttSource(get_json=FakeJson([]))

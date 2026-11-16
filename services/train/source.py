@@ -8,7 +8,7 @@ from zoneinfo import ZoneInfo
 
 from minitel.data.http import HttpError, get_json
 
-from .models import Departure, DepartureBoard
+from .models import Departure, DepartureBoard, ServiceDetail, ServiceStop
 
 LONDON = ZoneInfo("Europe/London")
 DEFAULT_BASE = "https://data.rtt.io"
@@ -24,15 +24,20 @@ def _timestamp(value):
     except ValueError:
         return None
     if moment.tzinfo is None:
-        moment = moment.replace(tzinfo=timezone.utc)
+        moment = moment.replace(tzinfo=LONDON)
     return moment.timestamp()
 
 
-def _hhmm(value):
+def _local_datetime(value):
     stamp = _timestamp(value)
     if stamp is None:
         return None
-    return datetime.fromtimestamp(stamp, LONDON).strftime("%H:%M")
+    return datetime.fromtimestamp(stamp, LONDON)
+
+
+def _hhmm(value):
+    local = _local_datetime(value)
+    return local.strftime("%H:%M") if local is not None else None
 
 
 def _location_name(pair):
@@ -184,10 +189,16 @@ class RttSource:
             with self._names_lock:
                 self._names_loading = False
 
-    def _location_url(self, origin, destination):
+    def _location_url(self, origin, destination, time_from=None):
         params = {"code": origin, "timeWindow": self.window_minutes}
         if destination:
             params["filterTo"] = destination
+        if time_from is not None:
+            if isinstance(time_from, datetime):
+                value = time_from.isoformat()
+            else:
+                value = str(time_from)
+            params["timeFrom"] = value
         return f"{self.base_url}/gb-nr/location?{urlencode(params)}"
 
     def _fetch(self, url):
@@ -203,14 +214,14 @@ class RttSource:
                 self._invalidate()
             raise
 
-    def departures(self, origin, destination=None):
+    def departures(self, origin, destination=None, *, time_from=None):
         origin = str(origin).strip().upper()
         destination = (
             str(destination).strip().upper() if destination else None
         )
         if not origin:
             raise ValueError("origin CRS code is required")
-        url = self._location_url(origin, destination)
+        url = self._location_url(origin, destination, time_from)
         empty = DepartureBoard(origin, destination, ())
         payload = None
         for attempt in (0, 1):
@@ -230,6 +241,73 @@ class RttSource:
         if payload is None:
             return empty
         return self._parse(payload, origin, destination)
+
+    def service(self, unique_identity):
+        identity = str(unique_identity).strip()
+        if identity.startswith("gb-nr:"):
+            identity = identity.split(":", 1)[1]
+        if not identity:
+            raise ValueError("service identity is required")
+        url = (
+            f"{self.base_url}/gb-nr/service?"
+            + urlencode({"uniqueIdentity": identity})
+        )
+        payload = self._fetch(url)
+        service = payload.get("service") or {}
+        locations = service.get("locations") or ()
+        stops = []
+        for location in locations:
+            metadata = location.get("location") or {}
+            temporal = location.get("temporalData") or {}
+            display = temporal.get("displayAs")
+            if display in ("PASS", "DIVERTED"):
+                continue
+            departure = temporal.get("departure")
+            arrival = temporal.get("arrival")
+            if not departure and not arrival:
+                continue
+            code = (metadata.get("shortCodes") or [""])[0]
+            name = metadata.get("description")
+            if not code or not name:
+                continue
+            scheduled = _hhmm(
+                (departure or {}).get("scheduleAdvertised")
+                or (departure or {}).get("scheduleInternal")
+                or (arrival or {}).get("scheduleAdvertised")
+                or (arrival or {}).get("scheduleInternal")
+            ) or "--:--"
+            arrival_at = _local_datetime(
+                (arrival or {}).get("scheduleAdvertised")
+                or (arrival or {}).get("scheduleInternal")
+                or (departure or {}).get("scheduleAdvertised")
+                or (departure or {}).get("scheduleInternal")
+            )
+            arrival_time = (
+                arrival_at.strftime("%H:%M") if arrival_at else "--:--"
+            )
+            platform_data = (
+                (location.get("locationMetadata") or {}).get("platform") or {}
+            )
+            platform = (
+                platform_data.get("actual")
+                or platform_data.get("forecast")
+                or platform_data.get("planned")
+            )
+            stops.append(
+                ServiceStop(
+                    code=str(code).upper(),
+                    name=name,
+                    scheduled=scheduled,
+                    arrival=arrival_time,
+                    arrival_at=arrival_at,
+                    platform=str(platform) if platform else None,
+                    cancelled=(
+                        bool((departure or arrival or {}).get("isCancelled"))
+                        or display == "CANCELLED"
+                    ),
+                )
+            )
+        return ServiceDetail(str(unique_identity), tuple(stops))
 
     def _parse(self, payload, origin, destination):
         services = payload.get("services") or ()
@@ -291,6 +369,7 @@ class RttSource:
                             or display == "CANCELLED"
                         ),
                         unique_identity=metadata.get("uniqueIdentity") or "",
+                        scheduled_at=_local_datetime(scheduled_iso),
                     ),
                 )
             )

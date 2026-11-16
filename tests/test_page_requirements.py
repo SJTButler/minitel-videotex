@@ -21,6 +21,7 @@ class RequirementTests(unittest.TestCase):
         self.assertEqual(registry.get("111").requires, ("hackernews",))
         self.assertEqual(registry.get("120").requires, ("weather",))
         self.assertEqual(registry.get("170").requires, ("train",))
+        self.assertEqual(registry.get("171").requires, ("train",))
         self.assertEqual(registry.get("100").requires, ())
 
     def test_missing_service_reports_pages(self):

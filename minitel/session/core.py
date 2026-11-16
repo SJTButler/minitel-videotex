@@ -4,6 +4,9 @@ import time
 import traceback
 from dataclasses import replace
 
+from ..design.choice import Choice
+from ..design.pager import Pager
+from ..design.region import PAGE_BACK
 from ..design.stops import reveal_viewport
 from ..pagemodel.model import PageContext
 from ..protocol import codec
@@ -183,8 +186,11 @@ class Session(
         for name in ctx._region_order:
             definition = ctx._region_defs[name]
             key = definition.key
-            cursor = ctx._region_pagers.get(name)
-            if cursor is not None:
+            cursor = (
+                ctx._region_pagers.get(name)
+                or ctx._region_choices.get(name)
+            )
+            if isinstance(cursor, Pager):
                 if ctx._region_pager_explicit.get(name):
                     cursor = cursor.clamp()
                 elif (
@@ -209,7 +215,14 @@ class Session(
             )
             if not fields and cursor is None:
                 raise ValueError(f"region {name!r} has no cursor")
-            regions[name] = RegionState(definition, cursor, key, fields)
+            committed = (
+                previous[name].committed
+                if name in previous and previous[name].key == key
+                else None
+            )
+            regions[name] = RegionState(
+                definition, cursor, key, fields, committed
+            )
 
         self.regions = regions
         requested = (
@@ -236,18 +249,26 @@ class Session(
             state = self.regions.get(name)
             if state is None:
                 raise ValueError("a page tick cannot change regions")
-            cursor = ctx._region_pagers.get(name)
+            cursor = (
+                ctx._region_pagers.get(name)
+                or ctx._region_choices.get(name)
+            )
             if cursor is None:
                 continue
-            if ctx._region_pager_explicit.get(name):
-                cursor = cursor.clamp()
-            elif state.cursor is not None and state.key == state.definition.key:
-                cursor = replace(
-                    cursor, offset=state.cursor.offset
-                ).clamp()
-            else:
-                cursor = cursor.clamp()
+            if isinstance(cursor, Pager):
+                if ctx._region_pager_explicit.get(name):
+                    cursor = cursor.clamp()
+                elif (
+                    state.cursor is not None
+                    and state.key == state.definition.key
+                ):
+                    cursor = replace(
+                        cursor, offset=state.cursor.offset
+                    ).clamp()
+                else:
+                    cursor = cursor.clamp()
             state.cursor = cursor
+            state.definition = ctx._region_defs[name]
         self._remember_region_offsets()
 
     def _remember_region_offsets(self):
@@ -288,6 +309,17 @@ class Session(
             if direction > 0
             else region.definition.prev
         )
+        if target == PAGE_BACK and direction < 0:
+            hook = getattr(self.current, "on_back", None)
+            if callable(hook):
+                ctx = PageContext(self, self.current, self.registry)
+                try:
+                    handled = hook(ctx)
+                except Exception:
+                    return Action(screen=self._fail_page("back"))
+                if handled:
+                    return self.refresh()
+            return self._back_or_parent()
         if target is not None:
             return self._focus_region(target)
         if direction < 0:
@@ -311,11 +343,16 @@ class Session(
         cursor = region.cursor
         if cursor is None:
             return self._region_edge(region, direction)
-        moved = (
-            cursor.next(wrap=False)
-            if direction > 0
-            else cursor.prev(wrap=False)
-        )
+        if isinstance(cursor, Choice):
+            moved = (
+                cursor.next() if direction > 0 else cursor.prev()
+            )
+        else:
+            moved = (
+                cursor.next(wrap=False)
+                if direction > 0
+                else cursor.prev(wrap=False)
+            )
         if moved == cursor:
             return self._region_edge(region, direction)
         region.cursor = moved
@@ -355,6 +392,12 @@ class Session(
             return Action()
         if region.is_form:
             return self.submit()
+        commit = region.definition.commit
+        if commit is not None:
+            try:
+                region.committed = commit(region.cursor)
+            except Exception:
+                return Action(screen=self._fail_page("commit"))
         if region.definition.activate == "stay":
             return self.refresh()
         return self.submit()

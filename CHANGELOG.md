@@ -5,6 +5,13 @@
 - Added pane regions: named form and pager regions with declared
   `next`/`prev` boundaries, focus handover, content-keyed pager memory, and
   tick re-declaration. Pages without regions keep the implicit `"main"` path.
+- Added Choice regions, `Region.commit`, and page-owned back stacks
+  (`prev="page_back"` + `on_back`) for multi-state pane pages. Added the
+  `171 RAIL EXPLORER` page: a train picker, calling-points and onward-departures
+  Choice panes, a breadcrumb path with elapsed travel time, and LIFO `RETOUR`
+  through pane states. The right pane only offers departures after the current
+  train's absolute arrival time (including midnight rollover) and excludes the
+  current train. RTT service detail supplies calling points and arrival times.
 - Added the `170 TRAIN TIMES` page (home alias `7`), the first pane-regions
   caller: a `FROM`/`TO` CRS form and a paged departure board, with
   `170#FROMTO` direct entry. Added the Realtime Trains NG service with

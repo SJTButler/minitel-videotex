@@ -69,6 +69,7 @@ pages/         example site, auto-discovered
     index.py    page 160, search index over the wikipedia service
     article.py  page 161, linked article reader
   train.py      page 170, train departure board over the train service
+  rail_explorer.py page 171, calling points + onward departure explorer
   not_found.py fallback
   page_directory.py page 199, hidden developer directory
   news/
@@ -417,6 +418,21 @@ Direct entry can prefill the query: `170#WATHXX` means Waterloo to Heathrow
 Central, and `170#WAT` is the origin only. The token is the 3-letter origin or
 the 6-letter origin+destination concatenation because page extensions are
 capped at six characters. The form fields and results are populated on entry.
+
+Page `171 RAIL EXPLORER` is the Choice+Choice caller. `171#FTN` starts with a
+train picker; after the first `ENVOI`, the left pane shows the current train's
+calling points and the right pane shows onward departures from a committed
+calling point. The right pane only offers trains that depart after the current
+train's arrival at that point, and excludes the current train. The onward board
+is queried with `timeFrom` set to that arrival date/time, so a late-night hop
+rolls over midnight correctly instead of showing earlier trains from today.
+`ENVOI` on a calling point loads the right pane; `ENVOI` on a train makes it
+current and clears the right pane. `RETOUR` pops the page's back stack, so the
+right pane returns to the calling-points chooser and the left pane returns to
+the last station's departures. The breadcrumb shows the committed path and the
+elapsed time from the first departure. `services/train/source.py` reads the
+RTT service detail (`/gb-nr/service`) for calling points and absolute arrival
+times; the cache is shared with the departure board.
 
 The service uses the [Realtime Trains NG API](https://realtimetrains.github.io/api-specification).
 The portal issues a refresh token; put it in `.env` (ignored by Git):
