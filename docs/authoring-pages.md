@@ -167,11 +167,11 @@ Every `render`, `on_submit`, `on_form`, and `on_key` receives a
 | `ctx.clear_input()` | clear the `PAGE:` field |
 | `ctx.set_status(text)` | declare the row-0 status label for the default header |
 | `ctx.fields` | the registered fields |
-| `ctx.add_field(name, row, col, width, *, cursor="visible", live=False, visible=True)` | register a named field |
-| `ctx.set_input(row, col, width, *, cursor="visible", live=False, visible=True)` | one-field shorthand |
-| `ctx.set_pager(total, page_size, *, offset=None, carousel=None)` | register a session-owned pager, optionally with timed advance |
+| `ctx.add_field(name, row, col, width, *, cursor="visible", live=False, visible=True, region=None)` | register a named field |
+| `ctx.set_input(row, col, width, *, cursor="visible", live=False, visible=True, region=None)` | one-field shorthand |
+| `ctx.set_pager(total, page_size, *, offset=None, carousel=None, region=None)` | register a session-owned pager, optionally with timed advance |
 | `ctx.pager` | the `Pager` registered for this render |
-| `ctx.set_choice(total, page_size, *, selected=None, reset=False, wrap=False)` | register a selectable paged list |
+| `ctx.set_choice(total, page_size, *, selected=None, reset=False, wrap=False, region=None)` | register a selectable paged list |
 | `ctx.choice` | the active `Choice` for this render, or `None` |
 | `ctx.set_viewport(total, height, *, offset=None, follow=None, step=None)` | register a session-owned viewport over a line buffer |
 | `ctx.viewport` | the active `Viewport` for this render, or `None` before the page sets one |
@@ -692,9 +692,26 @@ and calls `ctx.focus_region(saved_focus)`. This is page history, not a third
 trail cursor. Keep the snapshots to page content, focus, and region keys; the
 session restores cursor selection/page from its keyed memory.
 
-- `ctx.set_regions(*regions, default_focus=None)` declares the graph. The first
-  region is the default focus. Call it once per render, before the region's
-  cursors.
+A Choice in a named region keeps its selected index when the next render
+declares the same `Region.key`, even if the item total or page size changes.
+The index is clamped to the new total, so a shorter live list cannot leave the
+highlight out of range. A key with no remembered state, `reset=True`, or a
+different cursor kind starts at the first item; returning to a key that the
+page used before restores its remembered page and selection. An explicit
+`selected` wins. The index is not an item identity: a live list that reorders
+items must change the key or accept that the highlight follows the row, not the
+record.
+
+Choice state is remembered per `(page, region, key)` as the page offset and
+selected index; pager state remains offset-only. If a page omits a region and
+re-declares it later with the same key, its page and selection return. If the
+focused region disappears, focus falls to the current region if it still
+exists, then a remembered region for that page, then `default_focus`.
+
+`ctx.set_regions(*regions, default_focus=None)` declares the graph. The first
+region is the default focus. Call it once per render, before the region's
+cursors.
+
 - Each `Region(name, next=None, prev=None, activate="submit", commit=None,
   key=None)` has at most one cursor. `next`/`prev` name the region to focus
   when the cursor cannot move. `prev=PAGE_BACK` calls the page's `on_back(ctx)`
@@ -715,9 +732,12 @@ session restores cursor selection/page from its keyed memory.
   `committed`); `ctx.focused_region` is the current name. Use it to style the
   active pane. The page owns the rectangles; the session knows only the
   regions and the cursor state.
-- `Region.key` scopes remembered pager/choice state. A changed key resets the
-  selection and page. Focus is remembered per page; choice/pager state is
-  remembered per page and content key.
+- `Region.key` scopes remembered pager/choice state. The same key preserves a
+  live choice's index (clamped to the new total); a key with no remembered
+  state or `reset` starts fresh; returning to a remembered key restores its
+  page and selection. Pager state is remembered as an offset only. Focus is
+  remembered per page; choice/pager state is remembered per page and content
+  key.
 - The session places the terminal cursor only in a focused form field. A
   focused pager or choice hides it; the page draws its own selection/page label.
 - A page with no `set_regions` keeps the implicit `"main"` region and all
@@ -731,8 +751,12 @@ session restores cursor selection/page from its keyed memory.
   page cannot use `set_viewport`/`set_stops`; a scroll page cannot declare
   regions.
 
-The synthetic and caller tests live in `tests/test_regions.py`; the first real
-caller is the train times page plan.
+The synthetic and caller tests live in `tests/test_regions.py`,
+`tests/test_region_state.py`, and `tests/test_region_conformance.py`; the first
+real callers are the train times page (`170`) and the rail explorer (`171`).
+For worked layouts, shape choices, direct-entry advice, and anti-patterns, see
+[`page-recipes.md`](page-recipes.md). That catalogue is subordinate to this
+contract: it never defines API or overrides a rule here.
 
 ## Scroll viewports
 

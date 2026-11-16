@@ -106,7 +106,7 @@ pages/         example site, auto-discovered
       store.py   SQLite storage
 tests/         library, service, and page tests
 tools/         server probes, virtual Minitel decoder, interactive client
-docs/          authoring guide
+docs/          authoring guide and page recipes
 ```
 
 ## Development environment
@@ -531,6 +531,8 @@ Pages need no hook: the mechanism is session-owned, like the screensaver.
 ## Adding pages
 
 The full guide is in [`docs/authoring-pages.md`](docs/authoring-pages.md).
+Worked page shapes, direct-entry advice, and anti-patterns are in
+[`docs/page-recipes.md`](docs/page-recipes.md).
 
 Short version: create `pages/your_page.py`, use `@page(...)`, return a `Screen`,
 and call `page_input(s, ctx)` if you want typing. Restart the server; pages are

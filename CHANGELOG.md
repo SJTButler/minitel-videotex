@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Preserved Choice region state across live updates, conditional renders, and
+  page back stacks: a same-key Choice keeps and clamps its selected index, a
+  removed and re-added region or a restored earlier key returns its selection
+  and page from keyed memory, and focus falls back to a declared region. Added
+  pane-region conformance tests and the `docs/page-recipes.md` design catalogue.
 - Added pane regions: named form and pager regions with declared
   `next`/`prev` boundaries, focus handover, content-keyed pager memory, and
   tick re-declaration. Pages without regions keep the implicit `"main"` path.
