@@ -608,6 +608,12 @@ class PageContext:
             raise ValueError("remove requires a named choice region")
         if commands is not None:
             raise ValueError("commands requires a named choice region")
+        if key is not None:
+            try:
+                hash(key)
+            except TypeError as exc:
+                raise TypeError("region key must be hashable") from exc
+            self._region_keys["main"] = key
         if self._viewport_set or self.pager is not None:
             raise ValueError(
                 f"page {self.page.number!r} cannot mix a choice with "

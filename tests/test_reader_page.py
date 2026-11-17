@@ -24,6 +24,7 @@ ENVOI = bytes([0x13, 0x41])
 RETOUR = bytes([0x13, 0x42])
 GUIDE = bytes([0x13, 0x44])
 SUITE = bytes([0x13, 0x48])
+ANNULATION = bytes([0x13, 0x45])
 
 
 def load_virtual_minitel():
@@ -298,6 +299,21 @@ class ReaderPageTests(unittest.TestCase):
         self.assertTrue(find_cell(session, "ALPHA PAGE").inverse)
         session.feed(ENVOI)
         self.assertEqual(session.current.number, "161#ALPHA")
+
+    def test_index_choice_is_keyed_by_query(self):
+        session = make_session()
+        session.feed(b"FIXTURE")
+        session.feed(ENVOI)
+        self.assertEqual(session.regions["main"].key, "FIXTURE")
+        self.assertEqual(session.choice.selected, 0)
+
+        session.feed(SUITE)
+        self.assertEqual(session.choice.selected, 1)
+        session.feed(ANNULATION)
+        session.feed(b"PAGE")
+        session.feed(ENVOI)
+        self.assertEqual(session.regions["main"].key, "PAGE")
+        self.assertEqual(session.choice.selected, 0)
 
     def test_index_guide_restores_query_and_selection(self):
         session = make_session()

@@ -29,6 +29,7 @@ def _index(ctx, service):
     reset = ctx.state.pop(READER_RESET, False)
     choice = ctx.set_choice(
         len(results), PAGE_SIZE,
+        key=query,
         selected=saved if returning else None,
         reset=reset,
     )

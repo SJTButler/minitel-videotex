@@ -388,11 +388,12 @@ class Session(
             cursor = ctx.pager
             page_size = ctx.pager.page_size
         state = self.regions.get("main")
+        key = ctx._region_keys.get("main")
         if state is None or state.definition.kind != kind:
             state = RegionState(
                 MainRegion(kind, page_size),
                 cursor,
-                None,
+                key,
                 fields,
                 None,
                 None,
@@ -403,7 +404,7 @@ class Session(
         else:
             state.definition = MainRegion(kind, page_size)
             state.cursor = cursor
-            state.key = None
+            state.key = key
             state.fields = fields
             state.items = None
             state.commit = None
