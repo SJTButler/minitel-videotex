@@ -1,6 +1,6 @@
 """Page 160: search index for the linked Wikipedia reader."""
 
-from minitel.pagemodel import LINE_FIELD, page
+from minitel import LINE_FIELD, page
 
 from ..common.header import AnnouncementHeader
 from ..common.reader import index_screen

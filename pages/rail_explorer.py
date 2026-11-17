@@ -4,10 +4,7 @@ import re
 from datetime import datetime
 from zoneinfo import ZoneInfo
 
-from minitel.design.region import PAGE_BACK, Region
-from minitel.pagemodel import page
-from minitel.protocol import codec
-from minitel.render import Screen
+from minitel import PAGE_BACK, Region, Screen, codec, page
 
 from pages.common.layout import ACCENT, SECONDARY, WARNING, status
 from pages.common.service_status import (

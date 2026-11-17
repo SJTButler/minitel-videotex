@@ -2,9 +2,7 @@
 
 from dataclasses import dataclass
 
-from minitel.protocol import codec
-from minitel.pagemodel import page
-from minitel.render import Screen
+from minitel import Screen, codec, page
 
 from ..common.layout import SECONDARY, WARNING
 from ._support.layout import local_time

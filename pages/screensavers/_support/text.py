@@ -2,7 +2,7 @@
 
 from pathlib import Path
 
-from minitel.protocol import codec
+from minitel import codec
 from minitel.text import sanitize, wrap
 
 

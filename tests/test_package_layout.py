@@ -14,6 +14,9 @@ class PackageLayoutTests(unittest.TestCase):
     def test_public_surface_uses_the_new_packages(self):
         self.assertIs(minitel.Pager, minitel.design.Pager)
         self.assertIs(minitel.Carousel, minitel.design.Carousel)
+        self.assertIs(minitel.Choice, minitel.design.Choice)
+        self.assertIs(minitel.Stop, minitel.design.Stop)
+        self.assertIs(minitel.Stops, minitel.design.Stops)
         self.assertIs(minitel.InputField, minitel.design.InputField)
         self.assertIs(minitel.Page, minitel.pagemodel.Page)
         self.assertIs(minitel.Session, minitel.session.Session)

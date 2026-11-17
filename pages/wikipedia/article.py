@@ -1,6 +1,6 @@
 """Page 161: linked Wikipedia article reader."""
 
-from minitel.pagemodel import LINE_FIELD, page
+from minitel import LINE_FIELD, page
 
 from services.common.reader import match_prefix
 

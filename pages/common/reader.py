@@ -2,9 +2,7 @@
 
 from dataclasses import dataclass
 
-from minitel.design.stops import Stop
-from minitel.protocol import codec
-from minitel.render import Screen
+from minitel import Screen, Stop, codec
 from minitel.text import fit, sanitize
 
 from .layout import SECONDARY, WARNING, key_footer, status

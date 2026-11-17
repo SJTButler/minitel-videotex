@@ -1,5 +1,4 @@
-from minitel.pagemodel import page
-from minitel.render import Screen
+from minitel import Screen, page
 
 TOP = 3
 LEFT = 4

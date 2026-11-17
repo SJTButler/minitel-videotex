@@ -2,10 +2,7 @@
 
 import re
 
-from minitel.design.region import Region
-from minitel.pagemodel import page
-from minitel.protocol import codec
-from minitel.render import Screen
+from minitel import Region, Screen, codec, page
 
 from pages.common.layout import ACCENT, SECONDARY, WARNING, status
 from pages.common.service_status import (

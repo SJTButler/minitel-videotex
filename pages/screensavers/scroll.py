@@ -1,8 +1,6 @@
 """Page 902: a scrolling public-domain text screensaver."""
 
-from minitel.pagemodel import page
-from minitel.protocol import codec
-from minitel.render import Screen
+from minitel import Screen, codec, page
 
 from ._support.text import LINES
 

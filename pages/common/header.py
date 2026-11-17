@@ -1,7 +1,6 @@
 """Default row-0 headers for the public pages."""
 
-from minitel import Header, Screen
-from minitel.protocol import codec
+from minitel import Header, Screen, codec
 from minitel.text import fit, sanitize
 
 from .layout import STATUS_MARGIN, status

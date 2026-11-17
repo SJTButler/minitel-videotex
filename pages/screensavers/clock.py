@@ -1,6 +1,4 @@
-from minitel.protocol import codec
-from minitel.pagemodel import page
-from minitel.render import Screen
+from minitel import Screen, codec, page
 
 from ..common.clock import clock_hm, clock_seconds, date_text, local_now
 

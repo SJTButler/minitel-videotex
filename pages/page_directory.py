@@ -1,8 +1,6 @@
 """Page 199: a hidden developer directory of registered pages."""
 
-from minitel.protocol import codec
-from minitel.pagemodel import page
-from minitel.render import Screen
+from minitel import Screen, codec, page
 
 from .common.layout import SECONDARY, footer
 from .common.widgets import page_input

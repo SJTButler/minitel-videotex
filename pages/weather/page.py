@@ -1,8 +1,6 @@
 """Page 120: current conditions, today's forecast, and city detail."""
 
-from minitel.protocol import codec
-from minitel.pagemodel import page
-from minitel.render import Screen
+from minitel import Screen, codec, page
 from minitel.text import fit
 
 from ..common.layout import SECONDARY, WARNING, footer, key_footer

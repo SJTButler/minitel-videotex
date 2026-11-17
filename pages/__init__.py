@@ -1,4 +1,4 @@
-from minitel.pagemodel import Registry
+from minitel import Registry
 
 from .common.header import StatusHeader
 

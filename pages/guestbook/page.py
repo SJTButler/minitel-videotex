@@ -1,6 +1,4 @@
-from minitel.protocol import codec
-from minitel.pagemodel import page
-from minitel.render import Screen
+from minitel import Screen, codec, page
 
 from ._support import store as guestbook_store
 from ..common.messages import MessageLatch
