@@ -4,7 +4,7 @@ import re
 
 from minitel import Region, Screen, codec, page
 
-from pages.common.layout import ACCENT, SECONDARY, WARNING, status
+from pages.common.layout import ACCENT, SECONDARY, WARNING
 from pages.common.service_status import (
     ServiceState,
     ServiceStatus,
@@ -71,7 +71,7 @@ def _screen(ctx):
             ctx.values["destination"] = destination
 
     screen = Screen()
-    status(screen, PAGE)
+    ctx.set_status(f"PAGE {PAGE}")
     screen.text(
         1, 0, "TRAIN TIMES", size=codec.DOUBLE_WIDTH, fg=ACCENT
     )

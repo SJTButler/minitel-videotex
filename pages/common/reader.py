@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from minitel import Screen, Stop, codec
 from minitel.text import fit, sanitize
 
-from .layout import SECONDARY, WARNING, key_footer, status
+from .layout import SECONDARY, WARNING, key_footer
 
 WIDTH = 39
 HEIGHT = 24
@@ -308,7 +308,7 @@ def article_screen(ctx, lines, view, *, buffer, status_text,
 def index_screen(ctx, results, choice, *, title, query, status_text,
                  hint="", source="", page="160"):
     screen = Screen()
-    status(screen, page)
+    ctx.set_status(f"PAGE {page}")
     screen.text(1, 0, title, inverse=True, size=codec.DOUBLE_WIDTH)
     line = f"QUERY: {query}" if query else "ALL PAGES"
     screen.text(2, 0, fit(line, codec.COLS))

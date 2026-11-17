@@ -6,7 +6,7 @@ from zoneinfo import ZoneInfo
 
 from minitel import PAGE_BACK, Region, Screen, codec, page
 
-from pages.common.layout import ACCENT, SECONDARY, WARNING, status
+from pages.common.layout import ACCENT, SECONDARY, WARNING
 from pages.common.service_status import (
     ServiceState,
     ServiceStatus,
@@ -177,7 +177,7 @@ def _blank(ctx):
     ctx.set_choice(0, PAGE_SIZE, region="calls")
     ctx.set_choice(0, PAGE_SIZE, region="trains")
     screen = Screen()
-    status(screen, PAGE)
+    ctx.set_status(f"PAGE {PAGE}")
     screen.text(
         1, 0, "RAIL EXPLORER", size=codec.DOUBLE_WIDTH, fg=ACCENT
     )
@@ -450,7 +450,7 @@ def _screen(ctx):
     )
 
     screen = Screen()
-    status(screen, PAGE)
+    ctx.set_status(f"PAGE {PAGE}")
     screen.text(
         1, 0, "RAIL EXPLORER", size=codec.DOUBLE_WIDTH, fg=ACCENT
     )
