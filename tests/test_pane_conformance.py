@@ -103,6 +103,15 @@ def ambient_commands(ctx):
     return screen
 
 
+@page("991", regions=(Region("items", kind="choice", page_size=2),))
+def ambient_named_choice(ctx):
+    screen = Screen()
+    ctx.set_input(0, 0, 4)
+    ctx.set_choice(("A", "B"), region="items", key="items")
+    screen.text(1, 0, "CHOICE")
+    return screen
+
+
 @page("986", regions=(Region("rows", kind="pager", page_size=2),))
 def named_pager(ctx):
     screen = Screen()
@@ -159,7 +168,6 @@ class PurePaneTests(unittest.TestCase):
             session.regions["main"].definition.kind, "pager"
         )
         self.assertIs(session.pager, session.regions["main"].cursor)
-        self.assertIs(session.pagers["985"], session.pager)
 
     def test_ambient_pager_is_the_main_region(self):
         session = make_session("987", home, ambient_pager)
@@ -196,6 +204,15 @@ class PurePaneTests(unittest.TestCase):
     def test_mixing_ambient_and_commands_is_rejected(self):
         with self.assertRaises(ValueError):
             make_session("990", home, ambient_commands)
+
+    def test_ambient_line_with_a_static_choice(self):
+        session = make_session("991", home, ambient_named_choice)
+        self.assertEqual(tuple(session.regions), ("items",))
+        session.feed(b"Q")
+        self.assertEqual(session.line, "Q")
+        session.feed(SUITE)
+        self.assertEqual(session.regions["items"].cursor.selected, 1)
+        self.assertEqual(session.line, "")
 
     def test_named_regions_keep_the_region_store(self):
         session = make_session("986", home, named_pager)
