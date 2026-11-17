@@ -66,7 +66,6 @@ class Session(
         self.active = 0
         self.active_name = None
         self.requested_focus = None
-        self.pagers = {}
         self.viewport = None
         self.viewports = {}
         self.stops = None
@@ -403,10 +402,8 @@ class Session(
         self.requested_focus_region = None
         self._focus_memory[self.current.number] = "main"
         if kind == "pager":
-            self.pagers[self.current.number] = cursor
             self._adopt_pager_carousel(cursor, ctx.pager_carousel)
         else:
-            self.pagers.pop(self.current.number, None)
             self._clear_pager_carousel()
         self._remember_region_offsets()
 

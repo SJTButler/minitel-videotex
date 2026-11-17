@@ -345,16 +345,10 @@ class PageContext:
             if current is not None:
                 offset = current.offset
             else:
-                stored = self._session.pagers.get(self.page.number)
                 remembered = self._session._region_memory.get(
                     (self.page.number, "main", None)
                 )
-                if stored is not None:
-                    offset = stored.offset
-                elif isinstance(remembered, int):
-                    offset = remembered
-                else:
-                    offset = 0
+                offset = remembered if isinstance(remembered, int) else 0
         self.pager = Pager(total, page_size, offset).clamp()
         self.pager_carousel = carousel
         return self.pager

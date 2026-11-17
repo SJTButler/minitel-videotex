@@ -145,7 +145,6 @@ class ContentCarouselTests(unittest.TestCase):
         self.clock.advance(0.1)
         action = self.session.on_timeout()
         self.assertEqual(self.session.pager.offset, 4)
-        self.assertEqual(self.session.pagers["600"].offset, 4)
         self.assertTrue(action.raw)
 
     def test_ticks_do_not_reset_the_carousel(self):

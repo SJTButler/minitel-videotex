@@ -206,7 +206,6 @@ class IdleMixin:
             return Action()
         main.cursor = pager
         self._remember_region_offsets()
-        self.pagers[self.current.number] = pager
         self._pager_carousel_key = (
             pager.page_size,
             pager.offset,
