@@ -50,24 +50,6 @@ def _parse_route(token):
     return None
 
 
-def _pick_commit(choice, items):
-    if choice.selected is None or not items:
-        return None
-    index = choice.selected
-    if not 0 <= index < len(items):
-        return None
-    return items[index]
-
-
-def _stop_commit(choice, items):
-    if choice.selected is None or not items:
-        return None
-    index = choice.selected
-    if not 0 <= index < len(items):
-        return None
-    return items[index].code
-
-
 def _minutes(value):
     try:
         hour, minute = str(value).split(":", 1)
@@ -170,12 +152,8 @@ def _restore(ctx, snapshot):
 
 
 def _blank(ctx):
-    ctx.set_regions(
-        Region("calls", prev=PAGE_BACK),
-        Region("trains", prev=PAGE_BACK),
-    )
-    ctx.set_choice(0, PAGE_SIZE, region="calls")
-    ctx.set_choice(0, PAGE_SIZE, region="trains")
+    ctx.set_choice((), region="calls")
+    ctx.set_choice((), region="trains")
     screen = Screen()
     ctx.set_status(f"PAGE {PAGE}")
     screen.text(
@@ -411,31 +389,21 @@ def _screen(ctx):
 
     if phase == "pick":
         calls_key = ("pick", origin, filter_to)
-        calls_commit = lambda choice: _pick_commit(choice, pick_items)
+        calls_items = pick_items
     else:
         train = ctx.state.get(TRAIN)
         calls_key = train.unique_identity if train is not None else None
-        calls_commit = lambda choice: _stop_commit(choice, calls)
+        calls_items = calls
     trains_key = ctx.state.get(ALIGHT)
 
-    ctx.set_regions(
-        Region(
-            "calls", next="trains", prev=PAGE_BACK,
-            activate="submit", commit=calls_commit, key=calls_key,
-        ),
-        Region(
-            "trains", prev=PAGE_BACK,
-            activate="submit",
-            commit=lambda choice: _pick_commit(choice, trains),
-            key=trains_key,
-        ),
-    )
     calls_choice = ctx.set_choice(
-        len(pick_items) if phase == "pick" else len(calls),
-        PAGE_SIZE, region="calls",
+        calls_items,
+        region="calls",
+        key=calls_key,
+        commit=None if phase == "pick" else (lambda stop: stop.code),
     )
     trains_choice = ctx.set_choice(
-        len(trains), PAGE_SIZE, region="trains"
+        trains, region="trains", key=trains_key
     )
 
     screen = Screen()
@@ -540,6 +508,21 @@ def _on_back(ctx):
     on_back=_on_back,
     on_tick=_screen,
     tick_interval=1.0,
+    regions=(
+        Region(
+            "calls",
+            kind="choice",
+            next="trains",
+            prev=PAGE_BACK,
+            page_size=PAGE_SIZE,
+        ),
+        Region(
+            "trains",
+            kind="choice",
+            prev=PAGE_BACK,
+            page_size=PAGE_SIZE,
+        ),
+    ),
 )
 def rail_explorer(ctx):
     return _screen(ctx)

@@ -12,38 +12,55 @@ def home(ctx):
 
 def _stateful_choice_render(ctx):
     total = ctx.state.get("total", 3)
-    ctx.set_regions(Region("list", key=ctx.state.get("key")))
     choice = ctx.set_choice(
         total,
-        2,
+        region="list",
         selected=ctx.state.get("selected"),
         reset=ctx.state.get("reset", False),
-        region="list",
+        key=ctx.state.get("key"),
     )
     screen = Screen()
     screen.text(0, 0, f"SEL {choice.selected} PAGE {choice.label}")
     return screen
 
 
-@page("980")
+@page(
+    "980",
+    regions=(Region("list", kind="choice", page_size=2),),
+)
 def stateful_choice(ctx):
     return _stateful_choice_render(ctx)
 
 
 def _conditional_choice_render(ctx):
+    hidden = ctx.state.get("hidden", False)
     screen = Screen()
-    if ctx.state.get("hidden"):
-        ctx.set_regions(Region("other", key="other"))
-        other = ctx.set_choice(2, 2, region="other")
+    other = ctx.set_choice(
+        2, region="other", enabled=hidden
+    )
+    choice = ctx.set_choice(
+        5,
+        region="list",
+        key=ctx.state.get("key", "content"),
+        enabled=not hidden,
+    )
+    if hidden:
         screen.text(0, 0, f"OTHER {other.selected}")
-        return screen
-    ctx.set_regions(Region("list", key=ctx.state.get("key", "content")))
-    choice = ctx.set_choice(5, 2, region="list")
-    screen.text(0, 0, f"LIST {choice.selected} PAGE {choice.label}")
+    else:
+        screen.text(
+            0, 0, f"LIST {choice.selected} PAGE {choice.label}"
+        )
     return screen
 
 
-@page("981")
+@page(
+    "981",
+    regions=(
+        Region("other", kind="choice", optional=True, page_size=2),
+        Region("list", kind="choice", optional=True, page_size=2),
+    ),
+    default_focus="list",
+)
 def conditional_choice(ctx):
     return _conditional_choice_render(ctx)
 
@@ -143,7 +160,8 @@ class ConditionalChoiceStateTests(unittest.TestCase):
 
         self.session.state["hidden"] = True
         self.session.refresh()
-        self.assertNotIn("list", self.session.regions)
+        self.assertIn("list", self.session.regions)
+        self.assertFalse(self.session.regions["list"].active)
 
         self.session.state["hidden"] = False
         self.session.refresh()

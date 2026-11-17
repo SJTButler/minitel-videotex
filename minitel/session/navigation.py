@@ -31,7 +31,7 @@ class NavigationMixin:
             self._reset_page()
             self._extension_pending = isinstance(page, ExtensionPage)
             self.current = page
-            self.focused_region = self._focus_memory.get(page.number)
+            self._init_page_regions()
             screen = self.render()
             self._shadow_exact = True
             return Action(screen=screen, page=page)
@@ -85,7 +85,7 @@ class NavigationMixin:
         else:
             self.current = self.registry.resolve(self.initial)
         self._reset_page()
-        self.focused_region = self._focus_memory.get(self.current.number)
+        self._init_page_regions()
         self._extension_pending = False
         screen = self.render()
         self._shadow_exact = True
@@ -100,7 +100,7 @@ class NavigationMixin:
         self.history.clear()
         self.current = self.registry.resolve(self.initial)
         self._reset_page()
-        self.focused_region = self._focus_memory.get(self.current.number)
+        self._init_page_regions()
         self._extension_pending = False
         screen = self.render()
         self._shadow_exact = True

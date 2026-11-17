@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Pane regions are declared statically on `@page(regions=...)` and validated at
+  definition time; `render` binds items, keys, and commits through
+  `ctx.set_pager`/`ctx.set_choice`. Optional regions bridge focus and edges, and
+  pure single-cursor pane pages use the same region state. `170` and `171` are
+  migrated; `ctx.set_regions` is removed.
 - Exported the complete page-authoring surface from `minitel` (`Choice`,
   `Stop`, `Stops`), standardised pane pages on `ctx.set_status`, and added
   `Pager.rows` / `Choice.rows` so pages iterate the visible window and the

@@ -13,17 +13,13 @@ BEL = bytes([codec.BEL])
 
 def _pane_render(ctx):
     query = ctx.state.get("query")
-    ctx.set_regions(
-        Region("form", next="results"),
-        Region("results", prev="form", activate="stay", key=query),
-    )
     screen = Screen()
     screen.text(1, 0, "PANE")
     line_field(screen, ctx, "origin", 2, 2, 3, label="A:", region="form")
     line_field(
         screen, ctx, "destination", 2, 10, 3, label="B:", region="form"
     )
-    pager = ctx.set_pager(5, 2, region="results")
+    pager = ctx.set_pager(5, region="results", key=query)
     for index, item in enumerate(pager.window(tuple(range(5)))):
         screen.text(5 + index, 0, f"ITEM {item}")
     screen.text(8, 0, pager.label)
@@ -56,40 +52,19 @@ def home(ctx):
     on_form=_pane_submit,
     on_tick=_pane_render,
     tick_interval=1.0,
+    regions=(
+        Region("form", kind="form", next="results"),
+        Region(
+            "results",
+            kind="pager",
+            prev="form",
+            activate="stay",
+            page_size=2,
+        ),
+    ),
 )
 def pane(ctx):
     return _pane_render(ctx)
-
-
-def _bad_tick(ctx):
-    ctx.set_regions(
-        Region("form", next="results"),
-        Region("results", prev="form", key="changed"),
-    )
-    ctx.add_field("origin", 2, 2, 3, region="form")
-    ctx.set_pager(5, 2, region="results")
-    return None
-
-
-def _bad_render(ctx):
-    ctx.set_regions(
-        Region("form", next="results"),
-        Region("results", prev="form", key="initial"),
-    )
-    screen = Screen()
-    ctx.add_field("origin", 2, 2, 3, region="form")
-    ctx.set_pager(5, 2, region="results")
-    return screen
-
-
-@page(
-    "961",
-    form=True,
-    on_tick=_bad_tick,
-    tick_interval=1.0,
-)
-def bad_tick(ctx):
-    return _bad_render(ctx)
 
 
 @page("968")
@@ -100,10 +75,12 @@ def implicit_pager(ctx):
     return screen
 
 
-@page("970")
+@page(
+    "970",
+    regions=(Region("choices", kind="choice", page_size=2),),
+)
 def choice_region(ctx):
-    ctx.set_regions(Region("choices"))
-    choice = ctx.set_choice(3, 2, region="choices")
+    choice = ctx.set_choice(3, region="choices")
     screen = Screen()
     screen.text(0, 0, f"SEL {choice.selected}")
     return screen
@@ -123,16 +100,31 @@ def _choice_back(ctx):
     "971",
     on_submit=_choice_submit,
     on_back=_choice_back,
+    regions=(
+        Region(
+            "choices",
+            kind="choice",
+            prev=PAGE_BACK,
+            page_size=2,
+        ),
+    ),
 )
 def choice_commit(ctx):
-    ctx.set_regions(
-        Region(
-            "choices", prev=PAGE_BACK, activate="submit",
-            commit=lambda choice: choice.selected,
-        )
+    choice = ctx.set_choice(
+        3,
+        region="choices",
+        commit=lambda cursor: cursor.selected,
     )
-    choice = ctx.set_choice(3, 2, region="choices")
     screen = Screen()
+    screen.text(0, 0, f"SEL {choice.selected}")
+    return screen
+
+
+@page("974")
+def composite_choice(ctx):
+    screen = Screen()
+    line_field(screen, ctx, "query", 2, 2, 3, label="Q:")
+    choice = ctx.set_choice(3, 2)
     screen.text(0, 0, f"SEL {choice.selected}")
     return screen
 
@@ -260,18 +252,77 @@ class RegionTests(unittest.TestCase):
     def test_implicit_pager_still_wraps(self):
         session = make_session(home, implicit_pager)
         session.navigate("968")
+        self.assertIn("main", session.regions)
+        self.assertEqual(
+            session.regions["main"].definition.kind, "pager"
+        )
         session.feed(SUITE)
         self.assertEqual(session.pager.page_number, 2)
         session.feed(SUITE)
         self.assertEqual(session.pager.page_number, 1)
 
-    def test_tick_cannot_change_regions(self):
-        session = make_session(home, bad_tick)
-        session.navigate("961")
-        action = session.tick()
-        self.assertIn("PAGE ERROR", action.screen.to_text())
-        self.assertEqual(session.page_error, "tick")
-        self.assertIn("961", session._ticks_disabled)
+    def test_composite_choice_and_field_keeps_the_legacy_cursor(self):
+        session = make_session(home, composite_choice)
+        session.navigate("974")
+        self.assertEqual(session.regions, {})
+        self.assertEqual(session.choice.selected, 0)
+        session.feed(SUITE)
+        self.assertEqual(session.choice.selected, 1)
+
+    def test_static_regions_reject_set_regions(self):
+        @page(
+            "961",
+            regions=(Region("choices", kind="choice", page_size=2),),
+        )
+        def bad(ctx):
+            ctx.set_regions(Region("choices", kind="choice"))
+            return Screen()
+
+        session = make_session(home, bad)
+        with self.assertRaises(ValueError):
+            session.navigate("961")
+
+    def test_focused_region_is_valid_on_the_first_render_line(self):
+        @page(
+            "972",
+            regions=(
+                Region("a", kind="choice", next="b", page_size=2),
+                Region("b", kind="choice", prev="a", page_size=2),
+            ),
+        )
+        def first_line(ctx):
+            screen = Screen()
+            screen.text(0, 0, f"FIRST {ctx.focused_region}")
+            ctx.set_choice(2, region="a")
+            ctx.set_choice(2, region="b")
+            return screen
+
+        session = make_session(home, first_line)
+        session.navigate("972")
+        self.assertIn("FIRST a", session.screen.to_text())
+
+    def test_choice_items_commit_automatically(self):
+        def submit(ctx, line):
+            ctx.state["committed"] = ctx.region("items").committed
+            return "972"
+
+        @page(
+            "973",
+            on_submit=submit,
+            regions=(Region("items", kind="choice", page_size=2),),
+        )
+        def item_commit(ctx):
+            ctx.set_choice(("A", "B", "C"), region="items")
+            return Screen()
+
+        session = make_session(home, item_commit)
+        session.navigate("973")
+        session.feed(ENVOI)
+        self.assertEqual(session.state["committed"], "A")
+        session.navigate("973")
+        session.feed(SUITE)
+        session.feed(ENVOI)
+        self.assertEqual(session.state["committed"], "B")
 
 
 class RegionValidationTests(unittest.TestCase):
@@ -280,37 +331,36 @@ class RegionValidationTests(unittest.TestCase):
         session.navigate(page_object.number)
 
     def test_duplicate_region_names(self):
-        @page("962")
-        def bad(ctx):
-            ctx.set_regions(Region("a"), Region("a"))
-            return Screen()
-
         with self.assertRaises(ValueError):
-            self._start(bad)
+            @page("962", regions=(Region("a"), Region("a")))
+            def bad(ctx):
+                return Screen()
 
     def test_unknown_edge(self):
-        @page("963")
-        def bad(ctx):
-            ctx.set_regions(Region("a", next="missing"))
-            return Screen()
-
         with self.assertRaises(ValueError):
-            self._start(bad)
+            @page("963", regions=(Region("a", next="missing"),))
+            def bad(ctx):
+                return Screen()
 
     def test_default_focus_must_exist(self):
-        @page("964")
-        def bad(ctx):
-            ctx.set_regions(Region("a"), default_focus="missing")
-            return Screen()
-
         with self.assertRaises(ValueError):
-            self._start(bad)
+            @page(
+                "964",
+                regions=(Region("a"),),
+                default_focus="missing",
+            )
+            def bad(ctx):
+                return Screen()
 
     def test_named_page_requires_explicit_pager_region(self):
-        @page("965")
+        @page(
+            "965",
+            regions=(
+                Region("a", kind="pager", page_size=2),
+                Region("b", kind="pager", page_size=2),
+            ),
+        )
         def bad(ctx):
-            ctx.set_regions(Region("form", next="results"),
-                            Region("results", prev="form"))
             ctx.set_pager(3, 2)
             return Screen()
 
@@ -318,12 +368,15 @@ class RegionValidationTests(unittest.TestCase):
             self._start(bad)
 
     def test_each_region_needs_a_cursor(self):
-        @page("969", form=True)
+        @page(
+            "969",
+            form=True,
+            regions=(
+                Region("form", kind="form", next="results"),
+                Region("results", kind="pager", prev="form", page_size=2),
+            ),
+        )
         def bad(ctx):
-            ctx.set_regions(
-                Region("form", next="results"),
-                Region("results", prev="form"),
-            )
             ctx.add_field("origin", 2, 2, 3, region="form")
             return Screen()
 
@@ -331,19 +384,20 @@ class RegionValidationTests(unittest.TestCase):
             self._start(bad)
 
     def test_named_form_requires_form_true(self):
-        @page("966")
-        def bad(ctx):
-            ctx.set_regions(Region("form"))
-            ctx.add_field("origin", 2, 2, 3, region="form")
-            return Screen()
-
         with self.assertRaises(ValueError):
-            self._start(bad)
+            @page("966", regions=(Region("form", kind="form"),))
+            def bad(ctx):
+                return Screen()
 
     def test_named_page_requires_an_explicit_choice_region(self):
-        @page("967")
+        @page(
+            "967",
+            regions=(
+                Region("a", kind="choice", page_size=2),
+                Region("b", kind="choice", page_size=2),
+            ),
+        )
         def bad(ctx):
-            ctx.set_regions(Region("results"))
             ctx.set_choice(3, 2)
             return Screen()
 
@@ -359,6 +413,12 @@ class RegionValidationTests(unittest.TestCase):
             Region("a", activate="focus:b")
         with self.assertRaises(TypeError):
             Region("a", key=[])
+        with self.assertRaises(ValueError):
+            Region("a", kind="bogus")
+        with self.assertRaises(ValueError):
+            Region("a", kind="form", page_size=2)
+        with self.assertRaises(ValueError):
+            Region("a", wrap=True)
 
 
 if __name__ == "__main__":

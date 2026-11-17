@@ -73,9 +73,11 @@ keys:     ENVOI in form: submit query, focus results
           RETOUR at the first field: history/back_page
 ```
 
-Use `Region.key=query` on the results region so a new query starts at page 1
-and a repeated query returns to its own page. The page reads the submitted
-values; the session keeps the cursor.
+Use `@page(regions=(Region("form", kind="form", next="results"),
+Region("results", kind="pager", prev="form", activate="stay",
+page_size=8)))` and bind `ctx.set_pager(departures, region="results",
+key=query)` so a new query starts at page 1 and a repeated query returns to its
+own page. The page reads the submitted values; the session keeps the cursor.
 
 ### Choice + choice (`171 RAIL EXPLORER`)
 
@@ -138,23 +140,44 @@ keys:     ENVOI in form: validate and focus choices
 Keep one form region. The session has one field/value/focus set per page in
 this slice; two independent forms need page-scoped field state, which is a
 separate mechanism. A `form=True` page may still have Choice and Pager regions
-as long as the choices and pagers are declared with `region=`.
+as long as the choices and pagers are bound with `region=`. Declare all four
+regions on `@page(regions=...)`; the graph does not change per render.
 
 ### Conditional panes
 
-A region may disappear when its data is empty or a mode is off. The page calls
-`ctx.set_regions(...)` with only the regions that exist for that render, and
-adjusts the edges so no edge points at an absent region.
+A region may be inactive when its data is empty or a mode is off. Declare it
+with `optional=True`, then bind it with `enabled=False` (or omit its binding)
+for that render:
+
+```python
+@page(
+    "984",
+    regions=(
+        Region("folders", kind="choice", next="messages", page_size=2),
+        Region(
+            "messages", kind="choice", next="reply",
+            prev=PAGE_BACK, optional=True, page_size=2,
+        ),
+        Region("reply", kind="choice", prev="messages", page_size=2),
+    ),
+)
+def mail(ctx):
+    show = ctx.state.get("show_messages", True)
+    ctx.set_choice(2, region="folders")
+    ctx.set_choice(2, region="messages", enabled=show)
+    ctx.set_choice(2, region="reply")
+```
 
 ```text
 full:     folders --SUITE--> messages --SUITE--> reply
-empty:    folders --SUITE--> reply
+empty:    folders --SUITE--> reply          (messages inactive)
 ```
 
-Focus fallback is session-owned: current region, then remembered focus for the
-page, then `default_focus`. A Choice that is removed and later re-declared with
-the same `Region.key` restores its page and selected index. Do not point at the
-absent region from a surviving edge; validation rejects unknown edges.
+The session bridges `next`/`prev` across inactive regions. Focus fallback is
+session-owned: previous active region, then remembered focus for the page, then
+`default_focus`. A Choice that is disabled and later re-enabled with the same
+key restores its page and selected index. Do not change the declared topology
+per render; use `optional=True` instead.
 
 Use a conditional region for empty folders, filtered lists, and advanced
 panes. Do not render a fake empty cursor just to keep the graph stable.
@@ -302,7 +325,7 @@ the route and the page validates the token.
 - **A third cursor for a breadcrumb.** The path is content; a back stack plus
   the page's state is navigation. Do not add a cursor the user must steer.
 - **Assuming a selection follows an item.** `Choice.selected` is an index. A
-  live list that reorders items must change the `Region.key` or accept index
+  live list that reorders items must change the bound `key` or accept index
   semantics.
 
 ## Worked layouts

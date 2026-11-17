@@ -70,7 +70,7 @@ The decorator form is the shortest:
       transient=False, back_page=None, extension_back_page=None,
       screensaver=None, no_screensaver=False, scroll=False, paint=None,
       requires=(), extensions=False, header=None, announce=None,
-      announce_channel=None, meta=None)
+      announce_channel=None, meta=None, regions=(), default_focus=None)
 def render(ctx):
     return Screen()
 ```
@@ -125,6 +125,10 @@ def render(ctx):
   [Announcements](#announcements).
 - `meta` is an explicit dict for a custom app; unknown keyword arguments are
   rejected, so a misspelled option fails at import time.
+- `regions=(Region(...), ...)` declares a static pane graph; see
+  [Pane regions](#pane-regions). The graph is validated at page definition.
+- `default_focus="name"` selects the initial region; otherwise the first region
+  in `regions` wins.
 
 For stateful or larger pages, subclass `Page`:
 
@@ -169,10 +173,12 @@ Every `render`, `on_submit`, `on_form`, and `on_key` receives a
 | `ctx.fields` | the registered fields |
 | `ctx.add_field(name, row, col, width, *, cursor="visible", live=False, visible=True, region=None)` | register a named field |
 | `ctx.set_input(row, col, width, *, cursor="visible", live=False, visible=True, region=None)` | one-field shorthand |
-| `ctx.set_pager(total, page_size, *, offset=None, carousel=None, region=None)` | register a session-owned pager, optionally with timed advance |
+| `ctx.set_pager(items_or_total, *, page_size=None, offset=None, carousel=None, region=None, key=None, enabled=True)` | register a session-owned pager, optionally with timed advance |
 | `ctx.pager` | the `Pager` registered for this render |
-| `ctx.set_choice(total, page_size, *, selected=None, reset=False, wrap=False, region=None)` | register a selectable paged list |
+| `ctx.set_choice(items_or_total, *, page_size=None, selected=None, reset=False, wrap=False, region=None, key=None, commit=None, enabled=True)` | register a selectable paged list |
 | `ctx.choice` | the active `Choice` for this render, or `None` |
+| `ctx.region(name)` | read-only view of a declared pane region |
+| `ctx.focused_region` | the focused pane region, or `"main"` on a single-cursor page |
 | `ctx.set_viewport(total, height, *, offset=None, follow=None, step=None)` | register a session-owned viewport over a line buffer |
 | `ctx.viewport` | the active `Viewport` for this render, or `None` before the page sets one |
 | `ctx.set_stops(stops, *, start_next=0, start_prev=0, selected=None, reset=False, wrap=True)` | register viewport match stops |
@@ -659,50 +665,71 @@ def render_list(ctx):
 | Paged list | `@page(...)` | `pager = ctx.set_pager(total, size)`; iterate `pager.rows(items)` | `SUITE`/`RETOUR` page | Session owns offset and remembers it per page. |
 | Selectable list | `@page(...)` | `choice = ctx.set_choice(total, size)`; iterate `choice.rows(items)` | `SUITE`/`RETOUR` move, `ENVOI` submits | `ENVOI` reads `ctx.choice.selected`. |
 | Form | `form=True`, `on_form=...` | `line_field(...)` / `ctx.add_field(...)` | `SUITE`/`RETOUR` fields, `ENVOI` submits | `ctx.values` holds field values. |
-| Form + results | `ctx.set_regions(Region("form", next="results"), Region("results", prev="form", activate="stay"))` | `line_field(..., region="form")`; `ctx.set_pager(..., region="results")` | Focus moves between regions; `ENVOI` follows `activate` | One form region per page. |
-| Two choices | `ctx.set_regions(...)` with `next`/`prev`/`commit` | `ctx.set_choice(..., region=...)`; read `ctx.region(name).committed` | `ENVOI` commits, boundaries follow edges | Use `prev="page_back"` for a page-owned back stack. |
+| Form + results | `@page(regions=(Region("form", kind="form", next="results"), Region("results", kind="pager", prev="form", activate="stay", page_size=8)))` | `line_field(..., region="form")`; `ctx.set_pager(..., region="results")` | Focus moves between regions; `ENVOI` follows `activate` | One form region per page. |
+| Two choices | `@page(regions=(Region("calls", kind="choice", next="trains", page_size=12), Region("trains", kind="choice", prev="calls", page_size=12)))` | `ctx.set_choice(..., region=...)`; read `ctx.region(name).committed` | `ENVOI` commits, boundaries follow edges | Use `prev="page_back"` for a page-owned back stack. |
 | Scroll page | `scroll=True` | `ctx.set_viewport(...)`; optional `ctx.set_stops(...)` | `SUITE`/`RETOUR` stops, `GUIDE` | Pane and scroll modes are mutually exclusive (D047). |
 | Carousel | `@page(...)`, `no_screensaver=True` when it repaints on idle | `ctx.set_pager(..., carousel=Carousel(...))` | `SUITE`/`RETOUR` still page | Session owns the deadline; do not add a page timer. |
 
 ## Pane regions
 
-A pane page may declare named focusable regions when it needs two interactions
-at once: a search form and a paged result list, or two selectable lists. Named
-regions support a **form**, a **pager**, or a **choice**; `Region.commit`,
-`prev="page_back"`, and a page `on_back` hook are available. Named viewport
-regions and `wrap` are not enabled.
+A pane page declares named focusable regions **statically** on `@page` when it
+needs two interactions at once: a search form and a paged result list, or two
+selectable lists. The graph is validated when the page is defined/registered;
+`render(ctx)` binds only runtime data.
 
 ```python
 from minitel import Region
 
-@page("170", form=True, on_form=submit, on_tick=render)
+@page(
+    "170",
+    form=True,
+    on_form=submit,
+    on_tick=render,
+    regions=(
+        Region("form", kind="form", next="results"),
+        Region(
+            "results",
+            kind="pager",
+            prev="form",
+            activate="stay",
+            page_size=8,
+        ),
+    ),
+)
 def train_times(ctx):
     query = ctx.state.get("query")
-    ctx.set_regions(
-        Region("form", next="results"),
-        Region("results", prev="form", activate="stay", key=query),
-    )
     ...
     line_field(s, ctx, "origin", 2, 2, 3, label="FROM:", region="form")
     line_field(s, ctx, "to", 2, 12, 3, label="TO:", region="form")
-    pager = ctx.set_pager(len(departures), 8, region="results")
+    pager = ctx.set_pager(
+        departures, region="results", key=query
+    )
     ...
 ```
 
-For two selectable lists, declare Choice regions and read their committed
-values in the page hook:
+For two selectable lists, declare Choice regions and bind their items:
 
 ```python
-ctx.set_regions(
-    Region("calls", next="trains", prev=PAGE_BACK,
-           commit=lambda choice: calls[choice.selected].code,
-           key=train.unique_identity),
-    Region("trains", prev=PAGE_BACK,
-           commit=lambda choice: trains[choice.selected].unique_identity,
-           key=alight),
+@page(
+    "171",
+    regions=(
+        Region(
+            "calls", kind="choice", next="trains",
+            prev=PAGE_BACK, page_size=12,
+        ),
+        Region("trains", kind="choice", prev=PAGE_BACK, page_size=12),
+    ),
 )
-calls_view = ctx.set_choice(len(calls), 12, region="calls")
-trains_view = ctx.set_choice(len(trains), 12, region="trains")
+def rail_explorer(ctx):
+    calls_view = ctx.set_choice(
+        calls,
+        region="calls",
+        key=train.unique_identity,
+        commit=lambda stop: stop.code,
+    )
+    trains_view = ctx.set_choice(
+        trains, region="trains", key=alight
+    )
 ```
 
 The page pushes a snapshot before a state-changing `ENVOI`; `on_back` pops it
@@ -710,64 +737,71 @@ and calls `ctx.focus_region(saved_focus)`. This is page history, not a third
 trail cursor. Keep the snapshots to page content, focus, and region keys; the
 session restores cursor selection/page from its keyed memory.
 
-A Choice in a named region keeps its selected index when the next render
-declares the same `Region.key`, even if the item total or page size changes.
-The index is clamped to the new total, so a shorter live list cannot leave the
-highlight out of range. A key with no remembered state, `reset=True`, or a
-different cursor kind starts at the first item; returning to a key that the
-page used before restores its remembered page and selection. An explicit
-`selected` wins. The index is not an item identity: a live list that reorders
-items must change the key or accept that the highlight follows the row, not the
-record.
+A Choice in a named region keeps its selected index when the next render binds
+the same `key`, even if the item total or page size changes. The index is
+clamped to the new total, so a shorter live list cannot leave the highlight out
+of range. A key with no remembered state, `reset=True`, or a different cursor
+kind starts at the first item; returning to a key that the page used before
+restores its remembered page and selection. An explicit `selected` wins. The
+index is not an item identity: a live list that reorders items must change the
+key or accept that the highlight follows the row, not the record.
 
 Choice state is remembered per `(page, region, key)` as the page offset and
-selected index; pager state remains offset-only. If a page omits a region and
-re-declares it later with the same key, its page and selection return. If the
-focused region disappears, focus falls to the current region if it still
-exists, then a remembered region for that page, then `default_focus`.
+selected index; pager state remains offset-only. If an optional region is
+disabled and re-enabled later with the same key, its page and selection return.
+If the focused region becomes inactive, focus falls to the previous active
+region, then a remembered region for that page, then `default_focus`.
 
-`ctx.set_regions(*regions, default_focus=None)` declares the graph. The first
-region is the default focus. Call it once per render, before the region's
-cursors.
+`Region(name, kind=..., next=None, prev=None, activate="submit",
+page_size=None, optional=False)` declares the static graph:
 
-- Each `Region(name, next=None, prev=None, activate="submit", commit=None,
-  key=None)` has at most one cursor. `next`/`prev` name the region to focus
-  when the cursor cannot move. `prev=PAGE_BACK` calls the page's `on_back(ctx)`
-  hook; if it returns true, the page has restored a state snapshot, otherwise
-  the session follows history.
-- `ctx.add_field(..., region="form")`, `ctx.set_pager(..., region="results")`,
-  and `ctx.set_choice(..., region="choices")` must name their region.
-  `line_field` takes a `region=` pass-through.
+- `kind` is `"form"`, `"pager"`, or `"choice"`. A page has at most one form
+  region, and `form=True` requires exactly one.
+- `next`/`prev` name the region to focus when the cursor cannot move.
+  `prev=PAGE_BACK` calls the page's `on_back(ctx)` hook; if it returns true, the
+  page has restored a state snapshot, otherwise the session follows history.
+- `page_size` is the default window size for a pager or choice region.
+- `optional=True` lets the region be inactive for a render. Disable it with
+  `enabled=False` or omit its binding; `next`/`prev` edges bridge across it.
+- `default_focus` names the initial region; otherwise the first region wins.
+- Validation rejects duplicate names, unknown edges, `next=PAGE_BACK`,
+  scroll/region conflicts, a form region without `form=True`, and explicit
+  `wrap`.
+
+Bind runtime data in `render(ctx)` or `on_tick(ctx)`:
+
+- `ctx.set_pager(items_or_total, *, page_size=None, region=None, key=None,
+  offset=None, carousel=None, enabled=True)`.
+- `ctx.set_choice(items_or_total, *, page_size=None, region=None, key=None,
+  selected=None, reset=False, commit=None, enabled=True)`.
+- `ctx.add_field(..., region="form")` or `line_field(..., region="form")`.
+  When the page has exactly one form region, `region=` may be omitted.
+- Passing `items` to `set_choice` commits the selected item automatically on
+  `ENVOI`. A `commit` transform receives that item; without one, the item
+  itself is committed. With an integer total, `commit` receives the cursor.
+- `ctx.region(name)` returns a read-only view (`cursor`, `key`, `focused`,
+  `committed`); `ctx.focused_region` is the current name. Both are valid on the
+  first line of `render` and inside `on_submit`/`on_back`.
 - `SUITE`/`RETOUR` first try the focused cursor. A form moves fields; a pager
   moves pages; a choice moves its selected item and follows pages when the
   selection crosses a page. At the cursor boundary the region's `next`/`prev`
   policy runs.
-- `ENVOI` runs the region's `commit` (if any), then `activate`: `submit` uses
-  the page submit path (`on_form` on a form page), `stay` refreshes. The page
-  hook can read `ctx.region(name).committed` and hand over focus with
+- `ENVOI` commits the selection (if any), then applies `activate`: `submit`
+  uses the page submit path (`on_form` on a form page); `stay` refreshes. The
+  page hook reads `ctx.region(name).committed` and hands over focus with
   `ctx.focus_region`.
-- `ctx.region(name)` returns a read-only view (`cursor`, `key`, `focused`,
-  `committed`); `ctx.focused_region` is the current name. Use it to style the
-  active pane. The page owns the rectangles; the session knows only the
-  regions and the cursor state.
-- `Region.key` scopes remembered pager/choice state. The same key preserves a
-  live choice's index (clamped to the new total); a key with no remembered
-  state or `reset` starts fresh; returning to a remembered key restores its
-  page and selection. Pager state is remembered as an offset only. Focus is
-  remembered per page; choice/pager state is remembered per page and content
-  key.
 - The session places the terminal cursor only in a focused form field. A
   focused pager or choice hides it; the page draws its own selection/page label.
-- A page with no `set_regions` keeps the implicit `"main"` region and all
-  existing behavior. A named-region page must use `region=` for every cursor
-  and cannot mix in an implicit cursor.
-- On a tick the page may re-declare the identical region graph (names, edges,
-  activate, key) and identical fields. The `commit` callable may be re-created
-  so it closes over refreshed content; changing the graph, adding a field, or
-  changing focus is a tick-contract violation. A tick does not steal focus.
-- Pane regions and scroll pages are mutually exclusive (D047). A named-region
-  page cannot use `set_viewport`/`set_stops`; a scroll page cannot declare
-  regions.
+- A page without `regions=` keeps the implicit single cursor (`ctx.pager`,
+  `ctx.choice`, form fields). A pane page binds every active region and cannot
+  mix in an implicit cursor.
+- On a tick the page rebinds data but cannot change the static graph. A key or
+  item total may change; adding a field, changing focus, or changing topology
+  is a tick-contract violation.
+- Pane regions and scroll pages are mutually exclusive (D047). A region page
+  cannot use `set_viewport`/`set_stops`; a scroll page cannot declare regions.
+- `ctx.set_regions(...)` is removed. Declare topology on `@page` and bind data
+  in `render`.
 
 The synthetic and caller tests live in `tests/test_regions.py`,
 `tests/test_region_state.py`, and `tests/test_region_conformance.py`; the first

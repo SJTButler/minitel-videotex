@@ -55,10 +55,6 @@ def _screen(ctx):
 
     origin, destination = ctx.state.get(QUERY, ("", ""))
     query_key = (origin, destination) if origin else None
-    ctx.set_regions(
-        Region("form", next="results"),
-        Region("results", prev="form", activate="stay", key=query_key),
-    )
     if token is not None:
         if route is None:
             ctx.focus("origin")
@@ -113,7 +109,7 @@ def _screen(ctx):
     if error:
         state = ServiceStatus(ServiceState.MISSING, error, WARNING)
 
-    pager = ctx.set_pager(len(departures), PAGE_SIZE, region="results")
+    pager = ctx.set_pager(departures, region="results", key=query_key)
     if board is not None:
         where = board.station
         if destination:
@@ -187,6 +183,16 @@ def _submit(ctx, values):
     back_page="100",
     extensions=True,
     extension_back_page="100",
+    regions=(
+        Region("form", kind="form", next="results"),
+        Region(
+            "results",
+            kind="pager",
+            prev="form",
+            activate="stay",
+            page_size=PAGE_SIZE,
+        ),
+    ),
 )
 def train_times(ctx):
     return _screen(ctx)

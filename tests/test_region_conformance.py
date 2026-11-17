@@ -18,32 +18,19 @@ def _three_kind_render(ctx):
     items = tuple(
         ctx.state.get("items", ("ALPHA", "BETA", "GAMMA", "DELTA"))
     )
-    ctx.set_regions(
-        Region("form", next="choices"),
-        Region(
-            "choices",
-            next="results",
-            prev="form",
-            commit=lambda choice: (
-                items[choice.selected]
-                if choice.selected is not None
-                and 0 <= choice.selected < len(items)
-                else None
-            ),
-            key=ctx.state.get("choice_key"),
-        ),
-        Region(
-            "results",
-            prev="choices",
-            activate="stay",
-            key=ctx.state.get("result_key", "results"),
-        ),
-    )
     screen = Screen()
     screen.text(0, 0, f"FOCUS {ctx.focused_region}")
     line_field(screen, ctx, "query", 2, 2, 3, label="Q:", region="form")
-    choice = ctx.set_choice(len(items), 2, region="choices")
-    pager = ctx.set_pager(6, 2, region="results")
+    choice = ctx.set_choice(
+        items,
+        region="choices",
+        key=ctx.state.get("choice_key"),
+    )
+    pager = ctx.set_pager(
+        6,
+        region="results",
+        key=ctx.state.get("result_key", "results"),
+    )
     selected = (
         items[choice.selected] if choice.selected is not None else "-"
     )
@@ -69,20 +56,32 @@ def _three_kind_form(ctx, values):
     on_form=_three_kind_form,
     on_tick=_three_kind_render,
     tick_interval=1.0,
+    regions=(
+        Region("form", kind="form", next="choices"),
+        Region(
+            "choices",
+            kind="choice",
+            next="results",
+            prev="form",
+            page_size=2,
+        ),
+        Region(
+            "results",
+            kind="pager",
+            prev="choices",
+            activate="stay",
+            page_size=2,
+        ),
+    ),
 )
 def three_kind(ctx):
     return _three_kind_render(ctx)
 
 
 def _three_choice_render(ctx):
-    ctx.set_regions(
-        Region("a", next="c", prev=PAGE_BACK, key="a"),
-        Region("b", next="a", prev="a", key="b"),
-        Region("c", prev="b", key="c"),
-    )
-    a = ctx.set_choice(2, 2, region="a")
-    b = ctx.set_choice(2, 2, region="b")
-    c = ctx.set_choice(2, 2, region="c")
+    a = ctx.set_choice(2, region="a", key="a")
+    b = ctx.set_choice(2, region="b", key="b")
+    c = ctx.set_choice(2, region="c", key="c")
     screen = Screen()
     screen.text(0, 0, f"FOCUS {ctx.focused_region}")
     screen.text(1, 0, f"A {a.selected} B {b.selected} C {c.selected}")
@@ -94,26 +93,33 @@ def _three_choice_back(ctx):
     return True
 
 
-@page("983", on_back=_three_choice_back)
+@page(
+    "983",
+    on_back=_three_choice_back,
+    regions=(
+        Region(
+            "a", kind="choice", next="c", prev=PAGE_BACK, page_size=2
+        ),
+        Region("b", kind="choice", next="a", prev="a", page_size=2),
+        Region("c", kind="choice", prev="b", page_size=2),
+    ),
+)
 def three_choice(ctx):
     return _three_choice_render(ctx)
 
 
 def _conditional_focus_render(ctx):
     show = not ctx.state.get("hide_middle", False)
-    regions = [Region("folders", next="messages" if show else "reply")]
-    if show:
-        regions.append(Region("messages", next="reply", prev=PAGE_BACK))
-    regions.append(Region("reply", prev="messages" if show else "folders"))
-    ctx.set_regions(*regions)
     screen = Screen()
     screen.text(0, 0, f"FOCUS {ctx.focused_region}")
-    folders = ctx.set_choice(2, 2, region="folders")
+    folders = ctx.set_choice(2, region="folders", key="folders")
     screen.text(2, 0, f"FOLDERS {folders.selected}")
+    messages = ctx.set_choice(
+        2, region="messages", key="messages", enabled=show
+    )
     if show:
-        messages = ctx.set_choice(2, 2, region="messages")
         screen.text(3, 0, f"MESSAGES {messages.selected}")
-    reply = ctx.set_choice(2, 2, region="reply")
+    reply = ctx.set_choice(2, region="reply", key="reply")
     screen.text(4, 0, f"REPLY {reply.selected}")
     return screen
 
@@ -123,7 +129,22 @@ def _conditional_focus_back(ctx):
     return True
 
 
-@page("984", on_back=_conditional_focus_back)
+@page(
+    "984",
+    on_back=_conditional_focus_back,
+    regions=(
+        Region("folders", kind="choice", next="messages", page_size=2),
+        Region(
+            "messages",
+            kind="choice",
+            next="reply",
+            prev=PAGE_BACK,
+            optional=True,
+            page_size=2,
+        ),
+        Region("reply", kind="choice", prev="messages", page_size=2),
+    ),
+)
 def conditional_focus(ctx):
     return _conditional_focus_render(ctx)
 
@@ -242,7 +263,8 @@ class ConditionalFocusConformanceTests(unittest.TestCase):
 
         self.session.state["hide_middle"] = True
         self.session.refresh()
-        self.assertNotIn("messages", self.session.regions)
+        self.assertIn("messages", self.session.regions)
+        self.assertFalse(self.session.regions["messages"].active)
         self.assertEqual(self.session.focused_region, "folders")
 
         self.session.state["hide_middle"] = False

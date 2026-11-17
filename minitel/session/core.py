@@ -6,7 +6,7 @@ from dataclasses import replace
 
 from ..design.choice import Choice
 from ..design.pager import Pager
-from ..design.region import PAGE_BACK
+from ..design.region import PAGE_BACK, MainRegion
 from ..design.stops import reveal_viewport
 from ..pagemodel.model import PageContext
 from ..protocol import codec
@@ -179,17 +179,51 @@ class Session(
         self._pager_carousel_next = None
         return self._render_error()
 
+    def _init_page_regions(self):
+        definitions = tuple(getattr(self.current, "regions", ()) or ())
+        if not definitions:
+            self.regions = {}
+            self.focused_region = self._focus_memory.get(
+                self.current.number
+            )
+            self.regions_default_focus = None
+            return
+        self.regions = {
+            definition.name: RegionState(
+                definition,
+                None,
+                None,
+                (),
+                None,
+                None,
+                None,
+                True,
+            )
+            for definition in definitions
+        }
+        self.regions_default_focus = (
+            getattr(self.current, "default_focus", None)
+            or definitions[0].name
+        )
+        remembered = self._focus_memory.get(self.current.number)
+        self.focused_region = (
+            remembered
+            if remembered in self.regions
+            else self.regions_default_focus
+        )
+
     def _adopt_named_regions(self, ctx):
         page_key = self.current.number
         previous = self.regions
         regions = {}
         for name in ctx._region_order:
             definition = ctx._region_defs[name]
-            key = definition.key
+            key = ctx._region_keys.get(name)
             cursor = (
                 ctx._region_pagers.get(name)
                 or ctx._region_choices.get(name)
             )
+            enabled = ctx._region_enabled.get(name, True)
             if isinstance(cursor, Pager):
                 if ctx._region_pager_explicit.get(name):
                     cursor = cursor.clamp()
@@ -217,7 +251,8 @@ class Session(
                 if name == ctx._form_region_name
                 else ()
             )
-            if not fields and cursor is None:
+            active = enabled and (bool(fields) or cursor is not None)
+            if not active and not definition.optional:
                 raise ValueError(f"region {name!r} has no cursor")
             committed = (
                 previous[name].committed
@@ -225,54 +260,205 @@ class Session(
                 else None
             )
             regions[name] = RegionState(
-                definition, cursor, key, fields, committed
+                definition,
+                cursor,
+                key,
+                fields,
+                ctx._region_items.get(name),
+                ctx._region_commit.get(name),
+                committed,
+                active,
             )
 
         self.regions = regions
         requested = (
             ctx._requested_focus_region or self.requested_focus_region
         )
-        if requested not in regions:
-            current = self.focused_region
+        if requested not in regions or not regions[requested].active:
+            candidates = []
+            previous_focus = self._active_target(
+                self.focused_region, -1
+            )
+            if previous_focus not in (None, PAGE_BACK):
+                candidates.append(previous_focus)
             remembered = self._focus_memory.get(page_key)
-            if current in regions:
-                requested = current
-            elif remembered in regions:
-                requested = remembered
-            else:
-                requested = ctx._default_focus
+            if remembered in regions and regions[remembered].active:
+                candidates.append(remembered)
+            default = self._active_target(ctx._default_focus, 1)
+            if default not in (None, PAGE_BACK):
+                candidates.append(default)
+            requested = next(
+                (
+                    name for name in candidates
+                    if name in regions and regions[name].active
+                ),
+                self._first_active(ctx._default_focus),
+            )
         self.focused_region = requested
         self.regions_default_focus = ctx._default_focus
         self.requested_focus_region = None
-        self._focus_memory[page_key] = requested
+        if requested is not None:
+            self._focus_memory[page_key] = requested
         self._remember_region_offsets()
 
+    def _active_target(self, name, direction):
+        seen = set()
+        while name not in (None, PAGE_BACK):
+            if name in seen:
+                return None
+            seen.add(name)
+            state = self.regions.get(name)
+            if state is None:
+                return None
+            if state.active:
+                return name
+            name = (
+                state.definition.next
+                if direction > 0
+                else state.definition.prev
+            )
+        return name
+
+    def _first_active(self, start=None):
+
+        names = list(self.regions)
+        if start in self.regions:
+            index = names.index(start)
+            names = names[index:] + names[:index]
+        for name in names:
+            if self.regions[name].active:
+                return name
+        return None
+
+    def _adopt_main_region(self, ctx):
+        if self.current.scroll or ctx._viewport_set:
+            self.regions = {}
+            self.focused_region = None
+            self.regions_default_focus = None
+            return
+        kinds = sum(
+            (
+                bool(ctx.fields),
+                ctx.choice is not None,
+                ctx.pager is not None,
+            )
+        )
+        if kinds != 1:
+            self.regions = {}
+            self.focused_region = None
+            self.regions_default_focus = None
+            return
+        if ctx.fields:
+            kind = "form"
+            cursor = None
+            page_size = None
+        elif ctx.choice is not None:
+            kind = "choice"
+            cursor = ctx.choice
+            page_size = ctx.choice.pager.page_size
+        else:
+            kind = "pager"
+            cursor = ctx.pager
+            page_size = ctx.pager.page_size
+        definition = MainRegion(kind, page_size)
+        self.regions = {
+            "main": RegionState(
+                definition,
+                cursor,
+                None,
+                tuple(ctx.fields),
+                None,
+                None,
+                None,
+                True,
+            )
+        }
+        self.focused_region = "main"
+        self.regions_default_focus = "main"
+        self.requested_focus_region = None
+        self._focus_memory[self.current.number] = "main"
+        self._remember_region_offsets()
+
+    def _sync_main_cursor(self):
+        if self.focused_region != "main":
+            return
+        state = self.regions.get("main")
+        if state is None or state.cursor is None:
+            return
+        if isinstance(state.cursor, Choice):
+            self.choice = state.cursor
+        else:
+            self.pager = state.cursor
+            self.pagers[self.current.number] = state.cursor
+
     def _adopt_region_tick(self, ctx):
-        page_key = self.current.number
         for name in ctx._region_order:
             state = self.regions.get(name)
             if state is None:
                 raise ValueError("a page tick cannot change regions")
+            previous_key = state.key
+            definition = ctx._region_defs[name]
+            key = ctx._region_keys.get(name)
             cursor = (
                 ctx._region_pagers.get(name)
                 or ctx._region_choices.get(name)
             )
-            if cursor is None:
-                continue
             if isinstance(cursor, Pager):
                 if ctx._region_pager_explicit.get(name):
                     cursor = cursor.clamp()
-                elif (
-                    state.cursor is not None
-                    and state.key == state.definition.key
-                ):
+                elif state.cursor is not None and state.key == key:
                     cursor = replace(
                         cursor, offset=state.cursor.offset
                     ).clamp()
                 else:
                     cursor = cursor.clamp()
+            fields = (
+                tuple(ctx.fields)
+                if name == ctx._form_region_name
+                else ()
+            )
+            enabled = ctx._region_enabled.get(name, True)
+            active = enabled and (bool(fields) or cursor is not None)
+            if not active and not definition.optional:
+                raise ValueError(f"region {name!r} has no cursor")
+            state.definition = definition
             state.cursor = cursor
-            state.definition = ctx._region_defs[name]
+            state.key = key
+            state.fields = fields
+            state.items = ctx._region_items.get(name)
+            state.commit = ctx._region_commit.get(name)
+            state.active = active
+            if previous_key != key:
+                state.committed = None
+        if (
+            self.focused_region not in self.regions
+            or not self.regions[self.focused_region].active
+        ):
+            candidates = []
+            previous_focus = self._active_target(
+                self.focused_region, -1
+            )
+            if previous_focus not in (None, PAGE_BACK):
+                candidates.append(previous_focus)
+            remembered = self._focus_memory.get(self.current.number)
+            if (
+                remembered in self.regions
+                and self.regions[remembered].active
+            ):
+                candidates.append(remembered)
+            default = self._active_target(
+                self.regions_default_focus, 1
+            )
+            if default not in (None, PAGE_BACK):
+                candidates.append(default)
+            self.focused_region = next(
+                (
+                    name for name in candidates
+                    if name in self.regions
+                    and self.regions[name].active
+                ),
+                self._first_active(self.regions_default_focus),
+            )
         self._remember_region_offsets()
 
     def _remember_region_offsets(self):
@@ -295,7 +481,7 @@ class Session(
 
     def _form_region_name(self):
         for name, state in self.regions.items():
-            if state.is_form:
+            if state.is_form and state.active:
                 return name
         return None
 
@@ -306,7 +492,7 @@ class Session(
         return form is not None and self.focused_region == form
 
     def _focus_region(self, name):
-        if name not in self.regions:
+        if name not in self.regions or not self.regions[name].active:
             return Action()
         self.focused_region = name
         self.requested_focus_region = None
@@ -319,6 +505,8 @@ class Session(
             if direction > 0
             else region.definition.prev
         )
+        if target not in (None, PAGE_BACK):
+            target = self._active_target(target, direction)
         if target == PAGE_BACK and direction < 0:
             hook = getattr(self.current, "on_back", None)
             if callable(hook):
@@ -358,14 +546,19 @@ class Session(
                 cursor.next() if direction > 0 else cursor.prev()
             )
         else:
+            wrap = (
+                getattr(region.definition, "wrap", False)
+                and direction > 0
+            )
             moved = (
-                cursor.next(wrap=False)
+                cursor.next(wrap=wrap)
                 if direction > 0
-                else cursor.prev(wrap=False)
+                else cursor.prev(wrap=wrap)
             )
         if moved == cursor:
             return self._region_edge(region, direction)
         region.cursor = moved
+        self._sync_main_cursor()
         self._remember_region_offsets()
         return self.refresh()
 
@@ -394,6 +587,8 @@ class Session(
             return self.screensaver(self.current.screensaver)
         if result is not None:
             return self.navigate(result)
+        if name == "GUIDE" and self.guide:
+            return self.navigate(self.guide)
         return self.refresh()
 
     def _activate_region(self):
@@ -402,10 +597,26 @@ class Session(
             return Action()
         if region.is_form:
             return self.submit()
-        commit = region.definition.commit
-        if commit is not None:
+        if isinstance(region.cursor, Choice) and region.items is not None:
             try:
-                region.committed = commit(region.cursor)
+                selected = region.cursor.selected
+                if (
+                    selected is not None
+                    and 0 <= selected < len(region.items)
+                ):
+                    item = region.items[selected]
+                    region.committed = (
+                        region.commit(item)
+                        if region.commit is not None
+                        else item
+                    )
+                else:
+                    region.committed = None
+            except Exception:
+                return Action(screen=self._fail_page("commit"))
+        elif region.commit is not None:
+            try:
+                region.committed = region.commit(region.cursor)
             except Exception:
                 return Action(screen=self._fail_page("commit"))
         if region.definition.activate == "stay":
@@ -535,6 +746,7 @@ class Session(
         self._reschedule_announcements(self.clock(), immediate=True)
         self._touch()
         self._shadow_exact = True
+        self._init_page_regions()
         return self.render()
 
     def refresh(self):
@@ -623,6 +835,7 @@ class Session(
                 )
                 self.stops = ctx.stops if ctx._stops_set else None
                 self.choice = ctx.choice if ctx._choice_set else None
+                self._adopt_main_region(ctx)
             self.fields = ctx.fields
             names = [field.name for field in self.fields]
             self.values = {name: self.values.get(name, "") for name in names}
@@ -706,6 +919,8 @@ class Session(
             self.stops = ctx.stops
         if not self.screensaver_active and ctx._choice_set:
             self.choice = ctx.choice
+        if not self.screensaver_active and not ctx._regions_declared:
+            self._adopt_main_region(ctx)
         if frame is None:
             return Action()
         if isinstance(frame, (bytes, bytearray)):
