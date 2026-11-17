@@ -814,11 +814,13 @@ Bind runtime data in `render(ctx)` or `on_tick(ctx)`:
 - `CORRECTION` on a non-form region backspaces the ambient line when one is
   present; otherwise it reaches the page's `on_key`. On a form it backspaces
   the focused field. `180 NOTES` uses `on_key` because it has no ambient line.
-- The session places the terminal cursor only in a focused form field. A
-  focused pager or choice hides it; the page draws its own selection/page label.
-- A page without `regions=` keeps the implicit single cursor (`ctx.pager`,
-  `ctx.choice`, form fields). A pane page binds every active region and cannot
-  mix in an implicit cursor.
+- The session shows the cursor in a focused form field or in the ambient line;
+  a focused pager or choice hides it when the page has no ambient line. The page
+  draws its own selection/page label.
+- A page without `regions=` puts its one cursor in the main region
+  (`Region("main")`); bind it with `ctx.set_pager` or `ctx.set_choice`, or use
+  form fields. It may add one ambient line with `ctx.set_input`. A pane page
+  binds every active region and cannot mix in a main cursor.
 - On a tick the page rebinds data but cannot change the static graph. A key or
   item total may change; adding a field, changing focus, or changing topology
   is a tick-contract violation.

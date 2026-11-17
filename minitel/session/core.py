@@ -66,14 +66,10 @@ class Session(
         self.active = 0
         self.active_name = None
         self.requested_focus = None
-        self._pager = None
-        self._choice = None
-        self.pager = None
         self.pagers = {}
         self.viewport = None
         self.viewports = {}
         self.stops = None
-        self.choice = None
         self.regions = {}
         self.focused_region = None
         self.requested_focus_region = None
@@ -127,27 +123,19 @@ class Session(
 
     @property
     def pager(self):
-        """The main-region pager, or the legacy composite pager."""
+        """The main-region pager, or None."""
         main = self.regions.get("main")
         if main is not None and isinstance(main.cursor, Pager):
             return main.cursor
-        return self._pager
-
-    @pager.setter
-    def pager(self, value):
-        self._pager = value
+        return None
 
     @property
     def choice(self):
-        """The main-region Choice, or the legacy composite Choice."""
+        """The main-region Choice, or None."""
         main = self.regions.get("main")
         if main is not None and isinstance(main.cursor, Choice):
             return main.cursor
-        return self._choice
-
-    @choice.setter
-    def choice(self, value):
-        self._choice = value
+        return None
 
     def _touch(self):
         now = self.clock()
@@ -164,10 +152,8 @@ class Session(
         self.active = 0
         self.active_name = None
         self.requested_focus = None
-        self.pager = None
         self.viewport = None
         self.stops = None
-        self.choice = None
 
     def _error_screen(self):
         screen = Screen()
@@ -695,17 +681,13 @@ class Session(
         self.active = 0
         self.active_name = None
         self.requested_focus = None
-        self.pager = None
         self.viewport = None
         self.stops = None
-        self.choice = None
         self.regions = {}
         self.focused_region = None
         self.requested_focus_region = None
         self.regions_default_focus = None
-        self._pager_carousel = None
-        self._pager_carousel_next = None
-        self._pager_carousel_key = None
+        self._clear_pager_carousel()
         self.status_text = None
         self._last_body_tick = self.clock()
 
@@ -763,16 +745,6 @@ class Session(
                 self._pager_carousel_next = None
         else:
             self._pager_carousel = carousel
-
-    def _adopt_pager(self, pager, carousel):
-        if pager is None:
-            self.pager = None
-            self.pagers.pop(self.current.number, None)
-            self._clear_pager_carousel()
-            return
-        self.pager = pager
-        self.pagers[self.current.number] = pager
-        self._adopt_pager_carousel(pager, carousel)
 
     def _adopt_viewport(self, viewport):
         if viewport is None:
@@ -900,10 +872,17 @@ class Session(
                     f"page {self.current.number!r} cannot mix an ambient "
                     "input with choice commands"
                 )
+            if form_fields and (
+                ctx.pager is not None
+                or ctx.choice is not None
+                or ctx._viewport_set
+            ):
+                raise ValueError(
+                    f"page {self.current.number!r} cannot mix form fields "
+                    "with a pager, choice, or viewport"
+                )
             if ctx._regions_declared:
                 self._adopt_named_regions(ctx)
-                self.pager = None
-                self.choice = None
                 self.viewport = None
                 self.stops = None
                 self._clear_pager_carousel()
@@ -916,12 +895,11 @@ class Session(
                 self.focused_region = None
                 self.requested_focus_region = None
                 self.regions_default_focus = None
-                self._adopt_pager(ctx.pager, ctx.pager_carousel)
                 self._adopt_viewport(
                     ctx.viewport if ctx._viewport_set else None
                 )
                 self.stops = ctx.stops if ctx._stops_set else None
-                self.choice = ctx.choice if ctx._choice_set else None
+                self._clear_pager_carousel()
             self.fields = ctx.fields
             names = [field.name for field in self.fields]
             self.values = {name: self.values.get(name, "") for name in names}
@@ -1005,14 +983,11 @@ class Session(
             self.focused_region = None
             self.requested_focus_region = None
             self.regions_default_focus = None
-            if ctx.pager is not None:
-                self._adopt_pager(ctx.pager, ctx.pager_carousel)
             if ctx._viewport_set:
                 self._adopt_viewport(ctx.viewport)
             if ctx._stops_set:
                 self.stops = ctx.stops
-            if ctx._choice_set:
-                self.choice = ctx.choice
+            self._clear_pager_carousel()
         if frame is None:
             return Action()
         if isinstance(frame, (bytes, bytearray)):
@@ -1150,37 +1125,6 @@ class Session(
         if name == "ANNULATION":
             return self.annulation()
 
-        if self.current.form and self.fields:
-            if name == "SUITE":
-                if self.active < len(self.fields) - 1:
-                    self.active += 1
-                    self.active_name = self.fields[self.active].name
-                    return self.refresh()
-                return Action()
-            if name == "RETOUR":
-                if self.active > 0:
-                    self.active -= 1
-                    self.active_name = self.fields[self.active].name
-                    return self.refresh()
-                return self._back_or_parent()
-
-        if (
-            self.choice is not None
-            and self.choice.total
-            and name in ("SUITE", "RETOUR")
-        ):
-            if name == "SUITE":
-                updated = self.choice.next()
-                if updated != self.choice:
-                    self.choice = updated
-                    self._clear_active_field()
-                    return self.refresh()
-                return Action()
-            if self.choice.selected not in (None, 0):
-                self.choice = self.choice.prev()
-                self._clear_active_field()
-                return self.refresh()
-
         if self.viewport is not None:
             if (
                 self.stops is not None
@@ -1203,22 +1147,6 @@ class Session(
                 if not self.viewport.at_top:
                     self.viewport = self.viewport.step_up()
                     self.viewports[self.current.number] = self.viewport
-                    self._clear_active_field()
-                    return self.refresh()
-                return self._back_or_parent()
-
-        if self.pager is not None:
-            if name == "SUITE":
-                if self.pager.page_count:
-                    self.pager = self.pager.next(wrap=True)
-                    self.pagers[self.current.number] = self.pager
-                    self._clear_active_field()
-                    return self.refresh()
-                return Action()
-            if name == "RETOUR":
-                if self.pager.page_index > 0:
-                    self.pager = self.pager.prev()
-                    self.pagers[self.current.number] = self.pager
                     self._clear_active_field()
                     return self.refresh()
                 return self._back_or_parent()

@@ -185,14 +185,9 @@ class PurePaneTests(unittest.TestCase):
         session.feed(b"AB")
         self.assertEqual(session.line, "AB")
 
-    def test_field_plus_pager_stays_composite(self):
-        session = make_session("984", home, composite_pager)
-        self.assertEqual(session.regions, {})
-        session.feed(b"2")
-        self.assertEqual(session.values["query"], "2")
-        session.feed(SUITE)
-        self.assertEqual(session.pager.page_number, 2)
-        self.assertEqual(session.values["query"], "")
+    def test_field_plus_pager_is_rejected(self):
+        with self.assertRaises(ValueError):
+            make_session("984", home, composite_pager)
 
     def test_mixing_ambient_and_form_fields_is_rejected(self):
         with self.assertRaises(ValueError):

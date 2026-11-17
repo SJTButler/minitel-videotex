@@ -122,15 +122,6 @@ def choice_commit(ctx):
     return screen
 
 
-@page("974")
-def composite_choice(ctx):
-    screen = Screen()
-    line_field(screen, ctx, "query", 2, 2, 3, label="Q:")
-    choice = ctx.set_choice(3, 2)
-    screen.text(0, 0, f"SEL {choice.selected}")
-    return screen
-
-
 @page("975", regions=(Region("items", kind="choice", page_size=2),))
 def choice_remove(ctx):
     items = ctx.state.setdefault("items", ["A", "B", "C"])
@@ -374,14 +365,6 @@ class RegionTests(unittest.TestCase):
         self.assertEqual(session.pager.page_number, 2)
         session.feed(SUITE)
         self.assertEqual(session.pager.page_number, 1)
-
-    def test_composite_choice_and_field_keeps_the_legacy_cursor(self):
-        session = make_session(home, composite_choice)
-        session.navigate("974")
-        self.assertEqual(session.regions, {})
-        self.assertEqual(session.choice.selected, 0)
-        session.feed(SUITE)
-        self.assertEqual(session.choice.selected, 1)
 
     def test_static_regions_reject_set_regions(self):
         @page(
