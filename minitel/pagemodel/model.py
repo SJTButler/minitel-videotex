@@ -79,6 +79,8 @@ class PageContext:
         self._region_committed = {}
         self._region_items = {}
         self._region_commit = {}
+        self._region_remove = {}
+        self._region_commands = {}
         self._region_keys = {}
         self._region_enabled = {}
         self._form_region_name = None
@@ -413,7 +415,8 @@ class PageContext:
         return self._region_pagers[region]
 
     def _set_region_choice(self, region, total, page_size, *, selected,
-                           reset, wrap, key, commit, items, enabled):
+                           reset, wrap, key, commit, remove, commands, items,
+                           enabled):
         if not self._regions_declared:
             raise ValueError("page has not declared regions")
         if region is None:
@@ -450,6 +453,21 @@ class PageContext:
             raise TypeError("region key must be hashable") from exc
         if commit is not None and not callable(commit):
             raise TypeError("region commit must be callable or None")
+        if remove is not None and not callable(remove):
+            raise TypeError("region remove must be callable or None")
+        if commands is not None:
+            if not hasattr(commands, "items"):
+                raise TypeError("region commands must be a mapping or None")
+            commands = dict(commands)
+            for char, handler in commands.items():
+                if not isinstance(char, str) or len(char) != 1:
+                    raise ValueError(
+                        "region command keys must be single characters"
+                    )
+                if not callable(handler):
+                    raise TypeError(
+                        "region command handlers must be callable"
+                    )
         if items is not None:
             items = tuple(items)
             total = len(items)
@@ -489,6 +507,8 @@ class PageContext:
         self._region_choices[region] = choice
         self._region_keys[region] = key
         self._region_commit[region] = commit
+        self._region_remove[region] = remove
+        self._region_commands[region] = commands
         self._region_items[region] = items
         self._region_enabled[region] = enabled
         if same_key:
@@ -557,8 +577,8 @@ class PageContext:
         return self.stops
 
     def set_choice(self, total, page_size=None, *, selected=None, reset=False,
-                   wrap=False, region=None, key=None, commit=None, items=None,
-                   enabled=True):
+                   wrap=False, region=None, key=None, commit=None, remove=None,
+                   commands=None, items=None, enabled=True):
         if not isinstance(total, int):
             if items is not None:
                 raise TypeError("pass either a sequence or items=, not both")
@@ -570,10 +590,15 @@ class PageContext:
             return self._set_region_choice(
                 region, total, page_size,
                 selected=selected, reset=reset, wrap=wrap,
-                key=key, commit=commit, items=items, enabled=enabled,
+                key=key, commit=commit, remove=remove, commands=commands,
+                items=items, enabled=enabled,
             )
         if page_size is None:
             raise TypeError("page_size is required on a page without regions")
+        if remove is not None:
+            raise ValueError("remove requires a named choice region")
+        if commands is not None:
+            raise ValueError("commands requires a named choice region")
         if self._viewport_set or self.pager is not None:
             raise ValueError(
                 f"page {self.page.number!r} cannot mix a choice with "

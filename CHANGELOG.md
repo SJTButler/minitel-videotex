@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- Added the `180 NOTES` desk to-do list: a pane page with a paged Choice of
+  open/done items above a one-line entry form, backed by a session-created
+  SQLite store. `ENVOI` toggles the selected item or saves an edit,
+  `CORRECTION` loads it into the entry form, `ANNULATION` deletes it, and
+  `*`/`#` move it up or down. The title shows the visible window and done count.
+  Choice regions can bind a `remove` callback for `ANNULATION` and character
+  `commands` for `*`/`#`; `CORRECTION` on a non-form region now reaches
+  `on_key`, while forms keep backspace and field-clearing.
 - Pane regions are declared statically on `@page(regions=...)` and validated at
   definition time; `render` binds items, keys, and commits through
   `ctx.set_pager`/`ctx.set_choice`. Optional regions bridge focus and edges, and

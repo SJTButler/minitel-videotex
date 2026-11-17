@@ -268,6 +268,8 @@ class Session(
                 ctx._region_commit.get(name),
                 committed,
                 active,
+                remove=ctx._region_remove.get(name),
+                commands=ctx._region_commands.get(name),
             )
 
         self.regions = regions
@@ -427,6 +429,8 @@ class Session(
             state.fields = fields
             state.items = ctx._region_items.get(name)
             state.commit = ctx._region_commit.get(name)
+            state.remove = ctx._region_remove.get(name)
+            state.commands = ctx._region_commands.get(name)
             state.active = active
             if previous_key != key:
                 state.committed = None
@@ -566,10 +570,27 @@ class Session(
         region = self.regions.get(self.focused_region)
         if region is None:
             return Action()
-        if name == "CORRECTION":
-            return self.correction() if region.is_form else Action()
+        if name == "CORRECTION" and region.is_form:
+            return self.correction()
         if name == "ANNULATION":
-            return self.annulation() if region.is_form else Action()
+            if region.is_form:
+                return self.annulation()
+            if isinstance(region.cursor, Choice) and region.remove is not None:
+                selected = region.cursor.selected
+                if selected is None:
+                    return Action()
+                if region.items is not None:
+                    if not 0 <= selected < len(region.items):
+                        return Action()
+                    target = region.items[selected]
+                else:
+                    target = region.cursor
+                try:
+                    region.remove(target)
+                except Exception:
+                    return Action(screen=self._fail_page("remove"))
+                return self.refresh()
+            return Action()
         if name == "SUITE":
             return self._step_region(region, 1)
         if name == "RETOUR":

@@ -8,6 +8,8 @@ from pages.common.widgets import line_field
 ENVOI = bytes([0x13, 0x41])
 RETOUR = bytes([0x13, 0x42])
 SUITE = bytes([0x13, 0x48])
+ANNULATION = bytes([0x13, 0x45])
+CORRECTION = bytes([0x13, 0x47])
 BEL = bytes([codec.BEL])
 
 
@@ -129,6 +131,63 @@ def composite_choice(ctx):
     return screen
 
 
+@page("975", regions=(Region("items", kind="choice", page_size=2),))
+def choice_remove(ctx):
+    items = ctx.state.setdefault("items", ["A", "B", "C"])
+    ctx.set_choice(
+        items,
+        region="items",
+        key="items",
+        remove=lambda item: items.remove(item),
+    )
+    screen = Screen()
+    screen.text(0, 0, " ".join(items))
+    return screen
+
+
+@page("976", regions=(Region("items", kind="choice", page_size=2),))
+def choice_no_remove(ctx):
+    ctx.set_choice(("A", "B", "C"), region="items", key="items")
+    screen = Screen()
+    screen.text(0, 0, "NO REMOVE")
+    return screen
+
+
+@page("977", regions=(Region("items", kind="choice", page_size=2),))
+def choice_commands(ctx):
+    ctx.set_choice(
+        ("A", "B", "C"),
+        region="items",
+        key="items",
+        commands={
+            "*": lambda item: ctx.state.__setitem__("moved", item),
+        },
+    )
+    screen = Screen()
+    screen.text(0, 0, f"MOVED {ctx.state.get('moved', 'NONE')}")
+    return screen
+
+
+def _correct_key(ctx, name):
+    if name == "CORRECTION":
+        ctx.state["corrected"] = True
+    return None
+
+
+@page(
+    "978",
+    on_key=_correct_key,
+    regions=(Region("items", kind="choice", page_size=2),),
+)
+def choice_correct(ctx):
+    ctx.set_choice(("A", "B", "C"), region="items", key="items")
+    screen = Screen()
+    screen.text(
+        0, 0, "CORRECT" if ctx.state.get("corrected") else "PLAIN"
+    )
+    return screen
+
+
 def make_session(*pages, initial="959"):
     registry = Registry()
     for page_object in pages:
@@ -239,6 +298,61 @@ class RegionTests(unittest.TestCase):
         session.feed(SUITE)
         self.assertEqual(session.regions["choices"].cursor.selected, 1)
         self.assertIn("SEL 1", session.screen.to_text())
+
+    def test_annulation_removes_a_bound_choice_item(self):
+        session = make_session(home, choice_remove)
+        session.navigate("975")
+        self.assertEqual(session.state["items"], ["A", "B", "C"])
+
+        session.feed(ANNULATION)
+        self.assertEqual(session.state["items"], ["B", "C"])
+        self.assertEqual(session.focused_region, "items")
+        self.assertEqual(session.regions["items"].cursor.selected, 0)
+        self.assertIn("B C", session.screen.to_text())
+
+    def test_annulation_without_remove_is_a_no_op(self):
+        session = make_session(home, choice_no_remove)
+        session.navigate("976")
+        session.feed(ANNULATION)
+        self.assertEqual(session.focused_region, "items")
+        self.assertIn("NO REMOVE", session.screen.to_text())
+
+    def test_annulation_still_clears_a_form_field(self):
+        self.session.feed(b"PAD")
+        self.assertEqual(self.session.values["origin"], "PAD")
+        self.session.feed(ANNULATION)
+        self.assertEqual(self.session.values["origin"], "")
+
+    def test_correction_reaches_on_key_for_a_choice_region(self):
+        session = make_session(home, choice_correct)
+        session.navigate("978")
+        session.feed(CORRECTION)
+        self.assertTrue(session.state["corrected"])
+        self.assertIn("CORRECT", session.screen.to_text())
+
+    def test_correction_still_backspaces_a_form_field(self):
+        self.session.feed(b"PAD")
+        self.session.feed(CORRECTION)
+        self.assertEqual(self.session.values["origin"], "PA")
+
+    def test_choice_text_commands_run_on_the_focused_choice(self):
+        session = make_session(home, choice_commands)
+        session.navigate("977")
+        session.feed(b"*")
+        self.assertEqual(session.state["moved"], "A")
+        self.assertIn("MOVED A", session.screen.to_text())
+        self.assertEqual(session.focused_region, "items")
+
+    def test_unbound_choice_text_still_rings_the_bell(self):
+        session = make_session(home, choice_commands)
+        session.navigate("977")
+        actions = session.feed(b"#")
+        self.assertEqual(actions[0].raw, BEL)
+        self.assertNotIn("moved", session.state)
+
+    def test_choice_text_commands_do_not_steal_form_input(self):
+        self.session.feed(b"*")
+        self.assertEqual(self.session.values["origin"], "*")
 
     def test_choice_commit_and_page_back(self):
         session = make_session(home, choice_commit)

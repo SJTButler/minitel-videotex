@@ -13,6 +13,7 @@ def about(ctx):
     s.text(4, 0, "PRESTEL-STYLE SERVICE")
     s.text(5, 0, "FOR A MINITEL 1.")
     s.text(7, 0, "BUILT WITH PYTHON.")
+    s.text(9, 0, "180 NOTES: DESK TO-DO LIST")
     page_input(s, ctx)
     footer(s)
     return s

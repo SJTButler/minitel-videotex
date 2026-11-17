@@ -60,14 +60,14 @@ class PageDirectoryTests(unittest.TestCase):
         self.assertEqual(
             page_numbers(text),
             [
-                "160", "161", "170", "171", "190", "199", "900",
-                "901", "902", "903", "910", "911",
+                "160", "161", "170", "171", "180", "190", "199", "900",
+                "901", "902", "903", "910",
             ],
         )
         session.feed(SUITE)
         self.assertEqual(
             page_numbers(session.screen.to_text().splitlines()),
-            ["912"],
+            ["911", "912"],
         )
 
     def test_hides_internal_pages(self):
@@ -153,11 +153,11 @@ class PageDirectoryTests(unittest.TestCase):
         line = find_line(text, "910")
         self.assertTrue(line.startswith("910*"))
         self.assertIn("CAROUSEL: KILO", line)
+        session.feed(SUITE)
+        text = session.screen.to_text().splitlines()
         line = find_line(text, "911")
         self.assertTrue(line.startswith("911*"))
         self.assertIn("CAROUSEL: NEWS", line)
-        session.feed(SUITE)
-        text = session.screen.to_text().splitlines()
         line = find_line(text, "912")
         self.assertTrue(line.startswith("912*"))
         self.assertIn("CAROUSEL: WEATHER", line)
@@ -199,14 +199,16 @@ class PageDirectoryTests(unittest.TestCase):
         self.assertEqual(
             page_numbers(lines),
             [
-                "160", "161", "170", "171", "190", "199", "250",
-                "900", "901", "902", "903", "910",
+                "160", "161", "170", "171", "180", "190", "199", "250",
+                "900", "901", "902", "903",
             ],
         )
         session.feed(SUITE)
         text = session.screen.to_text()
         self.assertIn("REGISTERED PAGES 3/3", text)
-        self.assertEqual(page_numbers(text.splitlines()), ["911", "912"])
+        self.assertEqual(
+            page_numbers(text.splitlines()), ["910", "911", "912"]
+        )
 
 
 if __name__ == "__main__":

@@ -107,6 +107,10 @@ pages/         example site, auto-discovered
     page.py      page 140
     _support/
       store.py   SQLite storage
+  notes/
+    page.py      page 180, desk to-do list
+    _support/
+      store.py   SQLite storage
 tests/         library, service, and page tests
 tools/         server probes, virtual Minitel decoder, interactive client
 docs/          authoring guide and page recipes

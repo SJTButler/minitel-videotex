@@ -122,6 +122,54 @@ selection and page, so both panes return to their previous highlights. See
 Do not add a third breadcrumb cursor for the path. The page already knows the
 path; it is content, not navigation.
 
+### Form + toggle list (`180 NOTES`)
+
+A desk to-do list: a paged Choice of items above a one-line entry form. The
+list is the content; the form is a pinned compose bar.
+
+```text
+row 0   PAGE 180
+row 2   NOTES                          1-12/12  2 DONE
+row 3    1. CALL PLUMBER                     [ ]
+row 4    2. BUY COFFEE BEANS                 [X]
+...
+row 14  12. CALL MUM SUNDAY                  [ ]
+row 15  ----------------------------------------
+row 16  NEW NOTE
+row 17  > __________________________________
+row 18  (error message, when present)
+row 19  ENVOI: DONE  CORRECTION: EDIT
+row 20  ANNULATION: DELETE  *: UP  #: DOWN
+row 22  RETOUR=BACK  SOMMAIRE=HOME
+```
+
+```text
+regions:  items --SUITE--> entry
+          items --RETOUR--> page_back
+          entry --SUITE--> items
+          entry --RETOUR--> page_back
+keys:     ENVOI in entry: add a note (or save an edit) and clear the field
+          ENVOI in items: toggle done and stay on the list
+          CORRECTION in items: load the selected note into the entry form
+          ANNULATION in items: delete the selected note
+          * / # in items: move the selected note up / down
+```
+
+Use `@page(form=True, regions=(Region("items", kind="choice", next="entry",
+prev=PAGE_BACK, activate="stay", page_size=12), Region("entry", kind="form",
+next="items", prev=PAGE_BACK)))` and bind the list with
+`ctx.set_choice(notes, region="items", key="notes", commit=store.toggle,
+remove=store.delete, commands={"*": up, "#": down})`. `activate="stay"` is
+required: without it, `ENVOI` on the Choice falls through to the page submit
+path and the empty entry form reports an error. The title shows the window and
+done count, not just the total, so items past the first page are visible.
+
+Editing reuses the entry form: `CORRECTION` copies the selected note into the
+field and focuses it, a non-empty `ENVOI` updates that note, and an empty
+`ENVOI` cancels the edit. The move commands set a one-shot `selected=` index so
+the highlight follows the item after a reorder. See `pages/notes/page.py` and
+`tests/test_notes_page.py`.
+
 ### Form + choice + pager
 
 The three-cursor shape for a page with a query, a selectable result, and a

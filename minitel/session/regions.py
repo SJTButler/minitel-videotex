@@ -19,6 +19,8 @@ class RegionState:
     commit: Callable | None = None
     committed: object | None = None
     active: bool = True
+    remove: Callable | None = None
+    commands: dict | None = None
 
     @property
     def is_form(self):

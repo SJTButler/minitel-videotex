@@ -2,6 +2,7 @@
 
 from dataclasses import replace
 
+from ..design.choice import Choice
 from ..protocol import codec
 from .action import Action
 
@@ -81,10 +82,35 @@ class EditingMixin:
         col = field.col + min(len(value), field.width)
         self.screen.set_cursor(field.row, col, self._cursor_visible())
 
+    def _choice_command(self, char):
+        region = self.regions.get(self.focused_region)
+        if region is None or not isinstance(region.cursor, Choice):
+            return None
+        handler = region.commands.get(char) if region.commands else None
+        if handler is None:
+            return None
+        selected = region.cursor.selected
+        if selected is None:
+            return None
+        if region.items is not None:
+            if not 0 <= selected < len(region.items):
+                return None
+            target = region.items[selected]
+        else:
+            target = region.cursor
+        try:
+            handler(target)
+        except Exception:
+            return Action(screen=self._fail_page("command"))
+        return self.refresh()
+
     def text_event(self, event):
         if self.page_error is not None:
             return Action(raw=bytes([codec.BEL]))
         if self.regions and not self._named_form_focused():
+            command = self._choice_command(event.char)
+            if command is not None:
+                return command
             return Action(raw=bytes([codec.BEL]))
         field = self.active_field
         if field is None:

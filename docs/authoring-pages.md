@@ -667,6 +667,7 @@ def render_list(ctx):
 | Form | `form=True`, `on_form=...` | `line_field(...)` / `ctx.add_field(...)` | `SUITE`/`RETOUR` fields, `ENVOI` submits | `ctx.values` holds field values. |
 | Form + results | `@page(regions=(Region("form", kind="form", next="results"), Region("results", kind="pager", prev="form", activate="stay", page_size=8)))` | `line_field(..., region="form")`; `ctx.set_pager(..., region="results")` | Focus moves between regions; `ENVOI` follows `activate` | One form region per page. |
 | Two choices | `@page(regions=(Region("calls", kind="choice", next="trains", page_size=12), Region("trains", kind="choice", prev="calls", page_size=12)))` | `ctx.set_choice(..., region=...)`; read `ctx.region(name).committed` | `ENVOI` commits, boundaries follow edges | Use `prev="page_back"` for a page-owned back stack. |
+| Form + toggle list | `@page(form=True, regions=(Region("items", kind="choice", next="entry", activate="stay", page_size=12), Region("entry", kind="form", prev="page_back")))` | `ctx.set_choice(items, region="items", commit=..., remove=..., commands=...)`; `line_field(..., region="entry")` | `ENVOI` toggles, `CORRECTION` edits, `ANNULATION` removes, `*`/`#` move, `SUITE` moves to the entry form | See `180 NOTES`. |
 | Scroll page | `scroll=True` | `ctx.set_viewport(...)`; optional `ctx.set_stops(...)` | `SUITE`/`RETOUR` stops, `GUIDE` | Pane and scroll modes are mutually exclusive (D047). |
 | Carousel | `@page(...)`, `no_screensaver=True` when it repaints on idle | `ctx.set_pager(..., carousel=Carousel(...))` | `SUITE`/`RETOUR` still page | Session owns the deadline; do not add a page timer. |
 
@@ -773,7 +774,8 @@ Bind runtime data in `render(ctx)` or `on_tick(ctx)`:
 - `ctx.set_pager(items_or_total, *, page_size=None, region=None, key=None,
   offset=None, carousel=None, enabled=True)`.
 - `ctx.set_choice(items_or_total, *, page_size=None, region=None, key=None,
-  selected=None, reset=False, commit=None, enabled=True)`.
+  selected=None, reset=False, commit=None, remove=None, commands=None,
+  enabled=True)`.
 - `ctx.add_field(..., region="form")` or `line_field(..., region="form")`.
   When the page has exactly one form region, `region=` may be omitted.
 - Passing `items` to `set_choice` commits the selected item automatically on
@@ -790,6 +792,17 @@ Bind runtime data in `render(ctx)` or `on_tick(ctx)`:
   uses the page submit path (`on_form` on a form page); `stay` refreshes. The
   page hook reads `ctx.region(name).committed` and hands over focus with
   `ctx.focus_region`.
+- `ANNULATION` on a focused choice calls `remove` for the selected item (or the
+  cursor when only a total is bound) and refreshes. Without `remove` it does
+  nothing; on a form region it still clears the focused field. Removal is
+  immediate, so a confirmation needs a normal page or focusable region.
+- `commands={"*": handler, "#": handler}` binds character keys to a focused
+  Choice. The handler receives the selected item (or the cursor with a
+  total-only binding) and the session refreshes. A character with no binding
+  still rings the bell, and a focused form keeps the character as text.
+- `CORRECTION` on a non-form region reaches the page's `on_key`; on a form it
+  backspaces. `180 NOTES` uses it to load the selected item into its entry
+  form, then saves with `ENVOI`.
 - The session places the terminal cursor only in a focused form field. A
   focused pager or choice hides it; the page draws its own selection/page label.
 - A page without `regions=` keeps the implicit single cursor (`ctx.pager`,
@@ -1584,6 +1597,7 @@ Keep page numbers stable and descriptive. The example scheme is:
 | `161` | Wikipedia article reader, `161#TOKEN` direct entry |
 | `170` | train times, form + paged departures (`7`); `170#FROMTO` direct entry |
 | `171` | rail explorer, Choice+Choice calls/onward departures; `171#FROM` direct entry |
+| `180` | notes, a desk to-do list with a paged Choice and an entry form |
 | `190` | screensaver selector (`9` on the home menu) |
 | `199` | hidden developer page directory; not linked from home |
 | `900` | CLOCK screensaver |
