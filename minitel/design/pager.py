@@ -47,6 +47,12 @@ class Pager:
         offset = self.clamp().offset
         return tuple(items[offset:offset + self.page_size])
 
+    def rows(self, items):
+        """Yield ``(row, index, item)`` for the visible window."""
+        offset = self.clamp().offset
+        for row, item in enumerate(items[offset:offset + self.page_size]):
+            yield row, offset + row, item
+
     def next(self, wrap=False):
         if not self.page_count:
             return Pager(self.total, self.page_size, 0)

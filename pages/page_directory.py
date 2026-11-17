@@ -74,7 +74,6 @@ def _line(page, aliases):
 def page_directory_screen(ctx):
     entries = _entries(ctx.registry)
     pager = ctx.set_pager(len(entries), PAGE_SIZE)
-    visible = pager.window(entries)
 
     s = Screen()
     ctx.set_status("PAGE 199")
@@ -87,9 +86,9 @@ def page_directory_screen(ctx):
         fg=SECONDARY,
         underline=True,
     )
-    for index, entry in enumerate(visible):
+    for row, _index, entry in pager.rows(entries):
         s.text(
-            5 + index,
+            5 + row,
             0,
             _line(entry, ctx.registry.aliases_for(entry)),
         )

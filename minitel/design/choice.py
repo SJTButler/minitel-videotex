@@ -69,6 +69,12 @@ class Choice:
     def window(self, items):
         return self.pager.window(items)
 
+    def rows(self, items):
+        """Yield ``(row, index, item, selected)`` for the visible window."""
+        view = self.clamp()
+        for row, index, item in view.pager.rows(items):
+            yield row, index, item, view.selected == index
+
     def next(self):
         view = self.clamp()
         if not view.total:

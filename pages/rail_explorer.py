@@ -220,10 +220,7 @@ def _draw_pick(screen, ctx, choice, items, snapshot, origin, filter_to):
         f"{'TIME':<5} {'DESTINATION':<21} {'PLT':>3} STATUS",
         fg=SECONDARY,
     )
-    for row, (index, departure) in enumerate(zip(
-        range(choice.offset, choice.offset + len(choice.window(items))),
-        choice.window(items),
-    )):
+    for row, _index, departure, selected in choice.rows(items):
         platform = departure.platform or "-"
         screen.text(
             5 + row,
@@ -233,7 +230,7 @@ def _draw_pick(screen, ctx, choice, items, snapshot, origin, filter_to):
                 f"{departure.destination[:21]:<21} "
                 f"{platform:>3} {departure.status[:8]}"
             )[:40],
-            inverse=(choice.selected == index),
+            inverse=selected,
         )
     screen.text(17, 0, choice.label)
     screen.text(19, 0, "PATH " + " > ".join(ctx.state.get(PATH, [])[-5:]))
@@ -288,24 +285,16 @@ def _draw_explore(
     for row in range(4, 19):
         screen.text(row, 18, "|", fg=SECONDARY)
 
-    for row, (index, stop) in enumerate(zip(
-        range(calls_choice.offset,
-              calls_choice.offset + len(calls_choice.window(calls))),
-        calls_choice.window(calls),
-    )):
+    for row, _index, stop, selected in calls_choice.rows(calls):
         screen.text(
             6 + row,
             0,
             f"{stop.scheduled} {stop.name[:12]:<12}"[:18],
-            inverse=(calls_choice.selected == index),
+            inverse=selected,
         )
 
     if alight:
-        for row, (index, departure) in enumerate(zip(
-            range(trains_choice.offset,
-                  trains_choice.offset + len(trains_choice.window(trains))),
-            trains_choice.window(trains),
-        )):
+        for row, _index, departure, selected in trains_choice.rows(trains):
             platform = departure.platform or "-"
             screen.text(
                 6 + row,
@@ -315,7 +304,7 @@ def _draw_explore(
                     f"{departure.destination[:11]:<11} "
                     f"{platform:>3}"
                 )[:21],
-                inverse=(trains_choice.selected == index),
+                inverse=selected,
             )
     else:
         screen.text(6, 19, "SELECT A CALLING PT", fg=SECONDARY)

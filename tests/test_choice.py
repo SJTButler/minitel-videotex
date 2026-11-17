@@ -36,6 +36,30 @@ class ChoiceValueTests(unittest.TestCase):
         self.assertEqual(wrapped.next().selected, 0)
         self.assertEqual(Choice(Pager(0, 3)).clamp().selected, None)
 
+    def test_rows_marks_selection(self):
+        choice = Choice(Pager(10, 3)).clamp()
+        self.assertEqual(
+            list(choice.rows(ITEMS)),
+            [
+                (0, 0, "R0", True),
+                (1, 1, "R1", False),
+                (2, 2, "R2", False),
+            ],
+        )
+
+        choice = choice.next().next().next()
+        self.assertEqual(
+            list(choice.rows(ITEMS)),
+            [
+                (0, 3, "R3", True),
+                (1, 4, "R4", False),
+                (2, 5, "R5", False),
+            ],
+        )
+
+    def test_rows_empty(self):
+        self.assertEqual(list(Choice(Pager(0, 3)).rows(())), [])
+
 
 class ChoiceSessionTests(unittest.TestCase):
     def make_session(self):

@@ -129,7 +129,7 @@ def _screen(ctx):
         f"{'TIME':<5} {'DESTINATION':<21} {'PLT':>3} STATUS",
         fg=SECONDARY,
     )
-    for row, departure in enumerate(pager.window(departures)):
+    for row, _index, departure in pager.rows(departures):
         platform = departure.platform or "-"
         screen.text(
             6 + row,

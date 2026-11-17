@@ -21,6 +21,27 @@ class PagerTests(unittest.TestCase):
         self.assertEqual(pager.label, "3/3")
         self.assertEqual(pager.window(range(12)), (10, 11))
 
+    def test_rows(self):
+        pager = Pager(12, 5, 5)
+        self.assertEqual(
+            list(pager.rows(range(12))),
+            [(0, 5, 5), (1, 6, 6), (2, 7, 7), (3, 8, 8), (4, 9, 9)],
+        )
+
+    def test_rows_partial_last_page(self):
+        pager = Pager(12, 5, 10)
+        self.assertEqual(
+            list(pager.rows(range(12))),
+            [(0, 10, 10), (1, 11, 11)],
+        )
+
+    def test_rows_clamps_offset_and_handles_empty(self):
+        self.assertEqual(
+            list(Pager(12, 5, 99).rows(range(12))),
+            [(0, 10, 10), (1, 11, 11)],
+        )
+        self.assertEqual(list(Pager(0, 5).rows([])), [])
+
     def test_clamp(self):
         self.assertEqual(Pager(12, 5, 99).clamp().offset, 10)
         self.assertEqual(Pager(12, 5, -3).clamp().offset, 0)

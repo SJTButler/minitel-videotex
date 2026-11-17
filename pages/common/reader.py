@@ -318,15 +318,13 @@ def index_screen(ctx, results, choice, *, title, query, status_text,
     ctx.set_input(3, 8, 28, live=True)
     screen.text(4, 0, fit(status_text, codec.COLS))
 
-    window = choice.window(results)
-    offset = choice.offset
-    for index, result in enumerate(window):
-        row = 6 + index * 2
+    rows = list(choice.rows(results))
+    for row, _index, result, selected in rows:
+        row = 6 + row * 2
         tag_text = result.tag[:8]
         title_width = codec.COLS - (
             len(tag_text) + 1 if tag_text else 0
         )
-        selected = choice.selected == offset + index
         screen.text(
             row, 0, fit(result.title, max(1, title_width)),
             fg=SECONDARY, inverse=selected,
@@ -339,7 +337,7 @@ def index_screen(ctx, results, choice, *, title, query, status_text,
             screen.text(
                 row + 1, 2, fit(result.snippet, codec.COLS - 2)
             )
-    if not window:
+    if not rows:
         screen.text(6, 0, "NO RESULTS", inverse=True)
     pager_text = f"PAGE {choice.label}" if choice.page_count else ""
     screen.text(20, 0, pager_text)
