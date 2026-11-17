@@ -332,7 +332,6 @@ The linked reader is the third source example:
   session cycles all matching targets, starts at the topmost visible match,
   wraps, and reveals off-screen selections. The page still has one viewport and
   one field; stops are viewport metadata, not a second cursor.
-- The two-column/block menu is separate pending work.
 
 `on_tick` may return a complete `Screen`; the session diffs it against the
 shadow screen and restores the input cursor. Raw bytes remain the cheaper choice

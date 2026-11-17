@@ -1512,6 +1512,8 @@ supporting direct entry, use a non-numeric alias or no alias.
 
 Keep page numbers stable and descriptive. The example scheme is:
 
+<!-- page-catalogue:start -->
+
 | Number | Page |
 |---|---|
 | `100` | home / index |
@@ -1538,6 +1540,8 @@ Keep page numbers stable and descriptive. The example scheme is:
 | `903` | BOUNCING BALL screensaver |
 | `910`-`912` | CAROUSEL promo frames |
 | `__not_found__` | fallback |
+
+<!-- page-catalogue:end -->
 
 Page numbers and aliases are keys. Duplicates within one package are startup
 errors; across packages, a later package overrides an earlier claim with a
