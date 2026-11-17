@@ -1,6 +1,5 @@
 """Page 171: rail path explorer over Realtime Trains data."""
 
-import re
 from datetime import datetime
 from zoneinfo import ZoneInfo
 
@@ -12,6 +11,7 @@ from pages.common.service_status import (
     ServiceStatus,
     describe,
 )
+from pages.trains._support.crs import parse_route, valid_crs
 
 PAGE = "171"
 PAGE_SIZE = 12
@@ -27,27 +27,11 @@ TOTAL = "rail_total"
 STACK = "rail_stack"
 ERROR = "rail_error"
 FOCUS = "focus"
-_CRS = re.compile(r"^[A-Z]{3}$")
 LONDON = ZoneInfo("Europe/London")
-
-
-def _valid(value):
-    return bool(_CRS.fullmatch(value))
 
 
 def _current(ctx):
     return f"{PAGE}#{ctx.extension}" if ctx.extension else PAGE
-
-
-def _parse_route(token):
-    if not token:
-        return None
-    token = token.strip().upper()
-    if len(token) == 3 and _valid(token):
-        return token, ""
-    if len(token) == 6 and _valid(token[:3]) and _valid(token[3:]):
-        return token[:3], token[3:]
-    return None
 
 
 def _minutes(value):
@@ -316,7 +300,7 @@ def _screen(ctx):
         ctx.state[TOTAL] = 0
         ctx.state[STACK] = []
     if token is not None:
-        route = _parse_route(token)
+        route = parse_route(token)
         if route is None:
             ctx.state[PHASE] = "blank"
             ctx.state[ERROR] = "USE 171#FROM OR 171#FROMTO"
@@ -443,7 +427,7 @@ def _submit(ctx, line):
             ctx.focus_region("calls")
         else:
             station = str(committed).strip().upper()
-            if not _valid(station):
+            if not valid_crs(station):
                 return _current(ctx)
             base = ctx.state.get(BASE, "")
             path = list(ctx.state.get(PATH, []))

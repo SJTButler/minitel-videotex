@@ -117,7 +117,7 @@ session does not know the path; it only calls the hook at the declared
 boundary. An empty stack follows `back_page`/history. When the popped snapshot
 restores an earlier region key, the session restores that key's remembered
 selection and page, so both panes return to their previous highlights. See
-`pages/rail_explorer.py` and `tests/test_rail_explorer.py`.
+`pages/trains/rail_explorer.py` and `tests/test_rail_explorer.py`.
 
 Do not add a third breadcrumb cursor for the path. The page already knows the
 path; it is content, not navigation.
@@ -387,8 +387,8 @@ need the same thing before that mechanism is promoted.
 
 Real callers:
 
-- `170` train times: `pages/train.py`
-- `171` rail explorer: `pages/rail_explorer.py`
+- `170` train times: `pages/trains/train.py`
+- `171` rail explorer: `pages/trains/rail_explorer.py`
 - news list/detail: `pages/news/`
 - Wikipedia index/article: `pages/wikipedia/`, `pages/common/reader.py`
 - sports live/detail/tables/vidiprinter: `pages/sports/`

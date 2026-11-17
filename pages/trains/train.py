@@ -1,7 +1,5 @@
 """Page 170: train departures from a station."""
 
-import re
-
 from minitel import Region, Screen, codec, page
 
 from pages.common.layout import ACCENT, SECONDARY, WARNING
@@ -11,36 +9,17 @@ from pages.common.service_status import (
     describe,
 )
 from pages.common.widgets import line_field
+from pages.trains._support.crs import parse_route, valid_crs
 
 PAGE = "170"
 PAGE_SIZE = 8
 QUERY = "train_query"
 ERROR = "train_error"
-_CRS = re.compile(r"^[A-Z]{3}$")
-
-
-def _valid(value):
-    return bool(_CRS.fullmatch(value))
-
-
-def _parse_route(token):
-    if not token:
-        return None
-    token = token.strip().upper()
-    if len(token) == 3 and _valid(token):
-        return token, ""
-    if (
-        len(token) == 6
-        and _valid(token[:3])
-        and _valid(token[3:])
-    ):
-        return token[:3], token[3:]
-    return None
 
 
 def _screen(ctx):
     token = ctx.take_extension()
-    route = _parse_route(token) if token is not None else None
+    route = parse_route(token) if token is not None else None
     if token is not None:
         if route is None:
             ctx.state[ERROR] = "USE 170#FROMTO"
@@ -156,11 +135,11 @@ def _screen(ctx):
 def _submit(ctx, values):
     origin = values.get("origin", "").strip().upper()
     destination = values.get("destination", "").strip().upper()
-    if not _valid(origin):
+    if not valid_crs(origin):
         ctx.state[ERROR] = "USE 3-LETTER CRS CODES"
         ctx.focus("origin")
         return PAGE
-    if destination and not _valid(destination):
+    if destination and not valid_crs(destination):
         ctx.state[ERROR] = "USE 3-LETTER CRS CODES"
         ctx.focus("destination")
         return PAGE

@@ -68,8 +68,11 @@ pages/         example site, auto-discovered
   wikipedia/
     index.py    page 160, search index over the wikipedia service
     article.py  page 161, linked article reader
-  train.py      page 170, train departure board over the train service
-  rail_explorer.py page 171, calling points + onward departure explorer
+  trains/
+    train.py      page 170, train departure board over the train service
+    rail_explorer.py page 171, calling points + onward departure explorer
+    _support/
+      crs.py      CRS validation and route-token parsing
   not_found.py fallback
   page_directory.py page 199, hidden developer directory
   news/
