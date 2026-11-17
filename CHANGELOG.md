@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Exported the complete page-authoring surface from `minitel` (`Choice`,
+  `Stop`, `Stops`), standardised pane pages on `ctx.set_status`, and added
+  `Pager.rows` / `Choice.rows` so pages iterate the visible window and the
+  absolute item index without manual offset arithmetic. Added a page-shape and
+  cursor reference to `docs/authoring-pages.md`.
 - Preserved Choice region state across live updates, conditional renders, and
   page back stacks: a same-key Choice keeps and clamps its selected index, a
   removed and re-added region or a restored earlier key returns its selection

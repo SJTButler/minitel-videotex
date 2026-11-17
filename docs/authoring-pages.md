@@ -615,7 +615,7 @@ PAGE_SIZE = 4
 def render_list(ctx):
     items = ...
     pager = ctx.set_pager(len(items), PAGE_SIZE)
-    for index, item in enumerate(pager.window(items)):
+    for row, index, item in pager.rows(items):
         ...
     return screen
 ```
@@ -635,6 +635,11 @@ def render_list(ctx):
   at the last clamps. `ENVOI` reaches `on_submit`, where the page reads
   `ctx.choice.selected` and opens that item. Do not mix a choice with a pager or
   viewport.
+- `pager.rows(items)` yields `(row, index, item)` and `choice.rows(items)`
+  yields `(row, index, item, selected)`. `row` is the position in the visible
+  window; `index` is the absolute item index; `selected` is already clamped.
+  Use `.window(items)` when you need the tuple itself, an empty check, or
+  page-relative numbering.
 - Do not handle `SUITE`/`RETOUR` in `on_key` on a paginated page; the session
   handles them before `on_key`, just as it handles form focus.
 - The offset is remembered per page for the session. Returning from a detail
@@ -645,6 +650,19 @@ def render_list(ctx):
 - A single-region page uses one cursor style: multi-field form focus, a pager,
   choice, or a viewport. A named-region pane page has one cursor per region;
   see **Pane regions** below.
+
+### Page shapes and cursors
+
+| Shape | Declarations | Bind in `render` | Keys | Notes |
+|---|---|---|---|---|
+| Static card | `@page(...)`, no cursor | `return Screen()` | `SOMMAIRE`, `PAGE:` | No session cursor; a tick is opt-in. |
+| Paged list | `@page(...)` | `pager = ctx.set_pager(total, size)`; iterate `pager.rows(items)` | `SUITE`/`RETOUR` page | Session owns offset and remembers it per page. |
+| Selectable list | `@page(...)` | `choice = ctx.set_choice(total, size)`; iterate `choice.rows(items)` | `SUITE`/`RETOUR` move, `ENVOI` submits | `ENVOI` reads `ctx.choice.selected`. |
+| Form | `form=True`, `on_form=...` | `line_field(...)` / `ctx.add_field(...)` | `SUITE`/`RETOUR` fields, `ENVOI` submits | `ctx.values` holds field values. |
+| Form + results | `ctx.set_regions(Region("form", next="results"), Region("results", prev="form", activate="stay"))` | `line_field(..., region="form")`; `ctx.set_pager(..., region="results")` | Focus moves between regions; `ENVOI` follows `activate` | One form region per page. |
+| Two choices | `ctx.set_regions(...)` with `next`/`prev`/`commit` | `ctx.set_choice(..., region=...)`; read `ctx.region(name).committed` | `ENVOI` commits, boundaries follow edges | Use `prev="page_back"` for a page-owned back stack. |
+| Scroll page | `scroll=True` | `ctx.set_viewport(...)`; optional `ctx.set_stops(...)` | `SUITE`/`RETOUR` stops, `GUIDE` | Pane and scroll modes are mutually exclusive (D047). |
+| Carousel | `@page(...)`, `no_screensaver=True` when it repaints on idle | `ctx.set_pager(..., carousel=Carousel(...))` | `SUITE`/`RETOUR` still page | Session owns the deadline; do not add a page timer. |
 
 ## Pane regions
 
