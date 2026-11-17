@@ -167,12 +167,12 @@ Every `render`, `on_submit`, `on_form`, and `on_key` receives a
 | `ctx.add_resource(resource)` | register a per-session object to close on disconnect |
 | `ctx.active_name` | the active field name, including a pending focus |
 | `ctx.values` | all field values for the current page |
-| `ctx.input_value` | the value of the `PAGE:` field |
-| `ctx.clear_input()` | clear the `PAGE:` field |
+| `ctx.input_value` | the value of the ambient `PAGE:` line |
+| `ctx.clear_input()` | clear the ambient `PAGE:` line |
 | `ctx.set_status(text)` | declare the row-0 status label for the default header |
 | `ctx.fields` | the registered fields |
-| `ctx.add_field(name, row, col, width, *, cursor="visible", live=False, visible=True, region=None)` | register a named field |
-| `ctx.set_input(row, col, width, *, cursor="visible", live=False, visible=True, region=None)` | one-field shorthand |
+| `ctx.add_field(name, row, col, width, *, cursor="visible", live=False, visible=True, region=None)` | register a named form field |
+| `ctx.set_input(row, col, width, *, cursor="visible", live=False, visible=True, region=None)` | register the ambient command line |
 | `ctx.set_pager(items_or_total, *, page_size=None, offset=None, carousel=None, region=None, key=None, enabled=True)` | register a session-owned pager, optionally with timed advance |
 | `ctx.pager` | the `Pager` registered for this render |
 | `ctx.set_choice(items_or_total, *, page_size=None, selected=None, reset=False, wrap=False, region=None, key=None, commit=None, enabled=True)` | register a selectable paged list |
@@ -191,7 +191,13 @@ Every `render`, `on_submit`, `on_form`, and `on_key` receives a
 | `ctx.disable_screensaver()` | remove the session screensaver |
 | `ctx.start_screensaver(index=0)` | request an immediate takeover from a handler |
 
-`set_input` is the one-field shorthand; multi-field pages use `add_field`.
+`set_input` registers the ambient command line (the `PAGE:` input and the
+`160` search box); `add_field` registers a form field. An ambient input is not
+a form region and does not count as one. It is always available for text when
+no form region is focused, `ENVOI` submits its text before activating the
+cursor, and moving a cursor clears it unless `live=True`. A page may combine
+one ambient input with one main cursor, but not with form fields or choice
+commands. Multi-field pages use `add_field`.
 Fields tell the session where the cursor belongs and what the maximum length is.
 The cursor policy is `visible` (the default), `hidden` (never show it), or
 `auto` (hide while idle, show while the field is non-empty, and pause ticks
@@ -631,8 +637,11 @@ def render_list(ctx):
   `offset=0` to force the first page after a filter change.
 - The session stores the pager. `SUITE` moves to the next page (wrapping from
   the last page to the first); `RETOUR` moves to the previous page and calls
-  `back()` only from page 1. Moving pages clears the active input field unless
-  the field is live.
+  `back()` only from page 1. Moving pages clears the ambient line unless
+  `live=True`.
+- `set_pager(..., carousel=Carousel(...))` is available on the main pager; the
+  session owns the deadline and advances the same cursor the page sees. Named
+  pager regions do not take carousels yet.
 - For a **selectable** list, use `ctx.set_choice(total, page_size)` instead of
   a pager. The `Choice` owns both the selected item and the outer page.
   `SUITE`/`RETOUR` move the selection through all items; when the selection
@@ -653,9 +662,9 @@ def render_list(ctx):
 - Page-specific error text is the page's responsibility. If it should disappear
   when the page changes, store the offset with the error and clear it when the
   pager offset differs, as `pages/news/hackernews.py` does.
-- A single-region page uses one cursor style: multi-field form focus, a pager,
-  choice, or a viewport. A named-region pane page has one cursor per region;
-  see **Pane regions** below.
+- A single-region page has one main cursor (form, pager, or choice) and may also
+  have one ambient command line. A named-region pane page has one cursor per
+  region; see **Pane regions** below.
 
 ### Page shapes and cursors
 
@@ -663,6 +672,8 @@ def render_list(ctx):
 |---|---|---|---|---|
 | Static card | `@page(...)`, no cursor | `return Screen()` | `SOMMAIRE`, `PAGE:` | No session cursor; a tick is opt-in. |
 | Paged list | `@page(...)` | `pager = ctx.set_pager(total, size)`; iterate `pager.rows(items)` | `SUITE`/`RETOUR` page | Session owns offset and remembers it per page. |
+| Paged list + line | `@page(...)` | `pager = ctx.set_pager(total, size)`; `ctx.set_input(...)` | `SUITE`/`RETOUR` page, `ENVOI` submits the line | `199`; one cursor plus the ambient command line. |
+| Selectable list + live query | `@page(...)` | `choice = ctx.set_choice(total, size)`; `ctx.set_input(..., live=True)` | `SUITE`/`RETOUR` select, `ENVOI` submits the line or opens an empty selection | `160`; the live line survives cursor movement. |
 | Selectable list | `@page(...)` | `choice = ctx.set_choice(total, size)`; iterate `choice.rows(items)` | `SUITE`/`RETOUR` move, `ENVOI` submits | `ENVOI` reads `ctx.choice.selected`. |
 | Form | `form=True`, `on_form=...` | `line_field(...)` / `ctx.add_field(...)` | `SUITE`/`RETOUR` fields, `ENVOI` submits | `ctx.values` holds field values. |
 | Form + results | `@page(regions=(Region("form", kind="form", next="results"), Region("results", kind="pager", prev="form", activate="stay", page_size=8)))` | `line_field(..., region="form")`; `ctx.set_pager(..., region="results")` | Focus moves between regions; `ENVOI` follows `activate` | One form region per page. |
@@ -800,9 +811,9 @@ Bind runtime data in `render(ctx)` or `on_tick(ctx)`:
   Choice. The handler receives the selected item (or the cursor with a
   total-only binding) and the session refreshes. A character with no binding
   still rings the bell, and a focused form keeps the character as text.
-- `CORRECTION` on a non-form region reaches the page's `on_key`; on a form it
-  backspaces. `180 NOTES` uses it to load the selected item into its entry
-  form, then saves with `ENVOI`.
+- `CORRECTION` on a non-form region backspaces the ambient line when one is
+  present; otherwise it reaches the page's `on_key`. On a form it backspaces
+  the focused field. `180 NOTES` uses `on_key` because it has no ambient line.
 - The session places the terminal cursor only in a focused form field. A
   focused pager or choice hides it; the page draws its own selection/page label.
 - A page without `regions=` keeps the implicit single cursor (`ctx.pager`,

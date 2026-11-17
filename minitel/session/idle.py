@@ -196,15 +196,21 @@ class IdleMixin:
                 return Action()
         else:
             target = allowed[0]
-        self.pager = type(self.pager)(
+        pager = type(self.pager)(
             self.pager.total,
             self.pager.page_size,
             target * self.pager.page_size,
         )
-        self.pagers[self.current.number] = self.pager
+        main = self.regions.get("main")
+        if main is not None and main.definition.kind == "pager":
+            main.cursor = pager
+            self._remember_region_offsets()
+        else:
+            self.pager = pager
+        self.pagers[self.current.number] = pager
         self._pager_carousel_key = (
-            self.pager.page_size,
-            self.pager.offset,
+            pager.page_size,
+            pager.offset,
             carousel,
         )
         self._pager_carousel_next = now + carousel.hold

@@ -66,6 +66,8 @@ class Session(
         self.active = 0
         self.active_name = None
         self.requested_focus = None
+        self._pager = None
+        self._choice = None
         self.pager = None
         self.pagers = {}
         self.viewport = None
@@ -122,6 +124,30 @@ class Session(
     def echo_override(self):
         """Assert the terminal's local echo mode for this session."""
         return codec.echo_mode(not self.echo)
+
+    @property
+    def pager(self):
+        """The main-region pager, or the legacy composite pager."""
+        main = self.regions.get("main")
+        if main is not None and isinstance(main.cursor, Pager):
+            return main.cursor
+        return self._pager
+
+    @pager.setter
+    def pager(self, value):
+        self._pager = value
+
+    @property
+    def choice(self):
+        """The main-region Choice, or the legacy composite Choice."""
+        main = self.regions.get("main")
+        if main is not None and isinstance(main.cursor, Choice):
+            return main.cursor
+        return self._choice
+
+    @choice.setter
+    def choice(self, value):
+        self._choice = value
 
     def _touch(self):
         now = self.clock()
@@ -332,25 +358,24 @@ class Session(
                 return name
         return None
 
-    def _adopt_main_region(self, ctx):
+    def _is_pure_pane(self, ctx):
         if self.current.scroll or ctx._viewport_set:
-            self.regions = {}
-            self.focused_region = None
-            self.regions_default_focus = None
-            return
-        kinds = sum(
-            (
-                bool(ctx.fields),
-                ctx.choice is not None,
-                ctx.pager is not None,
+            return False
+        fields = tuple(field for field in ctx.fields if not field.ambient)
+        return (
+            sum(
+                (
+                    bool(fields),
+                    ctx.choice is not None,
+                    ctx.pager is not None,
+                )
             )
+            == 1
         )
-        if kinds != 1:
-            self.regions = {}
-            self.focused_region = None
-            self.regions_default_focus = None
-            return
-        if ctx.fields:
+
+    def _adopt_main_region(self, ctx):
+        fields = tuple(field for field in ctx.fields if not field.ambient)
+        if fields:
             kind = "form"
             cursor = None
             page_size = None
@@ -362,36 +387,41 @@ class Session(
             kind = "pager"
             cursor = ctx.pager
             page_size = ctx.pager.page_size
-        definition = MainRegion(kind, page_size)
-        self.regions = {
-            "main": RegionState(
-                definition,
+        state = self.regions.get("main")
+        if state is None or state.definition.kind != kind:
+            state = RegionState(
+                MainRegion(kind, page_size),
                 cursor,
                 None,
-                tuple(ctx.fields),
+                fields,
                 None,
                 None,
                 None,
                 True,
             )
-        }
+            self.regions = {"main": state}
+        else:
+            state.definition = MainRegion(kind, page_size)
+            state.cursor = cursor
+            state.key = None
+            state.fields = fields
+            state.items = None
+            state.commit = None
+            state.committed = None
+            state.remove = None
+            state.commands = None
+            state.active = True
         self.focused_region = "main"
         self.regions_default_focus = "main"
         self.requested_focus_region = None
         self._focus_memory[self.current.number] = "main"
-        self._remember_region_offsets()
-
-    def _sync_main_cursor(self):
-        if self.focused_region != "main":
-            return
-        state = self.regions.get("main")
-        if state is None or state.cursor is None:
-            return
-        if isinstance(state.cursor, Choice):
-            self.choice = state.cursor
+        if kind == "pager":
+            self.pagers[self.current.number] = cursor
+            self._adopt_pager_carousel(cursor, ctx.pager_carousel)
         else:
-            self.pager = state.cursor
-            self.pagers[self.current.number] = state.cursor
+            self.pagers.pop(self.current.number, None)
+            self._clear_pager_carousel()
+        self._remember_region_offsets()
 
     def _adopt_region_tick(self, ctx):
         for name in ctx._region_order:
@@ -562,7 +592,7 @@ class Session(
         if moved == cursor:
             return self._region_edge(region, direction)
         region.cursor = moved
-        self._sync_main_cursor()
+        self._clear_ambient_field()
         self._remember_region_offsets()
         return self.refresh()
 
@@ -570,10 +600,16 @@ class Session(
         region = self.regions.get(self.focused_region)
         if region is None:
             return Action()
-        if name == "CORRECTION" and region.is_form:
-            return self.correction()
+        if name == "CORRECTION":
+            if region.is_form:
+                return self.correction()
+            if self._ambient_field() is not None:
+                return self.correction()
         if name == "ANNULATION":
             if region.is_form:
+                return self.annulation()
+            ambient = self._ambient_field()
+            if ambient is not None and self.values.get(ambient.name):
                 return self.annulation()
             if isinstance(region.cursor, Choice) and region.remove is not None:
                 selected = region.cursor.selected
@@ -590,6 +626,8 @@ class Session(
                 except Exception:
                     return Action(screen=self._fail_page("remove"))
                 return self.refresh()
+            if ambient is not None:
+                return self.annulation()
             return Action()
         if name == "SUITE":
             return self._step_region(region, 1)
@@ -696,16 +734,12 @@ class Session(
         if errors:
             raise errors[0]
 
-    def _adopt_pager(self, pager, carousel):
-        if pager is None:
-            self.pager = None
-            self.pagers.pop(self.current.number, None)
-            self._pager_carousel = None
-            self._pager_carousel_next = None
-            self._pager_carousel_key = None
-            return
-        self.pager = pager
-        self.pagers[self.current.number] = pager
+    def _clear_pager_carousel(self):
+        self._pager_carousel = None
+        self._pager_carousel_next = None
+        self._pager_carousel_key = None
+
+    def _adopt_pager_carousel(self, pager, carousel):
         key = (pager.page_size, pager.offset, carousel)
         allowed = (
             carousel.allowed(pager.page_count)
@@ -728,6 +762,16 @@ class Session(
                 self._pager_carousel_next = None
         else:
             self._pager_carousel = carousel
+
+    def _adopt_pager(self, pager, carousel):
+        if pager is None:
+            self.pager = None
+            self.pagers.pop(self.current.number, None)
+            self._clear_pager_carousel()
+            return
+        self.pager = pager
+        self.pagers[self.current.number] = pager
+        self._adopt_pager_carousel(pager, carousel)
 
     def _adopt_viewport(self, viewport):
         if viewport is None:
@@ -838,13 +882,34 @@ class Session(
                     f"page {self.current.number!r} cannot declare both form "
                     "fields and a choice"
                 )
+            ambient = [field for field in ctx.fields if field.ambient]
+            form_fields = [field for field in ctx.fields if not field.ambient]
+            if len(ambient) > 1:
+                raise ValueError(
+                    f"page {self.current.number!r} cannot declare more than "
+                    "one ambient input"
+                )
+            if ambient and form_fields:
+                raise ValueError(
+                    f"page {self.current.number!r} cannot mix an ambient "
+                    "input with form fields"
+                )
+            if ambient and any(ctx._region_commands.values()):
+                raise ValueError(
+                    f"page {self.current.number!r} cannot mix an ambient "
+                    "input with choice commands"
+                )
             if ctx._regions_declared:
                 self._adopt_named_regions(ctx)
                 self.pager = None
-                self.pager_carousel = None
+                self.choice = None
                 self.viewport = None
                 self.stops = None
-                self.choice = None
+                self._clear_pager_carousel()
+            elif self._is_pure_pane(ctx):
+                self._adopt_main_region(ctx)
+                self.viewport = None
+                self.stops = None
             else:
                 self.regions = {}
                 self.focused_region = None
@@ -856,7 +921,6 @@ class Session(
                 )
                 self.stops = ctx.stops if ctx._stops_set else None
                 self.choice = ctx.choice if ctx._choice_set else None
-                self._adopt_main_region(ctx)
             self.fields = ctx.fields
             names = [field.name for field in self.fields]
             self.values = {name: self.values.get(name, "") for name in names}
@@ -876,6 +940,7 @@ class Session(
             if (
                 ctx._regions_declared
                 and not self._named_form_focused()
+                and self._ambient_field() is None
             ):
                 screen.set_cursor(codec.ROWS - 1, 0, False)
             elif field is not None and field.visible:
@@ -932,16 +997,21 @@ class Session(
             self.status_text = ctx.status
         if not self.screensaver_active and ctx._regions_declared:
             self._adopt_region_tick(ctx)
-        elif not self.screensaver_active and ctx.pager is not None:
-            self._adopt_pager(ctx.pager, ctx.pager_carousel)
-        if not self.screensaver_active and ctx._viewport_set:
-            self._adopt_viewport(ctx.viewport)
-        if not self.screensaver_active and ctx._stops_set:
-            self.stops = ctx.stops
-        if not self.screensaver_active and ctx._choice_set:
-            self.choice = ctx.choice
-        if not self.screensaver_active and not ctx._regions_declared:
+        elif not self.screensaver_active and self._is_pure_pane(ctx):
             self._adopt_main_region(ctx)
+        elif not self.screensaver_active:
+            self.regions = {}
+            self.focused_region = None
+            self.requested_focus_region = None
+            self.regions_default_focus = None
+            if ctx.pager is not None:
+                self._adopt_pager(ctx.pager, ctx.pager_carousel)
+            if ctx._viewport_set:
+                self._adopt_viewport(ctx.viewport)
+            if ctx._stops_set:
+                self.stops = ctx.stops
+            if ctx._choice_set:
+                self.choice = ctx.choice
         if frame is None:
             return Action()
         if isinstance(frame, (bytes, bytearray)):
@@ -955,7 +1025,11 @@ class Session(
         if isinstance(frame, Screen):
             if self.screensaver_active:
                 frame.set_cursor(codec.ROWS - 1, 0, False)
-            elif ctx._regions_declared and not self._named_form_focused():
+            elif (
+                ctx._regions_declared
+                and not self._named_form_focused()
+                and self._ambient_field() is None
+            ):
                 frame.set_cursor(codec.ROWS - 1, 0, False)
             else:
                 field = self.active_field
@@ -1022,6 +1096,8 @@ class Session(
             return self.text_event(event)
         if isinstance(event, codec.Enter):
             if self.regions:
+                if self._ambient_pending():
+                    return self.submit()
                 return self._activate_region()
             return self.submit()
         if isinstance(event, codec.Function):

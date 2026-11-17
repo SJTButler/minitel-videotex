@@ -214,15 +214,16 @@ class PageContext:
         return self._session.requested_focus or self._session.active_name
 
     def add_field(self, name, row, col, width, *, value="",
-                  cursor="visible", live=False, visible=True, region=None):
+                  cursor="visible", live=False, visible=True, region=None,
+                  ambient=False):
         if cursor not in CURSOR_MODES:
             raise ValueError(f"cursor must be one of {CURSOR_MODES}")
-        if region is not None or self._regions_declared:
+        if not ambient and (region is not None or self._regions_declared):
             self._claim_form_region(region)
         if self._tick:
             return self._redeclare_tick_field(
                 name, row, col, width, value=value, cursor=cursor,
-                live=live, visible=visible,
+                live=live, visible=visible, ambient=ambient,
             )
         if self.page.form and self._choice_set:
             raise ValueError(
@@ -234,7 +235,7 @@ class PageContext:
             raise ValueError(f"duplicate field name {name!r}")
         field = InputField(
             name, row, col, width, value=value, cursor=cursor,
-            live=live, visible=visible,
+            live=live, visible=visible, ambient=ambient,
         )
         self.fields.append(field)
         self.values.setdefault(name, value)
@@ -279,10 +280,10 @@ class PageContext:
         existing = self._tick_fields[self._tick_field_index]
         declared = (name, row, col, width,
                     attrs["value"], attrs["cursor"],
-                    attrs["live"], attrs["visible"])
+                    attrs["live"], attrs["visible"], attrs["ambient"])
         current = (existing.name, existing.row, existing.col, existing.width,
                    existing.value, existing.cursor,
-                   existing.live, existing.visible)
+                   existing.live, existing.visible, existing.ambient)
         if declared != current:
             raise ValueError(
                 "a page tick cannot change input fields"
@@ -303,7 +304,7 @@ class PageContext:
         return self.add_field(
             LINE_FIELD, row, col, width,
             value=value, cursor=cursor, live=live, visible=visible,
-            region=region,
+            region=region, ambient=True,
         )
 
     def set_status(self, text):
@@ -345,7 +346,15 @@ class PageContext:
                 offset = current.offset
             else:
                 stored = self._session.pagers.get(self.page.number)
-                offset = stored.offset if stored is not None else 0
+                remembered = self._session._region_memory.get(
+                    (self.page.number, "main", None)
+                )
+                if stored is not None:
+                    offset = stored.offset
+                elif isinstance(remembered, int):
+                    offset = remembered
+                else:
+                    offset = 0
         self.pager = Pager(total, page_size, offset).clamp()
         self.pager_carousel = carousel
         return self.pager

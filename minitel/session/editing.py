@@ -38,6 +38,25 @@ class EditingMixin:
         if field is not None and not field.live:
             self.values[field.name] = ""
 
+    def _ambient_field(self):
+        for field in self.fields:
+            if field.ambient:
+                return field
+        return None
+
+    def _ambient_pending(self):
+        if self._named_form_focused():
+            return False
+        field = self._ambient_field()
+        if field is None:
+            return False
+        return bool(self.values.get(field.name, "").strip())
+
+    def _clear_ambient_field(self):
+        field = self._ambient_field()
+        if field is not None and not field.live:
+            self.values[field.name] = ""
+
     def _cursor_visible(self):
         field = self.active_field
         if field is None or not field.visible:
@@ -108,11 +127,14 @@ class EditingMixin:
         if self.page_error is not None:
             return Action(raw=bytes([codec.BEL]))
         if self.regions and not self._named_form_focused():
-            command = self._choice_command(event.char)
-            if command is not None:
-                return command
-            return Action(raw=bytes([codec.BEL]))
-        field = self.active_field
+            field = self._ambient_field()
+            if field is None:
+                command = self._choice_command(event.char)
+                if command is not None:
+                    return command
+                return Action(raw=bytes([codec.BEL]))
+        else:
+            field = self.active_field
         if field is None:
             return Action(raw=bytes([codec.BEL]))
         value = self.values.get(field.name, "")

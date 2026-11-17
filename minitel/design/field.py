@@ -13,3 +13,4 @@ class InputField:
     cursor: str = "visible"
     live: bool = False
     visible: bool = True
+    ambient: bool = False
