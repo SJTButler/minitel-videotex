@@ -2,6 +2,22 @@
 
 ## Unreleased
 
+- Hardened the page/runtime boundary after the 2026-11-18 external review.
+  Double-width and double-height characters now use explicit continuation
+  cells, so renders, diffs, the virtual Minitel, and the client agree on the
+  physical span; writes into a reserved row or a covered cell are rejected.
+  `ENVOI` and `CR` both submit a pending ambient line, a region page can start
+  the screensaver without a callable-attribute crash, and `REPETITION`
+  repaints the page. Runtime `KeyError`/`ValueError`/`TypeError` in page code
+  now show `PAGE ERROR` instead of closing the connection, while page
+  declaration errors still fail tests. Also fixed the `ResourceCache` eviction
+  race, the quadratic power-signal scan, the missing `ÿ` decoder, and SQLite
+  WAL/busy-timeout settings.
+- Added the optional `minitel_kit` package for `Column`/`Table` and clipped
+  `Rect` panes. It sits outside `minitel/`, depends only on `Screen`, and is
+  used by the `170`/`171` train boards; services can import it or draw the same
+  cells themselves.
+
 - Added the `180 NOTES` desk to-do list: a pane page with a paged Choice of
   open/done items above a one-line entry form, backed by a session-created
   SQLite store. `ENVOI` toggles the selected item or saves an edit,

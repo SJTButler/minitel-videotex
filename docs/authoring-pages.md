@@ -442,6 +442,16 @@ Cell attributes:
 | `underline` | `True` / `False` |
 | `size` | `codec.NORMAL`, `DOUBLE_HEIGHT`, `DOUBLE_WIDTH`, `DOUBLE_SIZE` |
 
+Double-width and double-height attributes span more than one screen cell.
+`DOUBLE_WIDTH` and `DOUBLE_SIZE` use two columns per character, so a row holds
+at most 20 such characters. `DOUBLE_HEIGHT` and `DOUBLE_SIZE` also occupy the
+row below the anchor row. That row is reserved: leave it blank, and do not draw
+other content into it. `Screen.text` records the continuation cells and rejects
+overlapping writes; the renderer, virtual Minitel, and terminal client skip
+them. Double-size attributes are not usable in G1 mosaic mode. Cursor
+positioning resets the size to normal, so the renderer always emits position,
+then size, then text.
+
 Use `codec.text` for accents and special characters. `Screen.text` accepts
 Unicode; the renderer encodes it through `codec.text` and raises on characters
 the Minitel cannot represent.
@@ -575,7 +585,8 @@ from pages.common.widgets import form_footer, line_field
   parameter has been removed rather than left as a promise.
 - A `form=True` page with fields cannot also declare a `Choice`, `Pager`, or
   `Viewport`. Use `form=False` for the reader-style single live field, which
-  may coexist with a viewport or pager (D035).
+  may coexist with a viewport or pager: the field is hidden or live and the
+  cursor owns navigation.
 - Draw the field bar and its value with the same attributes. The renderer
   leaves the terminal pen set to the cursor cell at the end of a paint, and
   focus moves do the same, so typed text matches the field style. An inverse
@@ -679,7 +690,7 @@ def render_list(ctx):
 | Form + results | `@page(regions=(Region("form", kind="form", next="results"), Region("results", kind="pager", prev="form", activate="stay", page_size=8)))` | `line_field(..., region="form")`; `ctx.set_pager(..., region="results")` | Focus moves between regions; `ENVOI` follows `activate` | One form region per page. |
 | Two choices | `@page(regions=(Region("calls", kind="choice", next="trains", page_size=12), Region("trains", kind="choice", prev="calls", page_size=12)))` | `ctx.set_choice(..., region=...)`; read `ctx.region(name).committed` | `ENVOI` commits, boundaries follow edges | Use `prev="page_back"` for a page-owned back stack. |
 | Form + toggle list | `@page(form=True, regions=(Region("items", kind="choice", next="entry", activate="stay", page_size=12), Region("entry", kind="form", prev="page_back")))` | `ctx.set_choice(items, region="items", commit=..., remove=..., commands=...)`; `line_field(..., region="entry")` | `ENVOI` toggles, `CORRECTION` edits, `ANNULATION` removes, `*`/`#` move, `SUITE` moves to the entry form | See `180 NOTES`. |
-| Scroll page | `scroll=True` | `ctx.set_viewport(...)`; optional `ctx.set_stops(...)` | `SUITE`/`RETOUR` stops, `GUIDE` | Pane and scroll modes are mutually exclusive (D047). |
+| Scroll page | `scroll=True` | `ctx.set_viewport(...)`; optional `ctx.set_stops(...)` | `SUITE`/`RETOUR` stops, `GUIDE` | Mutually exclusive with pane regions: hardware scroll is cheap, software sub-pane scroll is not. |
 | Carousel | `@page(...)`, `no_screensaver=True` when it repaints on idle | `ctx.set_pager(..., carousel=Carousel(...))` | `SUITE`/`RETOUR` still page | Session owns the deadline; do not add a page timer. |
 
 ## Pane regions
@@ -824,10 +835,39 @@ Bind runtime data in `render(ctx)` or `on_tick(ctx)`:
 - On a tick the page rebinds data but cannot change the static graph. A key or
   item total may change; adding a field, changing focus, or changing topology
   is a tick-contract violation.
-- Pane regions and scroll pages are mutually exclusive (D047). A region page
-  cannot use `set_viewport`/`set_stops`; a scroll page cannot declare regions.
+- Pane regions and scroll pages are mutually exclusive. A region page cannot
+  use `set_viewport`/`set_stops`; a scroll page cannot declare regions. This is
+  a 1200-baud cost rule, not a limitation of the cursor model. Hardware scroll
+  (`LF`/`VT`) moves all of rows 1-24 in tens of bytes. Software-scrolling a
+  10-row sub-pane repaints all 10 rows, roughly 400-1000 bytes, or 3-7 seconds
+  at 133 characters per second. For scrollable text inside a multi-region page,
+  use a pager region over wrapped lines; use a scroll page for a full-height
+  reader.
 - `ctx.set_regions(...)` is removed. Declare topology on `@page` and bind data
   in `render`.
+
+The 1200-baud difference is worth seeing explicitly:
+
+| Update | Approx. bytes | Time at 133 cps |
+|---|---|---|
+| Hardware scroll of rows 1-24 (`LF`/`VT`) | 40-50 | 0.3-0.4 s |
+| Repaint a 10-row sub-pane | 400-1000 | 3-7.5 s |
+| Full 24-row page | 600-1000 | 4.5-7.5 s |
+
+A sub-pane scroll is therefore 10-30x the wire cost of a hardware scroll. Use
+a pager region over wrapped lines when a multi-region page needs to read more
+text; use a scroll page when the whole body is the reader.
+
+### Why regions and cursors have no geometry
+
+A `Region` names an interaction and its boundary edges; it does not own a
+`(row, col, width, height)`. Geometry belongs to the `Screen` built in
+`render(ctx)`. This keeps the session independent of screen coordinates: a page
+can move its result list when a status line appears, reuse the same region for
+a different layout, or draw the same pane at a different place on the next
+render. The session owns focus, cursor state, and remembered offsets; the page
+owns where the pane appears. If a page needs clipped drawing or a table, use an
+optional helper (see `minitel_kit` below) or draw the cells directly.
 
 The synthetic and caller tests live in `tests/test_regions.py`,
 `tests/test_region_state.py`, and `tests/test_region_conformance.py`; the first
@@ -835,6 +875,35 @@ real callers are the train times page (`170`) and the rail explorer (`171`).
 For worked layouts, shape choices, direct-entry advice, and anti-patterns, see
 [`page-recipes.md`](page-recipes.md). That catalogue is subordinate to this
 contract: it never defines API or overrides a rule here.
+
+## Optional drawing kit (`minitel_kit`)
+
+`minitel_kit` is an optional top-level package for pages that want common
+drawing helpers without putting them in the core. It depends only on `minitel`
+and is never imported by `minitel/`; a service can import it, replace it, or
+draw the same cells itself.
+
+```python
+from minitel_kit import Column, Rect, Table
+
+departures = Table(
+    Column("TIME", 5),
+    Column("DESTINATION", 21),
+    Column("PLT", 3, align="right"),
+    Column("STATUS", 8),
+)
+departures.header(screen, 5, attrs={"fg": SECONDARY})
+departures.row(screen, 6, ("12:00", "OXFORD", "2", "ON TIME"))
+
+detail = Rect(top=4, left=19, height=17, width=21)
+detail.text(screen, 0, 0, "OXFORD")
+```
+
+`Table` owns fixed column widths, alignment, truncation, gap, and per-column
+attributes. `Rect` owns clipped, relative drawing inside a region. Both are
+ordinary `Screen` writers: they do not own cursors, focus, or session state.
+Use them when the geometry is fixed; use direct `Screen` calls for custom
+layouts.
 
 ## Scroll viewports
 
@@ -1457,7 +1526,11 @@ The library pieces:
   Remote text is not guaranteed to be encodable: HTML tags, entities, curly
   quotes, emoji, and non-Latin scripts will crash the renderer if passed
   straight to `Screen.text`. Run every fetched title, author, domain, and
-  comment through `sanitize` first.
+  comment through `sanitize` first. `sanitize` deliberately uppercases and
+  transliterates to one-byte ASCII: it is a safety boundary for untrusted text,
+  and every G2 accented character costs three bytes on the wire. Curated page
+  copy can use native `codec.text` accents and symbols such as `°` and `£`
+  where they are worth the bytes.
 - `minitel/design/pager.py` - a frozen `Pager(total, page_size, offset)` with
   `clamp()`, `window()`, `next(wrap=True)`, `prev(wrap=True)`, and `label`.
 
@@ -1709,11 +1782,18 @@ for the rest of the session. A tick may re-declare identical fields so a shared
 Announcement providers are isolated per channel: a provider exception is logged
 and that channel is skipped, so one bad source does not blank the page.
 
-Page **declaration** errors are different: `ValueError`, `TypeError`, and an
-undeclared service `KeyError` from `ctx.set_input`, `add_field`, `set_choice`,
-`set_pager`, `set_viewport`, or `ctx.service` are development errors. They
-still raise, so page tests fail at the declaration site instead of silently
-showing the error screen. The same applies to a page returning a non-`Screen`.
+Page **declaration** errors are different. A contract violation from
+`ctx.set_input`, `add_field`, `set_choice`, `set_pager`, `set_viewport`,
+`ctx.service`, or an invalid declared paint mode raises a
+`PageDeclarationError` (or its TypeError/KeyError sibling). These are
+development errors: they still raise, so page tests fail at the declaration
+site instead of silently showing the error screen. Wrong keyword arguments on
+the page-context API are also declaration errors.
+
+Ordinary runtime exceptions inside page code - a `ValueError` from parsing
+remote data, a missing key, a `TypeError`, or a `Screen.text` overflow - are
+caught by the session boundary and show `PAGE ERROR`. They do not close the
+connection. The same applies to a page returning a non-`Screen`.
 
 ## Testing a page
 
@@ -1883,7 +1963,8 @@ The library boundaries are deliberate:
 - Keep the `PAGE:` field at row 20 and the footer at row 22.
 - Page copy is English. Only the Minitel key names (`ENVOI`, `RETOUR`,
   `SUITE`, `SOMMAIRE`, `GUIDE`, `CORRECTION`, `ANNULATION`) stay French.
-- Design uppercase-first; accents cost three bytes each.
+- Design uppercase-first; accents cost three bytes each. Use `sanitize` for
+  remote text, and native accents only for short curated strings.
 - Sanitize remote text with `minitel.text.sanitize` and wrap it with
   `minitel.text.wrap` before drawing.
 - Prefer `REP`-friendly runs (the renderer already compresses runs of 3+).

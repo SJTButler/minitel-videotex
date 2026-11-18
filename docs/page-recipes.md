@@ -36,7 +36,7 @@ Defaults worth keeping:
 - **Commit on `ENVOI`** when one pane chooses what the other pane shows. Live
   preview repaints the second pane on every cursor move at 1200 baud and makes
   `RETOUR` semantics ambiguous.
-- **Rows 1-24 belong to the page.** Row 0 is the header (D039). A footer inside
+- **Rows 1-24 belong to the page.** Row 0 is the header. A footer inside
   the body is page drawing and costs its row bytes on every scroll update.
 
 ## Pane recipes
@@ -272,8 +272,17 @@ hardcoded list.
 
 Scroll pages declare `scroll=True`. They use hardware `LF`/`VT`; the renderer
 moves the terminal, not a pane window. Pane and scroll modes are mutually
-exclusive (D047): no `Pager`, `Choice`, `Carousel`, or form region on a scroll
-page, and no viewport region on a pane page.
+exclusive: no `Pager`, `Choice`, `Carousel`, or form region on a scroll page,
+and no viewport region on a pane page. The rule follows the 1200-baud budget:
+
+| Update | Approx. bytes | Time at 133 cps |
+|---|---|---|
+| Hardware scroll of rows 1-24 | 40-50 | 0.3-0.4 s |
+| Repaint a 10-row sub-pane | 400-1000 | 3-7.5 s |
+
+A software sub-pane scroll repaints every visible row, so it is 10-30x the
+wire cost. Use a scroll page for a full-height reader; page wrapped lines
+inside a pane page when the body must stay beside a form or list.
 
 ### Article reader with a pane index (`160` -> `161`)
 
@@ -356,7 +365,8 @@ the route and the page validates the token.
   boundaries. A page that handles them in `on_key` will disagree with focus,
   history, and the screensaver.
 - **A viewport region inside a pane page.** The two modes are exclusive
-  (D047). Use a scroll page, or split the content.
+  because hardware scroll is full-body and cheap, while a software pane scroll
+  repaints every visible row. Use a scroll page, or page wrapped lines instead.
 - **Two live scroll regions.** A pane cannot offer a second hardware scroll
   area; hardware scroll moves all body rows.
 - **Fixed in-body chrome under a scroll.** It must be repainted on every

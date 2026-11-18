@@ -9,6 +9,20 @@ baud, grey palette. The M2 profile models are reserved for future capability
 work; detection, per-session speed, colour, DRCS, and 80-column mixed mode are
 not wired.
 
+## Design envelope
+
+- **Screen**: 40 columns x 25 rows. Row 0 is status/header; rows 1-24 are body.
+- **Link**: 1200 baud, about 133 characters per second. A full page is several
+  seconds; diffs and `REP` runs matter.
+- **Text**: one-byte uppercase ASCII is the safe default. A G2 accented
+  character costs three bytes, so curated accents are the exception.
+- **Scroll**: hardware `LF`/`VT` moves rows 1-24 in tens of bytes. A software
+  sub-pane scroll repaints every visible row and costs 10-30x more.
+- **Size**: double width uses two columns per character (at most 20 per row);
+  double height reserves the row below. Mosaics are not wired yet.
+- **Navigation**: the session owns cursors, history, focus, pauses, and the
+  screensaver. Pages declare fields, pagers, choices, regions, and scroll mode.
+
 ## Layout
 
 ```
@@ -38,6 +52,7 @@ minitel/       reusable, content-free library
   app.py               registry + profile + session + transport + services
   transport.py         TCP and connection-level pacing
   text.py              remote text sanitising, fit/wrap, domain, age
+minitel_kit/   optional Table/Rect drawing helpers on top of Screen
 run_server.py  example CLI wiring: pages + services + MinitelApp
 services/      background services, auto-discovered
   common/
@@ -273,6 +288,9 @@ The news service is the worked example:
 - `minitel/text.py` strips HTML, unescapes entities, transliterates typographic
   punctuation and accents, drops emoji, and wraps to the 40-column screen. Every
   remote title, author, domain, and comment goes through it before `Screen.text`.
+- `minitel_kit/` is optional: `Column`/`Table` and clipped `Rect` helpers draw
+  into a `Screen`, but the core never imports them. Use them or keep your own
+  geometry.
 - `minitel/design/pager.py` provides the `Pager` used by the four-story list.
 - `minitel/data/http.py` provides `get_json()` and `HttpError` for cache threads.
 - `pages/common/layout.py` exposes `BODY`, `ACCENT`, `SECONDARY`, and `WARNING`.
