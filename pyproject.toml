@@ -34,7 +34,7 @@ build-backend = "hatchling.build"
 package = true
 
 [tool.hatch.build.targets.wheel]
-packages = ["minitel"]
+packages = ["minitel", "minitel_kit"]
 
 [tool.hatch.build]
 exclude = [

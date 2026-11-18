@@ -1,4 +1,5 @@
 import ast
+import sys
 import unittest
 from pathlib import Path
 
@@ -9,6 +10,7 @@ ROOT = Path(__file__).resolve().parents[1]
 COMMON = ROOT / "pages" / "common"
 DESIGN = ROOT / "minitel" / "design"
 MINITEL = ROOT / "minitel"
+KIT = ROOT / "minitel_kit"
 
 TIMER_MODULES = {"asyncio", "sched", "threading"}
 
@@ -38,6 +40,36 @@ class LibraryBoundaryTests(unittest.TestCase):
                 )
                 self.assertFalse(
                     module == "services" or module.startswith("services."),
+                    f"{path} imports {module}",
+                )
+
+    def test_minitel_does_not_import_the_optional_kit(self):
+        for path in sorted(MINITEL.rglob("*.py")):
+            if "__pycache__" in path.parts:
+                continue
+            for module in imported_modules(path):
+                self.assertFalse(
+                    module == "minitel_kit" or module.startswith("minitel_kit."),
+                    f"{path} imports {module}",
+                )
+
+    def test_kit_depends_only_on_minitel(self):
+        for path in sorted(KIT.rglob("*.py")):
+            if "__pycache__" in path.parts:
+                continue
+            for module in imported_modules(path):
+                self.assertFalse(
+                    module == "pages" or module.startswith("pages."),
+                    f"{path} imports {module}",
+                )
+                self.assertFalse(
+                    module == "services" or module.startswith("services."),
+                    f"{path} imports {module}",
+                )
+                self.assertTrue(
+                    module == "minitel"
+                    or module.startswith("minitel.")
+                    or module.split(".")[0] in sys.stdlib_module_names,
                     f"{path} imports {module}",
                 )
 

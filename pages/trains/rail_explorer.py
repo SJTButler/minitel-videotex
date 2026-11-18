@@ -4,6 +4,7 @@ from datetime import datetime
 from zoneinfo import ZoneInfo
 
 from minitel import PAGE_BACK, Region, Screen, codec, page
+from minitel_kit import Rect
 
 from pages.common.layout import ACCENT, SECONDARY, WARNING
 from pages.common.service_status import (
@@ -12,6 +13,14 @@ from pages.common.service_status import (
     describe,
 )
 from pages.trains._support.crs import parse_route, valid_crs
+from pages.trains._support.departures import (
+    calls_header,
+    calls_row,
+    right_header,
+    right_row,
+    train_header,
+    train_row,
+)
 
 PAGE = "171"
 PAGE_SIZE = 12
@@ -177,23 +186,9 @@ def _draw_pick(screen, ctx, choice, items, snapshot, origin, filter_to):
         screen.text(3, 0, f"TO {filter_to}"[:40], fg=SECONDARY)
     else:
         screen.text(3, 0, status_info.text[:40], fg=status_info.colour)
-    screen.text(
-        4, 0,
-        f"{'TIME':<5} {'DESTINATION':<21} {'PLT':>3} STATUS",
-        fg=SECONDARY,
-    )
+    train_header(screen, 4)
     for row, _index, departure, selected in choice.rows(items):
-        platform = departure.platform or "-"
-        screen.text(
-            5 + row,
-            0,
-            (
-                f"{departure.scheduled} "
-                f"{departure.destination[:21]:<21} "
-                f"{platform:>3} {departure.status[:8]}"
-            )[:40],
-            inverse=selected,
-        )
+        train_row(screen, 5 + row, departure, inverse=selected)
     screen.text(17, 0, choice.label)
     screen.text(19, 0, "PATH " + " > ".join(ctx.state.get(PATH, [])[-5:]))
     screen.text(20, 0, "SOURCE: REALTIME TRAINS", fg=SECONDARY)
@@ -224,7 +219,9 @@ def _draw_explore(
     screen.text(3, 0, status_info.text[:40], fg=status_info.colour)
 
     calls_active = ctx.focused_region == "calls"
-    screen.text(4, 0, "CALLS", inverse=calls_active)
+    left = Rect(4, 0, 17, 18)
+    right = Rect(4, 19, 17, 21)
+    left.text(screen, 0, 0, "CALLS", inverse=calls_active)
     right_title = "NO STATION"
     if alight:
         right_title = f"FROM {alight}"
@@ -235,45 +232,24 @@ def _draw_explore(
                 else str(alight_arrival)
             )
             right_title = f"FROM {alight} {label}+"
-    screen.text(4, 19, right_title[:21], inverse=not calls_active)
-    screen.text(
-        5, 0, f"{'TIME':<5} {'STATION':<12}", fg=SECONDARY
-    )
-    screen.text(
-        5, 19,
-        f"{'TIME':<5} {'DESTINATION':<11} {'PLT':>3}",
-        fg=SECONDARY,
-    )
+    right.text(screen, 0, 0, right_title, inverse=not calls_active)
+    calls_header(screen, 5)
+    right_header(screen, 5, col=19)
     for row in range(4, 19):
         screen.text(row, 18, "|", fg=SECONDARY)
 
     for row, _index, stop, selected in calls_choice.rows(calls):
-        screen.text(
-            6 + row,
-            0,
-            f"{stop.scheduled} {stop.name[:12]:<12}"[:18],
-            inverse=selected,
-        )
+        calls_row(screen, 6 + row, stop, inverse=selected)
 
     if alight:
         for row, _index, departure, selected in trains_choice.rows(trains):
-            platform = departure.platform or "-"
-            screen.text(
-                6 + row,
-                19,
-                (
-                    f"{departure.scheduled} "
-                    f"{departure.destination[:11]:<11} "
-                    f"{platform:>3}"
-                )[:21],
-                inverse=selected,
-            )
+            right_row(screen, 6 + row, departure, col=19, inverse=selected)
     else:
-        screen.text(6, 19, "SELECT A CALLING PT", fg=SECONDARY)
+        right.text(screen, 2, 0, "SELECT A CALLING PT", fg=SECONDARY)
 
-    screen.text(18, 0, calls_choice.label)
+    left.text(screen, 14, 0, calls_choice.label)
     if alight:
-        screen.text(18, 19, trains_choice.label)
+        right.text(screen, 14, 0, trains_choice.label)
     path = ctx.state.get(PATH, [])
     total = ctx.state.get(TOTAL, 0)
     suffix = f"  {_duration(total)}" if total else ""

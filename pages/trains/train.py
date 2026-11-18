@@ -10,6 +10,7 @@ from pages.common.service_status import (
 )
 from pages.common.widgets import line_field
 from pages.trains._support.crs import parse_route, valid_crs
+from pages.trains._support.departures import train_header, train_row
 
 PAGE = "170"
 PAGE_SIZE = 8
@@ -99,22 +100,9 @@ def _screen(ctx):
             where = f"{where} TO {resolved or destination}"
         screen.text(3, 0, where[:40], fg=SECONDARY)
     screen.text(4, 0, state.text[:40], fg=state.colour)
-    screen.text(
-        5, 0,
-        f"{'TIME':<5} {'DESTINATION':<21} {'PLT':>3} STATUS",
-        fg=SECONDARY,
-    )
+    train_header(screen, 5)
     for row, _index, departure in pager.rows(departures):
-        platform = departure.platform or "-"
-        screen.text(
-            6 + row,
-            0,
-            (
-                f"{departure.scheduled} "
-                f"{departure.destination[:21]:<21} "
-                f"{platform:>3} {departure.status[:8]}"
-            )[:40],
-        )
+        train_row(screen, 6 + row, departure)
     screen.text(15, 0, pager.label)
     if destination and not departures:
         screen.text(
