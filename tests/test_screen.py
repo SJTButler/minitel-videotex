@@ -98,11 +98,39 @@ class ScreenTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             s.text(1, 0, "X" * 21, size=codec.DOUBLE_WIDTH)
 
+    def test_double_width_marks_continuation_cells(self):
+        s = Screen()
+        s.text(1, 0, "AB", size=codec.DOUBLE_WIDTH)
+
+        self.assertEqual(s.rows[1][0].ch, "A")
+        self.assertFalse(s.rows[1][0].continuation)
+        self.assertTrue(s.rows[1][1].continuation)
+        self.assertEqual(s.rows[1][2].ch, "B")
+        self.assertTrue(s.rows[1][3].continuation)
+        self.assertTrue(s.to_text().splitlines()[1].startswith("AB"))
+
+        with self.assertRaises(ValueError):
+            s.put(1, 1, "X")
+
     def test_double_height_needs_a_continuation_row(self):
         s = Screen()
         s.text(23, 0, "OK", size=codec.DOUBLE_HEIGHT)
         with self.assertRaises(ValueError):
             s.text(24, 0, "NO", size=codec.DOUBLE_HEIGHT)
+
+    def test_double_height_reserves_the_row_below(self):
+        s = Screen()
+        s.text(5, 0, "BIG", size=codec.DOUBLE_HEIGHT)
+
+        self.assertFalse(s.rows[5][0].continuation)
+        self.assertTrue(s.rows[6][0].continuation)
+        self.assertTrue(s.rows[6][1].continuation)
+        self.assertTrue(s.rows[6][2].continuation)
+
+        with self.assertRaises(ValueError):
+            s.put(6, 0, "X")
+        with self.assertRaises(ValueError):
+            s.text(6, 20, "SIDE")
 
     def test_put_and_fill_require_one_character(self):
         s = Screen()

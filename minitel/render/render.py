@@ -73,35 +73,40 @@ SCROLL_MAX = 8
 
 
 def paint_runs(out, row_index, row, *, include_default=False):
-    col = 0
-    while col < codec.COLS:
-        cell = row[col]
+    cells = [
+        (col, cell)
+        for col, cell in enumerate(row)
+        if not cell.continuation
+    ]
+    index = 0
+    while index < len(cells):
+        col, cell = cells[index]
         if (
             not include_default
             and cell.ch == " "
             and attrs(cell) == DEFAULT_ATTRS
         ):
-            col += 1
+            index += 1
             continue
 
-        start = col
+        start = index
         run_attrs = attrs(cell)
-        while col < codec.COLS and attrs(row[col]) == run_attrs:
-            col += 1
+        while index < len(cells) and attrs(cells[index][1]) == run_attrs:
+            index += 1
 
-        end = col
+        end = index
         if not include_default:
             while (
                 end > start
-                and row[end - 1].ch == " "
-                and attrs(row[end - 1]) == DEFAULT_ATTRS
+                and cells[end - 1][1].ch == " "
+                and attrs(cells[end - 1][1]) == DEFAULT_ATTRS
             ):
                 end -= 1
             if end == start:
                 continue
 
-        run = row[start:end]
-        out += codec.pos(row_index, start)
+        run = [cell for _col, cell in cells[start:end]]
+        out += codec.pos(row_index, cells[start][0])
         state = default_state()
         out += attr_bytes(state, run[0])
         if run[0].size != codec.NORMAL:
@@ -119,6 +124,19 @@ def _row_has_underline(row):
 
 def _row_has_non_normal_size(row):
     return any(cell.size != codec.NORMAL for cell in row)
+
+
+def _has_non_normal_size(screen):
+    return any(_row_has_non_normal_size(row) for row in screen.rows)
+
+
+def _has_double_height(screen):
+    return any(
+        cell.size in (codec.DOUBLE_HEIGHT, codec.DOUBLE_SIZE)
+        and not cell.continuation
+        for row in screen.rows
+        for cell in row
+    )
 
 
 def _is_default(cell):
@@ -364,7 +382,16 @@ def render_diff(old, new, scroll=False, *, paint="row", header_paint=None):
     if not changed and not cursor_changed:
         return b""
 
-    exact_shift = shift_delta(old, new) if scroll and changed else None
+    exact_shift = (
+        shift_delta(old, new)
+        if (
+            scroll
+            and changed
+            and not _has_non_normal_size(old)
+            and not _has_non_normal_size(new)
+        )
+        else None
+    )
     style_shift = None
     if (
         scroll
@@ -382,6 +409,9 @@ def render_diff(old, new, scroll=False, *, paint="row", header_paint=None):
     if changed:
         out += codec.cursor(False)
     out += reset()
+
+    if _has_double_height(old) or _has_double_height(new):
+        changed = sorted(changed, reverse=True)
 
     if exact_shift is not None:
         _paint_shift(

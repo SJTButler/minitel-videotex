@@ -38,15 +38,19 @@ ACCENTS = {
     (0x41, "i"): "ì", (0x42, "i"): "í", (0x43, "i"): "î", (0x48, "i"): "ï",
     (0x41, "o"): "ò", (0x42, "o"): "ó", (0x43, "o"): "ô", (0x48, "o"): "ö",
     (0x41, "u"): "ù", (0x42, "u"): "ú", (0x43, "u"): "û", (0x48, "u"): "ü",
+    (0x48, "y"): "ÿ",
     (0x4B, "c"): "ç",
 }
 
 
 class Cell:
-    __slots__ = ("ch", "fg", "bg", "inverse", "flash", "underline", "size", "charset")
+    __slots__ = (
+        "ch", "fg", "bg", "inverse", "flash", "underline", "size",
+        "charset", "continuation",
+    )
 
     def __init__(self, ch=" ", fg=7, bg=0, inverse=False, flash=False,
-                 underline=False, size=0, charset=0):
+                 underline=False, size=0, charset=0, continuation=False):
         self.ch = ch
         self.fg = fg
         self.bg = bg
@@ -55,6 +59,7 @@ class Cell:
         self.underline = underline
         self.size = size
         self.charset = charset
+        self.continuation = continuation
 
     def clone(self, ch=None):
         return Cell(
@@ -62,6 +67,7 @@ class Cell:
             fg=self.fg, bg=self.bg, inverse=self.inverse,
             flash=self.flash, underline=self.underline,
             size=self.size, charset=self.charset,
+            continuation=self.continuation,
         )
 
 
@@ -97,8 +103,17 @@ class Screen:
         cell = self.pen.clone(ch)
         cell.charset = self.pen.charset
         self.rows[self.row][self.col] = cell
+        columns = 2 if self.pen.size in (2, 3) else 1
+        rows = 2 if self.pen.size in (1, 3) else 1
+        for row in range(self.row, min(ROWS, self.row + rows)):
+            for col in range(self.col, min(COLS, self.col + columns)):
+                if row == self.row and col == self.col:
+                    continue
+                continuation = self.pen.clone(" ")
+                continuation.continuation = True
+                self.rows[row][col] = continuation
         self.last_ch = ch
-        self.col += 1
+        self.col += columns
 
     def repeat(self, count):
         for _ in range(count):
@@ -142,7 +157,9 @@ class Screen:
     def text(self):
         out = []
         for r in range(ROWS):
-            out.append("".join(cell.ch for cell in self.rows[r]))
+            out.append("".join(
+                cell.ch for cell in self.rows[r] if not cell.continuation
+            ))
         return "\n".join(out)
 
 
@@ -317,9 +334,15 @@ def render(screen, color):
     lines = []
     for r in range(ROWS):
         if color:
-            line = "".join(ansi_cell(cell) for cell in screen.rows[r])
+            line = "".join(
+                ansi_cell(cell)
+                for cell in screen.rows[r]
+                if not cell.continuation
+            )
         else:
-            line = "".join(cell.ch for cell in screen.rows[r])
+            line = "".join(
+                cell.ch for cell in screen.rows[r] if not cell.continuation
+            )
         lines.append(f"{r:02d} |{line}|")
     lines.append("")
     lines.append(

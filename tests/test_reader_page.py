@@ -108,10 +108,15 @@ def row(session, number):
 
 def find_cell(session, text):
     for line in session.screen.rows:
-        value = "".join(cell.ch for cell in line)
+        visible = [
+            (index, cell)
+            for index, cell in enumerate(line)
+            if not cell.continuation
+        ]
+        value = "".join(cell.ch for _index, cell in visible)
         col = value.find(text)
         if col >= 0:
-            return line[col]
+            return visible[col][1]
     raise AssertionError(f"no cell starts {text!r}")
 
 

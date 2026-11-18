@@ -38,6 +38,7 @@ class Cell:
     flash: bool = False
     underline: bool = False
     size: int = codec.NORMAL
+    continuation: bool = False
 
 
 SIZES = (
@@ -59,6 +60,11 @@ def _span(width, height, size):
     if size in (codec.DOUBLE_HEIGHT, codec.DOUBLE_SIZE):
         height *= 2
     return width, height
+
+
+def _cell_span(size):
+    """Return (columns, rows) occupied by one character of ``size``."""
+    return _span(1, 1, size)
 
 
 def _check_cell(ch):
@@ -127,15 +133,18 @@ class Screen:
         _check_cell(ch)
         size = attrs.get("size", codec.NORMAL)
         _check_placement(row, col, 1, 1, size, "cell")
-        self.rows[row][col] = Cell(ch=ch, **attrs)
+        self._check_free(row, col, 1, 1, size, "cell")
+        self._place(row, col, ch, attrs, size)
 
     def text(self, row, col, value, **attrs):
         if not isinstance(value, str):
             raise TypeError(f"text value must be a string, got {type(value)!r}")
         size = attrs.get("size", codec.NORMAL)
         _check_placement(row, col, len(value), 1, size, "text")
+        self._check_free(row, col, len(value), 1, size, "text")
+        columns, _rows = _cell_span(size)
         for i, ch in enumerate(value):
-            self.rows[row][col + i] = Cell(ch=ch, **attrs)
+            self._place(row, col + i * columns, ch, attrs, size)
 
     def fill(self, row, col, width, ch=" ", **attrs):
         _check_cell(ch)
@@ -143,8 +152,56 @@ class Screen:
             raise ValueError(f"fill width must be non-negative, got {width}")
         size = attrs.get("size", codec.NORMAL)
         _check_placement(row, col, width, 1, size, "fill")
+        self._check_free(row, col, width, 1, size, "fill")
+        columns, _rows = _cell_span(size)
         for i in range(width):
-            self.rows[row][col + i] = Cell(ch=ch, **attrs)
+            self._place(row, col + i * columns, ch, attrs, size)
+
+    def _check_free(self, row, col, width, height, size, what):
+        columns, rows = _span(width, height, size)
+        for r in range(row, row + rows):
+            if self._row_reserved(r):
+                raise ValueError(
+                    f"{what} targets row {r}, reserved by double-height text "
+                    "above"
+                )
+        for r in range(row, row + rows):
+            for c in range(col, col + columns):
+                cell = self.rows[r][c]
+                if cell.continuation:
+                    raise ValueError(
+                        f"{what} overlaps a multi-cell run at row {r}, "
+                        f"column {c}"
+                    )
+                if cell.size != codec.NORMAL:
+                    raise ValueError(
+                        f"{what} overlaps a size {cell.size} run at row {r}, "
+                        f"column {c}"
+                    )
+                if r > row and cell.ch != " ":
+                    raise ValueError(
+                        f"{what} would overwrite text on row {r}"
+                    )
+
+    def _row_reserved(self, row):
+        if row <= 0:
+            return False
+        return any(
+            not cell.continuation
+            and cell.size in (codec.DOUBLE_HEIGHT, codec.DOUBLE_SIZE)
+            for cell in self.rows[row - 1]
+        )
+
+    def _place(self, row, col, ch, attrs, size):
+        columns, rows = _cell_span(size)
+        self.rows[row][col] = Cell(ch=ch, **attrs)
+        for r in range(row, row + rows):
+            for c in range(col, col + columns):
+                if r == row and c == col:
+                    continue
+                self.rows[r][c] = Cell(
+                    ch=" ", continuation=True, **attrs
+                )
 
     def rule(self, row, col, width, ch="=", **attrs):
         self.fill(row, col, width, ch, **attrs)
@@ -166,4 +223,9 @@ class Screen:
         self.cursor_visible = visible
 
     def to_text(self):
-        return "\n".join("".join(cell.ch for cell in row) for row in self.rows)
+        return "\n".join(
+            "".join(
+                cell.ch for cell in row if not cell.continuation
+            )
+            for row in self.rows
+        )

@@ -102,7 +102,13 @@ class RenderTests(unittest.TestCase):
         s = Screen()
         s.text(1, 0, "BIG", size=codec.DOUBLE_WIDTH)
         decoded = decode(render(s))
-        self.assertTrue(all(decoded.rows[1][i].size == codec.DOUBLE_WIDTH for i in range(3)))
+        anchors = [
+            index for index, cell in enumerate(decoded.rows[1])
+            if cell.size == codec.DOUBLE_WIDTH and not cell.continuation
+        ]
+        self.assertEqual(anchors, [0, 2, 4])
+        self.assertTrue(decoded.rows[1][1].continuation)
+        self.assertTrue(decoded.text().splitlines()[1].startswith("BIG"))
 
     def test_inverse_after_full_inverse_row_is_reasserted(self):
         s = Screen()
@@ -239,6 +245,29 @@ class DiffTests(unittest.TestCase):
 
         diff = render_diff(old, new)
         self.assertLess(len(diff), len(render(new)))
+
+    def test_double_height_removal_clears_the_reserved_row(self):
+        old = Screen()
+        old.text(5, 0, "BIG", size=codec.DOUBLE_HEIGHT)
+        old.text(7, 0, "TAIL")
+        new = Screen()
+        new.text(7, 0, "TAIL")
+
+        decoded = apply_diff(old, render_diff(old, new))
+
+        self.assertEqual(decoded.text(), new.to_text())
+        self.assertFalse(any(
+            cell.continuation for cell in decoded.rows[6]
+        ))
+
+    def test_double_height_full_paint_leaves_the_row_below_blank(self):
+        screen = Screen()
+        screen.text(5, 0, "BIG", size=codec.DOUBLE_HEIGHT)
+
+        decoded = decode(render(screen))
+
+        self.assertTrue(decoded.text().splitlines()[5].startswith("BIG"))
+        self.assertEqual(decoded.text().splitlines()[6].strip(), "")
 
     def test_status_row_diff(self):
         old = Screen()

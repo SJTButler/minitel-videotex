@@ -309,7 +309,10 @@ class View:
     def _physical_col(self, screen, row, col):
         x = 0
         for index in range(col):
-            _, width = self._glyph(screen.rows[row][index], x)
+            cell = screen.rows[row][index]
+            if cell.continuation:
+                continue
+            _, width = self._glyph(cell, x)
             x += width
         return min(x, COLS - 1)
 
@@ -320,6 +323,9 @@ class View:
             while col < COLS:
                 if x >= COLS:
                     break
+                if screen.rows[row][col].continuation:
+                    col += 1
+                    continue
                 attr = self._cell_attr(screen.rows[row][col])
                 start = x
                 parts = []
@@ -327,6 +333,9 @@ class View:
                     if x >= COLS:
                         break
                     cell = screen.rows[row][col]
+                    if cell.continuation:
+                        col += 1
+                        continue
                     if self._cell_attr(cell) != attr:
                         break
                     glyph, width = self._glyph(cell, x)

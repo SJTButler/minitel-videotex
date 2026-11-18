@@ -58,6 +58,28 @@ class DecoderTests(unittest.TestCase):
         decoder.feed(b"e")
         self.assertEqual(decoder.screen.rows[1][0].ch, "é")
 
+    def test_ss2_y_diaeresis(self):
+        decoder = self.decode(b"\x19\x48y")
+        self.assertEqual(decoder.screen.rows[1][0].ch, "ÿ")
+
+    def test_double_width_advances_two_columns(self):
+        decoder = self.decode(b"\x1b\x4eAB")
+
+        self.assertEqual(decoder.screen.rows[1][0].ch, "A")
+        self.assertTrue(decoder.screen.rows[1][1].continuation)
+        self.assertEqual(decoder.screen.rows[1][2].ch, "B")
+        self.assertTrue(decoder.screen.rows[1][3].continuation)
+        self.assertEqual(decoder.screen.col, 4)
+        self.assertTrue(decoder.screen.text().splitlines()[1].startswith("AB"))
+
+    def test_double_height_marks_the_row_below(self):
+        decoder = self.decode(b"\x1b\x4dHI")
+
+        self.assertEqual(decoder.screen.rows[1][0].ch, "H")
+        self.assertTrue(decoder.screen.rows[2][0].continuation)
+        self.assertTrue(decoder.screen.rows[2][1].continuation)
+        self.assertTrue(decoder.screen.text().splitlines()[1].startswith("HI"))
+
     def test_split_repeat(self):
         decoder = VM.Decoder()
         decoder.feed(b"=")
