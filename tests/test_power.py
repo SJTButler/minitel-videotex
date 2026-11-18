@@ -49,6 +49,17 @@ class PowerWatcherTests(unittest.TestCase):
         self.watcher.reset()
         self.assertEqual(self.watcher.feed(b"AB"), [b"AB"])
 
+    def test_large_chunk_is_scanned_without_losing_a_split_signal(self):
+        data = b"A" * 4096
+        self.assertEqual(
+            self.watcher.feed(data + POWER_ON[:3]),
+            [data],
+        )
+        self.assertEqual(
+            self.watcher.feed(POWER_ON[3:]),
+            [Power(True)],
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

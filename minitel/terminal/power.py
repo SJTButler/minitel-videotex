@@ -54,7 +54,8 @@ class PowerWatcher:
     def feed(self, data):
         if not self._patterns:
             return [bytes(data)] if data else []
-        self._pending += data
+        pending = self._pending + data
+        self._pending = b""
         tokens = []
         passthrough = bytearray()
 
@@ -63,26 +64,35 @@ class PowerWatcher:
                 tokens.append(bytes(passthrough))
                 passthrough.clear()
 
-        while self._pending:
-            match = self._match()
+        index = 0
+        length = len(pending)
+        while index < length:
+            match = self._match_at(pending, index)
             if match is not None:
                 pattern, event = match
                 flush()
                 tokens.append(event)
-                self._pending = self._pending[len(pattern):]
+                index += len(pattern)
                 continue
-            if self._is_prefix():
+            if self._is_prefix_at(pending, index):
                 break
-            passthrough.append(self._pending[0])
-            self._pending = self._pending[1:]
+            passthrough.append(pending[index])
+            index += 1
         flush()
+        self._pending = pending[index:]
         return tokens
 
-    def _match(self):
+    def _match_at(self, data, index):
         for pattern, event in self._patterns:
-            if self._pending.startswith(pattern):
+            if data.startswith(pattern, index):
                 return pattern, event
         return None
 
-    def _is_prefix(self):
-        return any(pattern.startswith(self._pending) for pattern, _ in self._patterns)
+    def _is_prefix_at(self, data, index):
+        remaining = len(data) - index
+        for pattern, _event in self._patterns:
+            if remaining <= len(pattern) and data.startswith(
+                pattern[:remaining], index
+            ):
+                return True
+        return False

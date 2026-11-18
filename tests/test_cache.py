@@ -28,6 +28,24 @@ class Factory:
         return Thread()
 
 
+class DeferredFactory:
+    def __init__(self):
+        self.pending = []
+
+    def __call__(self, target, args):
+        self.pending.append((target, args))
+
+        class Thread:
+            def start(self):
+                pass
+
+        return Thread()
+
+    def run(self, index=-1):
+        target, args = self.pending[index]
+        target(*args)
+
+
 class CacheTests(unittest.TestCase):
     def test_snapshot_never_loaded(self):
         snapshot = Snapshot()
@@ -186,3 +204,23 @@ class CacheTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class CacheEvictionDuringLoadTests(unittest.TestCase):
+    def test_a_loader_finishing_after_eviction_respects_the_bound(self):
+        clock = Clock()
+        factory = DeferredFactory()
+        cache = ResourceCache(
+            max_entries=2, clock=clock, thread_factory=factory
+        )
+
+        cache.get("a", lambda: "A")
+        clock.now = 1
+        cache.get("b", lambda: "B")
+        clock.now = 2
+        cache.get("c", lambda: "C")
+
+        self.assertEqual(len(cache._entries), 2)
+        factory.run(0)
+
+        self.assertLessEqual(len(cache._entries), 2)

@@ -169,6 +169,7 @@ class ResourceCache:
         with self._lock:
             entry = self._entries.get(key)
             if entry is None:
+                self._evict_for_new()
                 entry = _Entry(Snapshot(), last_used=self.clock())
                 self._entries[key] = entry
             self._store(entry, value, error)

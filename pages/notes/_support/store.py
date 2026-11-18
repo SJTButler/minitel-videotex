@@ -28,8 +28,10 @@ class Note:
 class NoteStore:
     def __init__(self, path=DEFAULT_PATH):
         self.path = str(path)
-        self.conn = sqlite3.connect(self.path)
+        self.conn = sqlite3.connect(self.path, timeout=5.0)
         self.conn.row_factory = sqlite3.Row
+        self.conn.execute("PRAGMA journal_mode=WAL")
+        self.conn.execute("PRAGMA busy_timeout=5000")
         self.conn.execute(SCHEMA)
         self._migrate()
         self.conn.commit()
