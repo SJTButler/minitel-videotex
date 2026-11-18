@@ -1,6 +1,7 @@
 """Header API: row-0 chrome composed with a body page."""
 
 from ..render.screen import validate_paint
+from .errors import PageDeclarationKeyError
 
 
 class Header:
@@ -77,7 +78,7 @@ class HeaderContext:
 
     def service(self, name, default=None):
         if name not in self.requires:
-            raise KeyError(
+            raise PageDeclarationKeyError(
                 f"header on page {self.body_page.number!r} does not declare "
                 f"service {name!r}"
             )

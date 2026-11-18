@@ -6,6 +6,8 @@ from minitel import Carousel, M1, Registry, Region, Screen, Session, page
 
 SUITE = bytes([0x13, 0x48])
 ENVOI = bytes([0x13, 0x41])
+GUIDE = bytes([0x13, 0x44])
+REPETITION = bytes([0x13, 0x43])
 
 
 def make_session(initial, *page_objects):
@@ -112,6 +114,38 @@ def ambient_named_choice(ctx):
     return screen
 
 
+@page(
+    "992",
+    regions=(
+        Region("items", kind="choice", page_size=2, activate="stay"),
+    ),
+    on_submit=lambda ctx, line: "980" if line.strip() == "GO" else None,
+)
+def ambient_named_choice_stay(ctx):
+    screen = Screen()
+    ctx.set_input(0, 0, 4)
+    ctx.set_choice(("A", "B"), region="items", key="items")
+    screen.text(1, 0, "CHOICE")
+    return screen
+
+
+def _start_screensaver(ctx, key):
+    if key == "GUIDE":
+        ctx.start_screensaver()
+    return None
+
+
+@page(
+    "993",
+    regions=(Region("items", kind="choice", page_size=2),),
+    on_key=_start_screensaver,
+)
+def screensaver_region(ctx):
+    screen = Screen()
+    ctx.set_choice(("A", "B"), region="items", key="items")
+    return screen
+
+
 @page("986", regions=(Region("rows", kind="pager", page_size=2),))
 def named_pager(ctx):
     screen = Screen()
@@ -213,6 +247,32 @@ class PurePaneTests(unittest.TestCase):
         session.feed(SUITE)
         self.assertEqual(session.regions["items"].cursor.selected, 1)
         self.assertEqual(session.line, "")
+
+    def test_ambient_text_wins_envoi_over_a_stay_region(self):
+        session = make_session(
+            "992", home, ambient_named_choice_stay
+        )
+        session.feed(b"GO")
+        session.feed(ENVOI)
+
+        self.assertEqual(session.current.number, "980")
+        self.assertEqual(session.line, "")
+
+    def test_repetition_repaints_a_region_page(self):
+        session = make_session("991", home, ambient_named_choice)
+
+        actions = session.feed(REPETITION)
+
+        self.assertTrue(actions)
+        self.assertIsNotNone(actions[0].screen)
+
+    def test_region_page_screensaver_request_does_not_crash(self):
+        session = make_session("993", home, screensaver_region)
+        session.set_screensaver(("980",), after=0)
+
+        session.feed(GUIDE)
+
+        self.assertTrue(session.screensaver_active)
 
     def test_named_regions_keep_the_region_store(self):
         session = make_session("986", home, named_pager)

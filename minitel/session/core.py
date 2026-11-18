@@ -8,6 +8,10 @@ from ..design.choice import Choice
 from ..design.pager import Pager
 from ..design.region import PAGE_BACK, MainRegion
 from ..design.stops import reveal_viewport
+from ..pagemodel.errors import (
+    PAGE_DECLARATION_ERRORS,
+    PageDeclarationError,
+)
 from ..pagemodel.model import PageContext
 from ..protocol import codec
 from ..render.render import render_diff, reset
@@ -264,7 +268,7 @@ class Session(
             )
             active = enabled and (bool(fields) or cursor is not None)
             if not active and not definition.optional:
-                raise ValueError(f"region {name!r} has no cursor")
+                raise PageDeclarationError(f"region {name!r} has no cursor")
             committed = (
                 previous[name].committed
                 if name in previous and previous[name].key == key
@@ -411,7 +415,7 @@ class Session(
         for name in ctx._region_order:
             state = self.regions.get(name)
             if state is None:
-                raise ValueError("a page tick cannot change regions")
+                raise PageDeclarationError("a page tick cannot change regions")
             previous_key = state.key
             definition = ctx._region_defs[name]
             key = ctx._region_keys.get(name)
@@ -436,7 +440,7 @@ class Session(
             enabled = ctx._region_enabled.get(name, True)
             active = enabled and (bool(fields) or cursor is not None)
             if not active and not definition.optional:
-                raise ValueError(f"region {name!r} has no cursor")
+                raise PageDeclarationError(f"region {name!r} has no cursor")
             state.definition = definition
             state.cursor = cursor
             state.key = key
@@ -625,13 +629,15 @@ class Session(
             return Action(screen=self._fail_page("key"))
         requested = self._take_screensaver_request()
         if requested is not None:
-            return self.screensaver(requested)
+            return requested
         if result == "screensaver":
-            return self.screensaver(self.current.screensaver)
+            return self.activate_screensaver() or Action()
         if result is not None:
             return self.navigate(result)
         if name == "GUIDE" and self.guide:
             return self.navigate(self.guide)
+        if name == "REPETITION":
+            return Action(screen=self.render())
         return self.refresh()
 
     def _activate_region(self):
@@ -828,44 +834,44 @@ class Session(
                 )
             self.status_text = ctx.status
             if ctx._viewport_set and ctx.pager is not None:
-                raise ValueError(
+                raise PageDeclarationError(
                     f"page {self.current.number!r} cannot declare both a "
                     "viewport and a pager"
                 )
             if ctx._choice_set and (ctx._viewport_set or ctx.pager is not None):
-                raise ValueError(
+                raise PageDeclarationError(
                     f"page {self.current.number!r} cannot mix a choice with "
                     "a viewport or pager"
                 )
             if self.current.form and ctx.fields and ctx.pager is not None:
-                raise ValueError(
+                raise PageDeclarationError(
                     f"page {self.current.number!r} cannot declare both form "
                     "fields and a pager"
                 )
             if self.current.form and ctx.fields and ctx._viewport_set:
-                raise ValueError(
+                raise PageDeclarationError(
                     f"page {self.current.number!r} cannot declare both form "
                     "fields and a viewport"
                 )
             if self.current.form and ctx.fields and ctx._choice_set:
-                raise ValueError(
+                raise PageDeclarationError(
                     f"page {self.current.number!r} cannot declare both form "
                     "fields and a choice"
                 )
             ambient = [field for field in ctx.fields if field.ambient]
             form_fields = [field for field in ctx.fields if not field.ambient]
             if len(ambient) > 1:
-                raise ValueError(
+                raise PageDeclarationError(
                     f"page {self.current.number!r} cannot declare more than "
                     "one ambient input"
                 )
             if ambient and form_fields:
-                raise ValueError(
+                raise PageDeclarationError(
                     f"page {self.current.number!r} cannot mix an ambient "
                     "input with form fields"
                 )
             if ambient and any(ctx._region_commands.values()):
-                raise ValueError(
+                raise PageDeclarationError(
                     f"page {self.current.number!r} cannot mix an ambient "
                     "input with choice commands"
                 )
@@ -874,7 +880,7 @@ class Session(
                 or ctx.choice is not None
                 or ctx._viewport_set
             ):
-                raise ValueError(
+                raise PageDeclarationError(
                     f"page {self.current.number!r} cannot mix form fields "
                     "with a pager, choice, or viewport"
                 )
@@ -925,19 +931,22 @@ class Session(
                 screen.set_cursor(field.row, col, self._cursor_visible())
             else:
                 screen.set_cursor(codec.ROWS - 1, 0, False)
-            self.screen_paint = resolve_paint(
-                getattr(self.current, "paint", None),
-                screen.paint,
-                allow_full=True,
-                what="page paint",
-            )
-        except (KeyError, ValueError, TypeError):
+            try:
+                self.screen_paint = resolve_paint(
+                    getattr(self.current, "paint", None),
+                    screen.paint,
+                    allow_full=True,
+                    what="page paint",
+                )
+            except (TypeError, ValueError) as exc:
+                raise PageDeclarationError(str(exc)) from exc
+        except PAGE_DECLARATION_ERRORS:
             raise
         except Exception:
             return self._fail_page("render")
         try:
             screen = self._compose_header(screen, self.current)
-        except (KeyError, ValueError, TypeError):
+        except PAGE_DECLARATION_ERRORS:
             raise
         except Exception:
             return self._fail_page("header")
@@ -1107,6 +1116,8 @@ class Session(
 
         if name == "ENVOI":
             if self.regions:
+                if self._ambient_pending():
+                    return self.submit()
                 return self._activate_region()
             return self.submit()
 
@@ -1164,6 +1175,8 @@ class Session(
             return self.navigate(page)
         if name == "GUIDE" and self.guide:
             return self.navigate(self.guide)
+        if name == "REPETITION":
+            return Action(screen=self.render())
         return Action()
 
     @staticmethod

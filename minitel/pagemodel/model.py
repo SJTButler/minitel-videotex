@@ -17,6 +17,12 @@ from .announcement import (
     announcement_channel,
     validate_announcement_declaration,
 )
+from .errors import (
+    PageDeclarationError,
+    PageDeclarationKeyError,
+    PageDeclarationTypeError,
+    check_field_placement,
+)
 from .header import Header, header_requires
 
 
@@ -26,18 +32,11 @@ EXTENSION_SEPARATORS = ("#", "£")
 MAX_EXTENSION_LENGTH = 6
 
 
-def _check_field_placement(row, col, width):
-    if not all(isinstance(value, int) for value in (row, col, width)):
-        raise TypeError("field row, col, and width must be integers")
-    if width < 1:
-        raise ValueError("field width must be at least 1")
-    if not 0 <= row < codec.ROWS:
-        raise ValueError(f"field row must be between 0 and {codec.ROWS - 1}")
-    if not 0 <= col < codec.COLS:
-        raise ValueError(f"field col must be between 0 and {codec.COLS - 1}")
-    if col + width > codec.COLS:
-        raise ValueError(
-            f"field width {width} at col {col} exceeds {codec.COLS} columns"
+def _reject_unknown(unsupported, what):
+    if unsupported:
+        names = ", ".join(sorted(unsupported))
+        raise PageDeclarationTypeError(
+            f"unknown {what} option(s): {names}"
         )
 
 
@@ -129,9 +128,10 @@ class PageContext:
     def state(self):
         return self._session.state
 
-    def service(self, name, default=None):
+    def service(self, name, default=None, **unsupported):
+        _reject_unknown(unsupported, "service")
         if name not in self.page.requires:
-            raise KeyError(
+            raise PageDeclarationKeyError(
                 f"page {self.page.number!r} does not declare service {name!r}"
             )
         return self._session.services.get(name, default)
@@ -140,7 +140,7 @@ class PageContext:
         return self._session.add_resource(resource)
 
     def set_regions(self, *regions, default_focus=None):
-        raise ValueError(
+        raise PageDeclarationError(
             "pane regions are declared statically on @page(regions=...); "
             "bind items, keys, and commits in render(ctx)"
         )
@@ -149,7 +149,7 @@ class PageContext:
         if self._regions_declared:
             definition = self._region_defs.get(name)
             if definition is None:
-                raise KeyError(f"unknown region {name!r}")
+                raise PageDeclarationKeyError(f"unknown region {name!r}")
             state = self._session.regions.get(name)
             cursor = (
                 self._region_pagers.get(name)
@@ -172,7 +172,7 @@ class PageContext:
             )
         state = self._session.regions.get(name)
         if state is None:
-            raise KeyError(f"unknown region {name!r}")
+            raise PageDeclarationKeyError(f"unknown region {name!r}")
         return RegionView(
             name,
             state.definition,
@@ -200,12 +200,12 @@ class PageContext:
 
     def focus_region(self, name):
         if self._tick:
-            raise ValueError("a page tick cannot change region focus")
+            raise PageDeclarationError("a page tick cannot change region focus")
         if self._regions_declared:
             if name not in self._region_defs:
-                raise ValueError(f"unknown region {name!r}")
+                raise PageDeclarationError(f"unknown region {name!r}")
         elif name not in self._session.regions:
-            raise ValueError(f"unknown region {name!r}")
+            raise PageDeclarationError(f"unknown region {name!r}")
         self._requested_focus_region = name
         self._session.requested_focus_region = name
 
@@ -215,9 +215,10 @@ class PageContext:
 
     def add_field(self, name, row, col, width, *, value="",
                   cursor="visible", live=False, visible=True, region=None,
-                  ambient=False):
+                  ambient=False, **unsupported):
+        _reject_unknown(unsupported, "field")
         if cursor not in CURSOR_MODES:
-            raise ValueError(f"cursor must be one of {CURSOR_MODES}")
+            raise PageDeclarationError(f"cursor must be one of {CURSOR_MODES}")
         if not ambient and (region is not None or self._regions_declared):
             self._claim_form_region(region)
         if self._tick:
@@ -226,13 +227,13 @@ class PageContext:
                 live=live, visible=visible, ambient=ambient,
             )
         if self.page.form and self._choice_set:
-            raise ValueError(
+            raise PageDeclarationError(
                 f"page {self.page.number!r} cannot declare both form fields "
                 "and a choice"
             )
-        _check_field_placement(row, col, width)
+        check_field_placement(row, col, width)
         if any(field.name == name for field in self.fields):
-            raise ValueError(f"duplicate field name {name!r}")
+            raise PageDeclarationError(f"duplicate field name {name!r}")
         field = InputField(
             name, row, col, width, value=value, cursor=cursor,
             live=live, visible=visible, ambient=ambient,
@@ -243,38 +244,38 @@ class PageContext:
 
     def _claim_form_region(self, region):
         if not self._regions_declared:
-            raise ValueError("page has not declared regions")
+            raise PageDeclarationError("page has not declared regions")
         if region is None:
             if not self._static_regions:
-                raise ValueError("a named-region page must pass region=")
+                raise PageDeclarationError("a named-region page must pass region=")
             candidates = [
                 definition.name
                 for definition in self._region_defs.values()
                 if definition.kind == "form"
             ]
             if len(candidates) != 1:
-                raise ValueError("a named-region page must pass region=")
+                raise PageDeclarationError("a named-region page must pass region=")
             region = candidates[0]
         if region not in self._region_defs:
-            raise ValueError(f"unknown region {region!r}")
+            raise PageDeclarationError(f"unknown region {region!r}")
         if region in self._region_pagers or region in self._region_choices:
-            raise ValueError(f"region {region!r} already has a cursor")
+            raise PageDeclarationError(f"region {region!r} already has a cursor")
         if (
             self._static_regions
             and self._region_defs[region].kind != "form"
         ):
-            raise ValueError(f"region {region!r} is not a form region")
+            raise PageDeclarationError(f"region {region!r} is not a form region")
         if not self.page.form:
-            raise ValueError("a named form region requires form=True")
+            raise PageDeclarationError("a named form region requires form=True")
         if self._form_region_name not in (None, region):
-            raise ValueError(
+            raise PageDeclarationError(
                 "the first slice supports one form region per page"
             )
         self._form_region_name = region
 
     def _redeclare_tick_field(self, name, row, col, width, **attrs):
         if self._tick_field_index >= len(self._tick_fields):
-            raise ValueError(
+            raise PageDeclarationError(
                 "a page tick cannot add input fields"
             )
         existing = self._tick_fields[self._tick_field_index]
@@ -285,7 +286,7 @@ class PageContext:
                    existing.value, existing.cursor,
                    existing.live, existing.visible, existing.ambient)
         if declared != current:
-            raise ValueError(
+            raise PageDeclarationError(
                 "a page tick cannot change input fields"
             )
         self._tick_field_index += 1
@@ -300,46 +301,51 @@ class PageContext:
         self.values[LINE_FIELD] = ""
 
     def set_input(self, row, col, width, *, value="",
-                  cursor="visible", live=False, visible=True, region=None):
+                  cursor="visible", live=False, visible=True, region=None,
+                  **unsupported):
+        _reject_unknown(unsupported, "input")
         return self.add_field(
             LINE_FIELD, row, col, width,
             value=value, cursor=cursor, live=live, visible=visible,
             region=region, ambient=True,
         )
 
-    def set_status(self, text):
+    def set_status(self, text, **unsupported):
+        _reject_unknown(unsupported, "status")
         if not isinstance(text, str):
-            raise TypeError("status must be a string")
+            raise PageDeclarationTypeError("status must be a string")
         self.status = text
 
     def set_pager(self, total, page_size=None, *, offset=None, carousel=None,
-                  region=None, key=None, items=None, enabled=True):
+                  region=None, key=None, items=None, enabled=True,
+                  **unsupported):
+        _reject_unknown(unsupported, "pager")
         if not isinstance(total, int):
             if items is not None:
-                raise TypeError("pass either a sequence or items=, not both")
+                raise PageDeclarationTypeError("pass either a sequence or items=, not both")
             items = tuple(total)
             total = len(items)
         if not isinstance(enabled, bool):
-            raise TypeError("enabled must be a bool")
+            raise PageDeclarationTypeError("enabled must be a bool")
         if region is not None or self._regions_declared:
             return self._set_region_pager(
                 region, total, page_size, offset=offset, carousel=carousel,
                 key=key, items=items, enabled=enabled,
             )
         if page_size is None:
-            raise TypeError("page_size is required on a page without regions")
+            raise PageDeclarationTypeError("page_size is required on a page without regions")
         if self._viewport_set:
-            raise ValueError(
+            raise PageDeclarationError(
                 f"page {self.page.number!r} cannot declare both a viewport "
                 "and a pager"
             )
         if self.page.form and self.fields:
-            raise ValueError(
+            raise PageDeclarationError(
                 f"page {self.page.number!r} cannot declare both form fields "
                 "and a pager"
             )
         if carousel is not None and not isinstance(carousel, Carousel):
-            raise TypeError("carousel must be a Carousel or None")
+            raise PageDeclarationTypeError("carousel must be a Carousel or None")
         if offset is None:
             current = self._session.pager
             if current is not None:
@@ -356,39 +362,39 @@ class PageContext:
     def _set_region_pager(self, region, total, page_size, *, offset, carousel,
                           key, items, enabled):
         if not self._regions_declared:
-            raise ValueError("page has not declared regions")
+            raise PageDeclarationError("page has not declared regions")
         if region is None:
             if not self._static_regions:
-                raise ValueError("a named-region page must pass region=")
+                raise PageDeclarationError("a named-region page must pass region=")
             candidates = [
                 definition.name
                 for definition in self._region_defs.values()
                 if definition.kind == "pager"
             ]
             if len(candidates) != 1:
-                raise ValueError("a named-region page must pass region=")
+                raise PageDeclarationError("a named-region page must pass region=")
             region = candidates[0]
         if region not in self._region_defs:
-            raise ValueError(f"unknown region {region!r}")
+            raise PageDeclarationError(f"unknown region {region!r}")
         definition = self._region_defs[region]
         if self._static_regions and definition.kind != "pager":
-            raise ValueError(f"region {region!r} is not a pager region")
+            raise PageDeclarationError(f"region {region!r} is not a pager region")
         if region in self._region_pagers or region in self._region_choices:
-            raise ValueError(f"region {region!r} already has a cursor")
+            raise PageDeclarationError(f"region {region!r} already has a cursor")
         if region == self._form_region_name:
-            raise ValueError(f"region {region!r} already has form fields")
+            raise PageDeclarationError(f"region {region!r} already has form fields")
         if carousel is not None:
-            raise ValueError("carousel regions are not enabled yet")
+            raise PageDeclarationError("carousel regions are not enabled yet")
         if page_size is None:
             page_size = definition.page_size
         if page_size is None:
-            raise ValueError(
+            raise PageDeclarationError(
                 f"region {region!r} needs a page_size on @page or set_pager"
             )
         try:
             hash(key)
         except TypeError as exc:
-            raise TypeError("region key must be hashable") from exc
+            raise PageDeclarationTypeError("region key must be hashable") from exc
         if items is not None:
             items = tuple(items)
             total = len(items)
@@ -421,54 +427,54 @@ class PageContext:
                            reset, wrap, key, commit, remove, commands, items,
                            enabled):
         if not self._regions_declared:
-            raise ValueError("page has not declared regions")
+            raise PageDeclarationError("page has not declared regions")
         if region is None:
             if not self._static_regions:
-                raise ValueError("a named-region page must pass region=")
+                raise PageDeclarationError("a named-region page must pass region=")
             candidates = [
                 definition.name
                 for definition in self._region_defs.values()
                 if definition.kind == "choice"
             ]
             if len(candidates) != 1:
-                raise ValueError("a named-region page must pass region=")
+                raise PageDeclarationError("a named-region page must pass region=")
             region = candidates[0]
         if region not in self._region_defs:
-            raise ValueError(f"unknown region {region!r}")
+            raise PageDeclarationError(f"unknown region {region!r}")
         definition = self._region_defs[region]
         if self._static_regions and definition.kind != "choice":
-            raise ValueError(f"region {region!r} is not a choice region")
+            raise PageDeclarationError(f"region {region!r} is not a choice region")
         if region in self._region_pagers or region in self._region_choices:
-            raise ValueError(f"region {region!r} already has a cursor")
+            raise PageDeclarationError(f"region {region!r} already has a cursor")
         if region == self._form_region_name:
-            raise ValueError(f"region {region!r} already has form fields")
+            raise PageDeclarationError(f"region {region!r} already has form fields")
         if wrap:
-            raise ValueError("named choice regions do not support wrap yet")
+            raise PageDeclarationError("named choice regions do not support wrap yet")
         if page_size is None:
             page_size = definition.page_size
         if page_size is None:
-            raise ValueError(
+            raise PageDeclarationError(
                 f"region {region!r} needs a page_size on @page or set_choice"
             )
         try:
             hash(key)
         except TypeError as exc:
-            raise TypeError("region key must be hashable") from exc
+            raise PageDeclarationTypeError("region key must be hashable") from exc
         if commit is not None and not callable(commit):
-            raise TypeError("region commit must be callable or None")
+            raise PageDeclarationTypeError("region commit must be callable or None")
         if remove is not None and not callable(remove):
-            raise TypeError("region remove must be callable or None")
+            raise PageDeclarationTypeError("region remove must be callable or None")
         if commands is not None:
             if not hasattr(commands, "items"):
-                raise TypeError("region commands must be a mapping or None")
+                raise PageDeclarationTypeError("region commands must be a mapping or None")
             commands = dict(commands)
             for char, handler in commands.items():
                 if not isinstance(char, str) or len(char) != 1:
-                    raise ValueError(
+                    raise PageDeclarationError(
                         "region command keys must be single characters"
                     )
                 if not callable(handler):
-                    raise TypeError(
+                    raise PageDeclarationTypeError(
                         "region command handlers must be callable"
                     )
         if items is not None:
@@ -518,21 +524,23 @@ class PageContext:
             self._region_committed[region] = previous.committed
         return choice
 
-    def set_viewport(self, total, height, *, offset=None, follow=None, step=None):
+    def set_viewport(self, total, height, *, offset=None, follow=None, step=None,
+                     **unsupported):
+        _reject_unknown(unsupported, "viewport")
         if self._regions_declared:
-            raise ValueError("named regions do not support viewports")
+            raise PageDeclarationError("named regions do not support viewports")
         if not self.page.scroll:
-            raise ValueError(
+            raise PageDeclarationError(
                 f"page {self.page.number!r} must declare scroll=True "
                 "to use a viewport"
             )
         if self.pager is not None:
-            raise ValueError(
+            raise PageDeclarationError(
                 f"page {self.page.number!r} cannot declare both a pager "
                 "and a viewport"
             )
         if self.page.form and self.fields:
-            raise ValueError(
+            raise PageDeclarationError(
                 f"page {self.page.number!r} cannot declare both form fields "
                 "and a viewport"
             )
@@ -554,17 +562,18 @@ class PageContext:
         return self.viewport
 
     def set_stops(self, stops, *, start_next=0, start_prev=0,
-                  selected=None, reset=False, wrap=True):
+                  selected=None, reset=False, wrap=True, **unsupported):
+        _reject_unknown(unsupported, "stops")
         if self._regions_declared:
-            raise ValueError("named regions do not support viewports")
+            raise PageDeclarationError("named regions do not support viewports")
         if not self._viewport_set:
-            raise ValueError(
+            raise PageDeclarationError(
                 f"page {self.page.number!r} must set a viewport before stops"
             )
         stops = tuple(stops)
         for stop in stops:
             if not hasattr(stop, "first_line") or not hasattr(stop, "link"):
-                raise TypeError("stops must be Stop values")
+                raise PageDeclarationTypeError("stops must be Stop values")
         current = self.stops
         identity = tuple(
             (stop.first_line, stop.link) for stop in stops
@@ -581,14 +590,15 @@ class PageContext:
 
     def set_choice(self, total, page_size=None, *, selected=None, reset=False,
                    wrap=False, region=None, key=None, commit=None, remove=None,
-                   commands=None, items=None, enabled=True):
+                   commands=None, items=None, enabled=True, **unsupported):
+        _reject_unknown(unsupported, "choice")
         if not isinstance(total, int):
             if items is not None:
-                raise TypeError("pass either a sequence or items=, not both")
+                raise PageDeclarationTypeError("pass either a sequence or items=, not both")
             items = tuple(total)
             total = len(items)
         if not isinstance(enabled, bool):
-            raise TypeError("enabled must be a bool")
+            raise PageDeclarationTypeError("enabled must be a bool")
         if region is not None or self._regions_declared:
             return self._set_region_choice(
                 region, total, page_size,
@@ -597,24 +607,24 @@ class PageContext:
                 items=items, enabled=enabled,
             )
         if page_size is None:
-            raise TypeError("page_size is required on a page without regions")
+            raise PageDeclarationTypeError("page_size is required on a page without regions")
         if remove is not None:
-            raise ValueError("remove requires a named choice region")
+            raise PageDeclarationError("remove requires a named choice region")
         if commands is not None:
-            raise ValueError("commands requires a named choice region")
+            raise PageDeclarationError("commands requires a named choice region")
         if key is not None:
             try:
                 hash(key)
             except TypeError as exc:
-                raise TypeError("region key must be hashable") from exc
+                raise PageDeclarationTypeError("region key must be hashable") from exc
             self._region_keys["main"] = key
         if self._viewport_set or self.pager is not None:
-            raise ValueError(
+            raise PageDeclarationError(
                 f"page {self.page.number!r} cannot mix a choice with "
                 "a viewport or pager"
             )
         if self.page.form and self.fields:
-            raise ValueError(
+            raise PageDeclarationError(
                 f"page {self.page.number!r} cannot mix form fields with "
                 "a choice"
             )
@@ -661,12 +671,14 @@ class PageContext:
                 return field
         return None
 
-    def focus(self, name):
+    def focus(self, name, **unsupported):
+        _reject_unknown(unsupported, "focus")
         if self._tick:
-            raise ValueError("a page tick cannot change field focus")
+            raise PageDeclarationError("a page tick cannot change field focus")
         self._session.requested_focus = name
 
-    def page_for(self, key):
+    def page_for(self, key, **unsupported):
+        _reject_unknown(unsupported, "page_for")
         return self.registry.get(key)
 
 
@@ -725,16 +737,16 @@ class FunctionPage(Page):
         if screensaver is not None and (
             not isinstance(screensaver, str) or not screensaver
         ):
-            raise TypeError("screensaver must be a non-empty string or None")
+            raise PageDeclarationTypeError("screensaver must be a non-empty string or None")
         if isinstance(requires, str) or any(
             not isinstance(key, str) or not key.strip()
             for key in requires
         ):
-            raise TypeError("requires must be a sequence of service keys")
+            raise PageDeclarationTypeError("requires must be a sequence of service keys")
         requires = tuple(key.strip() for key in requires)
         if header is not None and header is not False:
             if not isinstance(header, Header):
-                raise TypeError(
+                raise PageDeclarationTypeError(
                     "header must be None, False, or a Header instance"
                 )
             header_requires(header)
@@ -916,7 +928,7 @@ class Registry:
 
     def add(self, page: Page, *, source=None, on_conflict="error"):
         if on_conflict not in ("error", "override"):
-            raise ValueError(
+            raise PageDeclarationError(
                 "on_conflict must be 'error' or 'override'"
             )
         if any(existing is page for existing in self._pages):
@@ -932,7 +944,7 @@ class Registry:
             if any(
                 separator in key for separator in EXTENSION_SEPARATORS
             ):
-                raise ValueError(
+                raise PageDeclarationError(
                     f"page key {key!r} must not contain an extension "
                     "separator"
                 )
@@ -942,7 +954,7 @@ class Registry:
             for key in keys:
                 existing = self._by_key.get(key)
                 if existing is not None:
-                    raise ValueError(
+                    raise PageDeclarationError(
                         f"page key {key!r} already registered by "
                         f"{existing.title!r}"
                     )
@@ -952,7 +964,7 @@ class Registry:
                 if existing is None:
                     continue
                 if self._sources.get(id(existing)) == source:
-                    raise ValueError(
+                    raise PageDeclarationError(
                         f"page key {key!r} already registered by "
                         f"{existing.title!r} in the same package "
                         f"{source!r}"
@@ -1013,12 +1025,12 @@ class Registry:
             return
         old_page, _, old_source = existing
         if old_source == source:
-            raise ValueError(
+            raise PageDeclarationError(
                 f"announcement channel {channel!r} already registered by "
                 f"page {old_page.number!r} in the same package {source!r}"
             )
         if on_conflict == "error":
-            raise ValueError(
+            raise PageDeclarationError(
                 f"announcement channel {channel!r} already registered by "
                 f"page {old_page.number!r}"
             )
@@ -1095,7 +1107,7 @@ class Registry:
     def resolve(self, key):
         page = self.get(key)
         if page is None:
-            raise KeyError(key)
+            raise PageDeclarationKeyError(key)
         return page
 
     def missing_requirements(self, services):

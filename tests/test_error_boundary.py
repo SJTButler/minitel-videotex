@@ -234,3 +234,40 @@ class ErrorBoundaryTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+@page("207", title="VALUE ERROR")
+def broken_value(ctx):
+    raise ValueError("bad remote value")
+
+
+@page("208", title="KEY ERROR")
+def broken_key(ctx):
+    return {}["missing"]
+
+
+@page("209", title="TYPE ERROR")
+def broken_type(ctx):
+    return None + 1
+
+
+class RuntimeErrorBoundaryTests(unittest.TestCase):
+    def assert_page_error(self, number):
+        registry = make_registry(home, broken_value, broken_key, broken_type)
+        session = make_session(registry)
+        session.navigate(number)
+
+        self.assertIn("PAGE ERROR", session.screen.to_text())
+        self.assertEqual(session.page_error, "render")
+
+        session.feed(SOMMAIRE)
+        self.assertEqual(session.current.number, "100")
+
+    def test_value_error_in_render_uses_the_error_screen(self):
+        self.assert_page_error("207")
+
+    def test_key_error_in_render_uses_the_error_screen(self):
+        self.assert_page_error("208")
+
+    def test_type_error_in_render_uses_the_error_screen(self):
+        self.assert_page_error("209")

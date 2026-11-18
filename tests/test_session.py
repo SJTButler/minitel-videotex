@@ -15,6 +15,7 @@ SOMMAIRE = bytes([0x13, 0x46])
 SUITE = bytes([0x13, 0x48])
 CORRECTION = bytes([0x13, 0x47])
 ANNULATION = bytes([0x13, 0x45])
+REPETITION = bytes([0x13, 0x43])
 
 
 class SessionTests(unittest.TestCase):
@@ -44,6 +45,13 @@ class SessionTests(unittest.TestCase):
         self.assertEqual(self.session.current.number, "110")
         self.assertIsNotNone(actions[0].screen)
         self.assertEqual(self.session.line, "")
+
+    def test_repetition_repaints_the_page(self):
+        actions = self.feed(REPETITION)
+
+        self.assertTrue(actions)
+        self.assertIsNotNone(actions[0].screen)
+        self.assertIn("3615 KILO", actions[0].screen.to_text())
 
     def test_history(self):
         self.feed(b"1" + ENVOI)

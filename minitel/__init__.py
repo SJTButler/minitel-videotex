@@ -20,6 +20,11 @@ from .design import (
     Stops,
     Viewport,
 )
+from .pagemodel.errors import (
+    PageDeclarationError,
+    PageDeclarationKeyError,
+    PageDeclarationTypeError,
+)
 from .pagemodel import (
     LINE_FIELD,
     AnnounceContext,
@@ -68,6 +73,9 @@ __all__ = [
     "MinitelApp",
     "Page",
     "PageContext",
+    "PageDeclarationError",
+    "PageDeclarationKeyError",
+    "PageDeclarationTypeError",
     "PAGE_BACK",
     "Pager",
     "PowerSignals",

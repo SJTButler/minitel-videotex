@@ -1,10 +1,20 @@
 """Session header selection, composition, and row-0 timing."""
 
+from ..pagemodel.errors import PageDeclarationError
 from ..pagemodel.header import Header, HeaderContext, header_requires
 from ..render.overlay import compose_row
 from ..render.render import render_diff
 from ..render.screen import Cell, Screen, resolve_paint
 from .action import Action
+
+
+def _resolve_paint(declared, override, *, allow_full, what):
+    try:
+        return resolve_paint(
+            declared, override, allow_full=allow_full, what=what
+        )
+    except (TypeError, ValueError) as exc:
+        raise PageDeclarationError(str(exc)) from exc
 
 
 class HeaderMixin:
@@ -91,7 +101,7 @@ class HeaderMixin:
                 f"header on page {page.number!r} returned {type(result)!r}, "
                 "expected Screen or None"
             )
-        self.screen_header_paint = resolve_paint(
+        self.screen_header_paint = _resolve_paint(
             getattr(header, "paint", None),
             result.paint,
             allow_full=False,
@@ -131,7 +141,7 @@ class HeaderMixin:
         if result is None:
             header_paint = self.screen_paint
         else:
-            header_paint = resolve_paint(
+            header_paint = _resolve_paint(
                 getattr(header, "paint", None),
                 result.paint,
                 allow_full=False,
