@@ -7,6 +7,7 @@ import pages
 
 from minitel import M1, Session
 from minitel.protocol import codec
+from minitel.render import render_diff
 from pages.screensavers import clock as clock_page
 from pages.screensavers import scroll as scroll_page
 from pages.screensavers._support.text import LINES
@@ -148,6 +149,7 @@ class ScreensaverPageTests(unittest.TestCase):
 
     def test_clock_page(self):
         self.assertEqual(self.registry.get("900").paint, "cell")
+        self.assertEqual(self.registry.get("900").tick_interval, 30.0)
         first = time.localtime(0)
         second = time.localtime(1)
         with patch.object(
@@ -165,6 +167,22 @@ class ScreensaverPageTests(unittest.TestCase):
         self.assertFalse(session.screen.cursor_visible)
         self.assertIsNone(action.screen)
         self.assertNotIn(bytes([codec.CAN]), action.raw)
+        mosaic = sum(
+            1
+            for row in session.screen.rows
+            for cell in row
+            if cell.mosaic is not None
+        )
+        self.assertGreater(mosaic, 50)
+
+    def test_clock_minute_hand_changes_cheaply(self):
+        first = time.struct_time((2026, 11, 19, 12, 0, 0, 3, 323, -1))
+        second = time.struct_time((2026, 11, 19, 12, 30, 0, 3, 323, -1))
+        old = clock_page._clock_screen(first)
+        new = clock_page._clock_screen(second)
+        diff = render_diff(old, new, paint="cell")
+        self.assertNotEqual(diff, b"")
+        self.assertLess(len(diff), 300)
 
     def test_test_card_has_a_mosaic_row(self):
         session = Session(

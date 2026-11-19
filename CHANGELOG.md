@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Turned the `900 CLOCK` screensaver into a mosaic analog face: a static dial
+  with hour/minute hands, a right-aligned date, and a digital `HH:MM` readout.
+  The 30 s tick changes only the hands.
 - Added `minitel_kit.MosaicCanvas`, `Bars`, and `Sparkline`, and the `121
   WEATHER CHART` page. The weather service now caches a seven-day daily
   forecast with highs, lows, precipitation, and weather codes, and `120` points

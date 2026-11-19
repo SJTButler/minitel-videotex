@@ -476,7 +476,10 @@ tests stay readable; the terminal client can fall back to block elements or a
 single placeholder. The renderer emits `SO`...`SI` around a mosaic run, so text
 after the run is back in G0. One mosaic byte is one screen cell; runs use `REP`,
 and `paint="cell"` diffs mosaic cells like any other cell. Keep mosaics for
-rules, boxes, icons, bars, and small graphics, not photographs.
+rules, boxes, icons, bars, and small graphics, not photographs. The `900 CLOCK`
+screensaver is the worked example: a `MosaicCanvas` dial is painted once and
+the hour/minute hands change on a 30 s tick. Its `HH:MM` is double-width and
+uses the row path when the minute changes.
 
 Use `codec.text` for accents and special characters. `Screen.text` accepts
 Unicode; the renderer encodes it through `codec.text` and raises on characters

@@ -62,6 +62,21 @@ class MosaicCanvasTests(unittest.TestCase):
         self.assertIn((2, 2), canvas.pixels)
         self.assertEqual(len(canvas.pixels), 54)
 
+    def test_ellipse_outline_and_filled(self):
+        canvas = MosaicCanvas(4, 4)
+        canvas.ellipse(0, 0, 7, 11)
+        self.assertTrue(canvas.get(0, 5) or canvas.get(1, 5))
+        self.assertNotIn((3, 5), canvas.pixels)
+        for y in range(12):
+            self.assertTrue(
+                any(py == y for _px, py in canvas.pixels),
+                f"outline has no pixel on row {y}",
+            )
+        canvas.clear()
+        canvas.ellipse(0, 0, 7, 11, filled=True)
+        self.assertIn((3, 5), canvas.pixels)
+        self.assertNotIn((0, 0), canvas.pixels)
+
     def test_draw_writes_mosaic_cells(self):
         canvas = MosaicCanvas(2, 1)
         canvas.set(0, 0)

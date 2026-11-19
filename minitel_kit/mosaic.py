@@ -1,5 +1,7 @@
 """Sub-cell mosaic drawing for ``minitel.Screen``."""
 
+import math
+
 
 class MosaicCanvas:
     """A 2x3 sub-pixel canvas packed into ordinary mosaic cells.
@@ -88,6 +90,42 @@ class MosaicCanvas:
         self.line(x0, y1, x1, y1)
         self.line(x0, y0, x0, y1)
         self.line(x1, y0, x1, y1)
+
+    def ellipse(self, x0, y0, x1, y1, filled=False):
+        x0, x1 = sorted((int(x0), int(x1)))
+        y0, y1 = sorted((int(y0), int(y1)))
+        if x0 == x1 or y0 == y1:
+            if filled:
+                self.fill(x0, y0, x1, y1)
+            else:
+                self.line(x0, y0, x1, y1)
+            return
+        cx = (x0 + x1) / 2
+        cy = (y0 + y1) / 2
+        rx = (x1 - x0) / 2
+        ry = (y1 - y0) / 2
+        if filled:
+            for y in range(y0, y1 + 1):
+                offset = (y - cy) / ry
+                if offset < -1 or offset > 1:
+                    continue
+                span = rx * math.sqrt(max(0.0, 1 - offset * offset))
+                self.fill(
+                    math.ceil(cx - span), y, math.floor(cx + span), y
+                )
+            return
+        steps = max(24, 2 * ((x1 - x0) + (y1 - y0)))
+        points = []
+        for step in range(steps):
+            angle = 2 * math.pi * step / steps
+            points.append((
+                cx + rx * math.cos(angle),
+                cy + ry * math.sin(angle),
+            ))
+        for index, point in enumerate(points):
+            start = point
+            end = points[(index + 1) % len(points)]
+            self.line(start[0], start[1], end[0], end[1])
 
     def pattern(self, row, col):
         if not 0 <= row < self.height:
