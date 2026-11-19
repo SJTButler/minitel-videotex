@@ -39,6 +39,7 @@ class Cell:
     underline: bool = False
     size: int = codec.NORMAL
     continuation: bool = False
+    mosaic: int | None = None
 
 
 SIZES = (
@@ -70,6 +71,13 @@ def _cell_span(size):
 def _check_cell(ch):
     if not isinstance(ch, str) or len(ch) != 1:
         raise ValueError(f"cell value must be one character, got {ch!r}")
+
+
+def _check_text_attrs(attrs, what):
+    if "mosaic" in attrs:
+        raise TypeError(
+            f"{what} writes text cells; use Screen.put_mosaic for a G1 cell"
+        )
 
 
 def _check_placement(row, col, width, height, size, what):
@@ -131,14 +139,41 @@ class Screen:
 
     def put(self, row, col, ch, **attrs):
         _check_cell(ch)
+        _check_text_attrs(attrs, "put")
         size = attrs.get("size", codec.NORMAL)
         _check_placement(row, col, 1, 1, size, "cell")
         self._check_free(row, col, 1, 1, size, "cell")
         self._place(row, col, ch, attrs, size)
 
+    def put_mosaic(self, row, col, pattern, **attrs):
+        """Place one 2x3 G1 block cell.
+
+        ``pattern`` is a 0..63 block bitmap. The cell may use colour, inverse,
+        and flash; double size and underline are not usable in G1.
+        """
+        if not isinstance(pattern, int) or isinstance(pattern, bool):
+            raise TypeError("mosaic pattern must be an int")
+        if not 0 <= pattern <= 63:
+            raise ValueError("mosaic pattern must be 0..63")
+        if "mosaic" in attrs:
+            raise TypeError("put_mosaic takes the pattern directly")
+        if "ch" in attrs:
+            raise TypeError("put_mosaic takes the pattern, not a character")
+        if attrs.get("continuation"):
+            raise TypeError("mosaic cells cannot be continuation cells")
+        size = attrs.get("size", codec.NORMAL)
+        if size != codec.NORMAL:
+            raise ValueError("mosaic cells cannot use double size")
+        if attrs.get("underline"):
+            raise ValueError("mosaic cells cannot use underline")
+        _check_placement(row, col, 1, 1, size, "mosaic cell")
+        self._check_free(row, col, 1, 1, size, "mosaic cell")
+        self.rows[row][col] = Cell(ch=" ", mosaic=pattern, **attrs)
+
     def text(self, row, col, value, **attrs):
         if not isinstance(value, str):
             raise TypeError(f"text value must be a string, got {type(value)!r}")
+        _check_text_attrs(attrs, "text")
         size = attrs.get("size", codec.NORMAL)
         _check_placement(row, col, len(value), 1, size, "text")
         self._check_free(row, col, len(value), 1, size, "text")
@@ -148,6 +183,7 @@ class Screen:
 
     def fill(self, row, col, width, ch=" ", **attrs):
         _check_cell(ch)
+        _check_text_attrs(attrs, "fill")
         if width < 0:
             raise ValueError(f"fill width must be non-negative, got {width}")
         size = attrs.get("size", codec.NORMAL)
@@ -225,7 +261,10 @@ class Screen:
     def to_text(self):
         return "\n".join(
             "".join(
-                cell.ch for cell in row if not cell.continuation
+                codec.mosaic_glyph(cell.mosaic)
+                if cell.mosaic is not None
+                else cell.ch
+                for cell in row if not cell.continuation
             )
             for row in self.rows
         )

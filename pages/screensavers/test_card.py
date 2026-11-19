@@ -27,5 +27,14 @@ def mire(ctx):
     s.text(13, 0, "PROFILE: " + ctx.profile.name.upper())
     s.text(14, 0, f"MAX: {ctx.profile.max_speed} BPS")
     s.text(15, 0, f"DATE: {date_text()}  TIME: {clock_hm()}")
+
+    s.text(17, 0, "MOSAIC:")
+    for index, pattern in enumerate(
+        (1, 2, 4, 8, 16, 32, 3, 12, 48, 63)
+    ):
+        s.put_mosaic(17, 8 + index * 2, pattern)
+    for col in range(40):
+        s.put_mosaic(19, col, 48)
+
     s.text(23, 0, "PRESS ANY KEY")
     return s

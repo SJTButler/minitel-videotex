@@ -19,7 +19,10 @@ not wired.
 - **Scroll**: hardware `LF`/`VT` moves rows 1-24 in tens of bytes. A software
   sub-pane scroll repaints every visible row and costs 10-30x more.
 - **Size**: double width uses two columns per character (at most 20 per row);
-  double height reserves the row below. Mosaics are not wired yet.
+  double height reserves the row below.
+- **Mosaic**: G1 cells carry a 2x3 block pattern via `Screen.put_mosaic`; the
+  renderer brackets a mosaic run with `SO`/`SI`. One logical cell per mosaic
+  byte, and double size/underline are not usable in G1.
 - **Navigation**: the session owns cursors, history, focus, pauses, and the
   screensaver. Pages declare fields, pagers, choices, regions, and scroll mode.
 

@@ -166,6 +166,24 @@ class ScreensaverPageTests(unittest.TestCase):
         self.assertIsNone(action.screen)
         self.assertNotIn(bytes([codec.CAN]), action.raw)
 
+    def test_test_card_has_a_mosaic_row(self):
+        session = Session(
+            self.registry, M1, initial="901",
+            fallback=self.registry.get(pages.NOT_FOUND),
+        )
+        session.start()
+        text = session.screen.to_text().splitlines()
+        self.assertIn("MOSAIC:", text[17])
+        mosaic = [
+            cell
+            for row in session.screen.rows
+            for cell in row
+            if cell.mosaic is not None
+        ]
+        self.assertEqual(len(mosaic), 50)
+        self.assertEqual(mosaic[0].mosaic, 1)
+        self.assertTrue(any(cell.mosaic == 63 for cell in mosaic))
+
     def test_scroll_text_is_wrapped_and_encodable(self):
         self.assertTrue(LINES)
         for line in LINES:

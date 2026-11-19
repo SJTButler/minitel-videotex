@@ -648,6 +648,89 @@ class ScrollDiffTests(unittest.TestCase):
         self.assertEqual(decoded.text(), new.to_text())
 
 
+class MosaicRenderTests(unittest.TestCase):
+    def test_full_paint_round_trips_mosaic_cells(self):
+        screen = Screen()
+        screen.put_mosaic(1, 0, 48)
+        screen.text(1, 1, "A")
+
+        data = render(screen)
+        self.assertIn(codec.charset(True), data)
+        self.assertIn(bytes([codec.g1_byte(48)]), data)
+        decoded = decode(data)
+        self.assertEqual(decoded.rows[1][0].mosaic, 48)
+        self.assertEqual(decoded.rows[1][1].ch, "A")
+        self.assertEqual(decoded.pen.charset, 0)
+
+    def test_mosaic_run_uses_repeat(self):
+        screen = Screen()
+        for col in range(3):
+            screen.put_mosaic(2, col, 1)
+
+        data = render(screen)
+        self.assertIn(b"\x60\x12\x42", data)
+        decoded = decode(data)
+        self.assertEqual(
+            [decoded.rows[2][col].mosaic for col in range(3)],
+            [1, 1, 1],
+        )
+
+    def test_mosaic_attributes(self):
+        screen = Screen()
+        screen.put_mosaic(
+            3, 4, 63, fg=codec.RED, bg=codec.BLUE, inverse=True
+        )
+        cell = decode(render(screen)).rows[3][4]
+        self.assertEqual(cell.mosaic, 63)
+        self.assertEqual(cell.fg, codec.RED)
+        self.assertEqual(cell.bg, codec.BLUE)
+        self.assertTrue(cell.inverse)
+
+    def test_text_after_mosaic_returns_to_g0(self):
+        screen = Screen()
+        screen.put_mosaic(4, 0, 1)
+        screen.text(4, 1, "AB")
+        decoded = decode(render(screen))
+        self.assertEqual(decoded.rows[4][1].ch, "A")
+        self.assertEqual(decoded.rows[4][1].charset, 0)
+
+    def test_cell_diff_changes_only_the_mosaic_cell(self):
+        old = Screen()
+        old.text(5, 0, "X")
+        old.put_mosaic(5, 2, 1)
+        old.put_mosaic(5, 3, 2)
+        new = old.clone()
+        new.put_mosaic(5, 2, 3)
+
+        diff = render_diff(old, new, paint="cell")
+        self.assertIn(codec.pos(5, 2), diff)
+        self.assertNotIn(codec.pos(5, 3), diff)
+        self.assertLess(len(diff), 60)
+        decoded = apply_diff(old, diff)
+        self.assertEqual(decoded.rows[5][2].mosaic, 3)
+        self.assertEqual(decoded.rows[5][3].mosaic, 2)
+        self.assertEqual(decoded.text(), new.to_text())
+
+    def test_mosaic_to_blank_uses_clear(self):
+        old = Screen()
+        old.put_mosaic(5, 38, 1)
+        old.put_mosaic(5, 39, 1)
+        new = Screen()
+
+        diff = render_diff(old, new, paint="cell")
+        self.assertIn(bytes([codec.CAN]), diff)
+        self.assertEqual(apply_diff(old, diff).text(), new.to_text())
+
+    def test_cursor_on_a_mosaic_cell_ends_in_g0(self):
+        screen = Screen()
+        screen.put_mosaic(6, 0, 1)
+        screen.set_cursor(6, 0, True)
+
+        decoded = decode(render(screen))
+        self.assertEqual(decoded.pen.charset, 0)
+        self.assertTrue(decoded.cursor)
+
+
 class PackageSurfaceTests(unittest.TestCase):
     def test_package_render_is_the_module_and_render_screen_is_the_function(self):
         self.assertTrue(hasattr(minitel.render, "render_diff"))

@@ -139,6 +139,68 @@ class ScreenTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             s.fill(0, 0, 2, "AB")
 
+    def test_put_mosaic(self):
+        s = Screen()
+        s.put_mosaic(2, 3, 48, fg=codec.RED, inverse=True)
+        cell = s.rows[2][3]
+        self.assertEqual(cell.mosaic, 48)
+        self.assertEqual(cell.ch, " ")
+        self.assertEqual(cell.fg, codec.RED)
+        self.assertTrue(cell.inverse)
+        self.assertEqual(s.to_text().splitlines()[2][3], "\U0001FB02")
+
+    def test_mosaic_clone_and_clear(self):
+        s = Screen()
+        s.put_mosaic(1, 1, 63)
+        clone = s.clone()
+        self.assertEqual(clone.rows[1][1].mosaic, 63)
+        self.assertIsNot(clone.rows[1][1], s.rows[1][1])
+        s.clear()
+        self.assertIsNone(s.rows[1][1].mosaic)
+
+    def test_mosaic_can_overwrite_text_and_vice_versa(self):
+        s = Screen()
+        s.text(1, 0, "A")
+        s.put_mosaic(1, 0, 1)
+        self.assertEqual(s.rows[1][0].mosaic, 1)
+        s.text(1, 0, "B")
+        self.assertIsNone(s.rows[1][0].mosaic)
+        self.assertEqual(s.rows[1][0].ch, "B")
+
+    def test_mosaic_validation(self):
+        s = Screen()
+        with self.assertRaises(ValueError):
+            s.put_mosaic(0, 0, 64)
+        with self.assertRaises(ValueError):
+            s.put_mosaic(0, 0, -1)
+        with self.assertRaises(TypeError):
+            s.put_mosaic(0, 0, "x")
+        with self.assertRaises(ValueError):
+            s.put_mosaic(0, 0, 1, size=codec.DOUBLE_WIDTH)
+        with self.assertRaises(ValueError):
+            s.put_mosaic(0, 0, 1, underline=True)
+        with self.assertRaises(TypeError):
+            s.put_mosaic(0, 0, 1, mosaic=1)
+        with self.assertRaises(TypeError):
+            s.put_mosaic(0, 0, 1, ch="A")
+        with self.assertRaises(TypeError):
+            s.put_mosaic(0, 0, 1, continuation=True)
+
+    def test_text_rejects_mosaic_attribute(self):
+        s = Screen()
+        with self.assertRaises(TypeError):
+            s.text(0, 0, "A", mosaic=1)
+        with self.assertRaises(TypeError):
+            s.put(0, 0, "A", mosaic=1)
+        with self.assertRaises(TypeError):
+            s.fill(0, 0, 1, "A", mosaic=1)
+
+    def test_mosaic_respects_reserved_rows(self):
+        s = Screen()
+        s.text(5, 0, "BIG", size=codec.DOUBLE_HEIGHT)
+        with self.assertRaises(ValueError):
+            s.put_mosaic(6, 0, 1)
+
     def test_unknown_size_is_rejected(self):
         s = Screen()
         with self.assertRaises(ValueError):

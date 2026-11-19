@@ -66,6 +66,25 @@ class KeyEncodingTests(unittest.TestCase):
         self.assertEqual(client.key_to_bytes(999999), b"")
 
 
+class MosaicClientTests(unittest.TestCase):
+    def test_mosaic_style_argument(self):
+        self.assertEqual(client.parse_args([]).mosaic, "sextant")
+        self.assertEqual(
+            client.parse_args(["--mosaic", "blocks"]).mosaic, "blocks"
+        )
+
+    def test_view_glyph_uses_the_mosaic_table(self):
+        decoder = client.Decoder()
+        decoder.feed(b"\x0e\x21\x0f")
+        cell = decoder.screen.rows[1][0]
+        view = object.__new__(client.View)
+        view.mosaic = "sextant"
+        view.wide = True
+        self.assertEqual(
+            client.View._glyph(view, cell, 0), ("\U0001FB00", 1)
+        )
+
+
 class LocalEchoTests(unittest.TestCase):
     class FakeSocket:
         def __init__(self):

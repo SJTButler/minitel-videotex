@@ -3,7 +3,9 @@
 from ..protocol import codec
 from .screen import Cell, validate_paint
 
-DEFAULT_ATTRS = (codec.WHITE, codec.BLACK, False, False, False, codec.NORMAL)
+DEFAULT_ATTRS = (
+    codec.WHITE, codec.BLACK, False, False, False, codec.NORMAL, False
+)
 DEFAULT_CELL = Cell()
 
 
@@ -14,11 +16,20 @@ def default_state():
         "inverse": False,
         "flash": False,
         "underline": False,
+        "mosaic": False,
     }
 
 
 def attrs(cell):
-    return (cell.fg, cell.bg, cell.inverse, cell.flash, cell.underline, cell.size)
+    return (
+        cell.fg,
+        cell.bg,
+        cell.inverse,
+        cell.flash,
+        cell.underline,
+        cell.size,
+        cell.mosaic is not None,
+    )
 
 
 def reset():
@@ -29,6 +40,7 @@ def reset():
         codec.flash(False),
         codec.underline(False),
         codec.size(codec.NORMAL),
+        codec.charset(False),
     ])
 
 
@@ -49,10 +61,16 @@ def attr_bytes(state, cell):
     if cell.underline != state["underline"]:
         out += codec.underline(cell.underline)
         state["underline"] = cell.underline
+    mosaic = cell.mosaic is not None
+    if mosaic != state["mosaic"]:
+        out += codec.charset(mosaic)
+        state["mosaic"] = mosaic
     return bytes(out)
 
 
 def encode_run(run):
+    if run and run[0].mosaic is not None:
+        return codec.mosaic_run([cell.mosaic for cell in run])
     out = bytearray()
     i = 0
     while i < len(run):
@@ -112,6 +130,8 @@ def paint_runs(out, row_index, row, *, include_default=False):
         if run[0].size != codec.NORMAL:
             out += codec.size(run[0].size)
         out += encode_run(run)
+        if run[0].mosaic is not None:
+            out += codec.charset(False)
         if run[0].size != codec.NORMAL:
             out += codec.size(codec.NORMAL)
         if run[0].underline:
@@ -191,6 +211,8 @@ def cell_diff_row_bytes(row_index, old_row, new_row):
         state = default_state()
         out += attr_bytes(state, new_row[start])
         out += encode_run([new_row[col] for col in cols])
+        if new_row[start].mosaic is not None:
+            out += codec.charset(False)
 
     if clear_start is not None:
         out += codec.pos(row_index, clear_start)
@@ -226,11 +248,14 @@ def paint_diff_row(out, row_index, old_row, new_row, *, paint, header_paint):
 
 def cursor_bytes(screen):
     out = bytearray()
+    out += codec.charset(False)
     out += codec.pos(screen.cursor_row, screen.cursor_col)
     state = default_state()
     out += codec.cursor(screen.cursor_visible)
     cell = screen.rows[screen.cursor_row][screen.cursor_col]
     out += attr_bytes(state, cell)
+    if cell.mosaic is not None:
+        out += codec.charset(False)
     if cell.size != codec.NORMAL:
         out += codec.size(cell.size)
     return bytes(out)

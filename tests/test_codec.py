@@ -123,6 +123,95 @@ class MiscEncoderTests(unittest.TestCase):
         self.assertEqual(codec.mosaic(0x3F), b"\x0e\x3f\x0f")
 
 
+class MosaicCodecTests(unittest.TestCase):
+    def test_charset(self):
+        self.assertEqual(codec.charset(True), b"\x0e")
+        self.assertEqual(codec.charset(False), b"\x0f")
+
+    def test_known_wire_bytes(self):
+        self.assertEqual(codec.g1_byte(0), 0x20)
+        self.assertEqual(codec.g1_byte(1), 0x60)
+        self.assertEqual(codec.g1_byte(2), 0x30)
+        self.assertEqual(codec.g1_byte(12), 0x2C)
+        self.assertEqual(codec.g1_byte(21), 0x6A)
+        self.assertEqual(codec.g1_byte(32), 0x21)
+        self.assertEqual(codec.g1_byte(42), 0x35)
+        self.assertEqual(codec.g1_byte(48), 0x23)
+        self.assertEqual(codec.g1_byte(63), 0x5F)
+
+    def test_all_patterns_round_trip(self):
+        for pattern in range(64):
+            self.assertEqual(
+                codec.g1_pattern(codec.g1_byte(pattern)), pattern
+            )
+
+    def test_full_block_bytes(self):
+        self.assertEqual(codec.g1_pattern(0x5F), 63)
+        self.assertEqual(codec.g1_pattern(0x7F), 63)
+
+    def test_observed_alias(self):
+        self.assertEqual(codec.g1_pattern(0x40), 1)
+        self.assertEqual(codec.g1_pattern(0x5E), 31)
+
+    def test_invalid_pattern(self):
+        with self.assertRaises(ValueError):
+            codec.g1_byte(64)
+        with self.assertRaises(ValueError):
+            codec.g1_byte(-1)
+        with self.assertRaises(TypeError):
+            codec.g1_byte("x")
+
+    def test_invalid_byte(self):
+        with self.assertRaises(ValueError):
+            codec.g1_pattern(0x80)
+        with self.assertRaises(TypeError):
+            codec.g1_pattern("x")
+
+    def test_repeat_byte(self):
+        self.assertEqual(codec.repeat_byte(0x60, 0), b"")
+        self.assertEqual(codec.repeat_byte(0x60, 1), b"\x60")
+        self.assertEqual(codec.repeat_byte(0x60, 3), b"\x60\x12\x42")
+        self.assertEqual(
+            codec.repeat_byte(0x60, 64), b"\x60\x12\x7f"
+        )
+        self.assertEqual(
+            codec.repeat_byte(0x60, 65), b"\x60\x12\x7f\x12\x41"
+        )
+
+    def test_mosaic_run_groups_repeats(self):
+        self.assertEqual(
+            codec.mosaic_run((1, 1, 1)), b"\x60\x12\x42"
+        )
+        self.assertEqual(
+            codec.mosaic_run((0, 1, 63)), b"\x20\x60\x5f"
+        )
+
+    def test_glyphs(self):
+        self.assertEqual(codec.mosaic_glyph(0), " ")
+        self.assertEqual(codec.mosaic_glyph(63), "█")
+        self.assertEqual(codec.mosaic_glyph(21), "▐")
+        self.assertEqual(codec.mosaic_glyph(42), "▌")
+        self.assertEqual(codec.mosaic_glyph(32), "\U0001FB00")
+        self.assertEqual(codec.mosaic_glyph(1, style="blocks"), "▗")
+        self.assertEqual(codec.mosaic_glyph(2, style="blocks"), "▖")
+        self.assertEqual(codec.mosaic_glyph(16, style="blocks"), "▝")
+        self.assertEqual(codec.mosaic_glyph(32, style="blocks"), "▘")
+        self.assertEqual(codec.mosaic_glyph(63, style="blocks"), "█")
+        for pattern in range(64):
+            self.assertEqual(len(codec.mosaic_glyph(pattern)), 1)
+            self.assertEqual(
+                len(codec.mosaic_glyph(pattern, style="blocks")), 1
+            )
+            self.assertEqual(
+                codec.mosaic_glyph(pattern, style="plain"),
+                " " if pattern == 0 else "▚",
+            )
+
+    def test_invalid_glyph_style(self):
+        with self.assertRaises(ValueError):
+            codec.mosaic_glyph(1, style="unknown")
+
+
 class InputParserTests(unittest.TestCase):
     def setUp(self):
         self.parser = InputParser()

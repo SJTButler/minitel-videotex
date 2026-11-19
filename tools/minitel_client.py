@@ -233,10 +233,11 @@ class Client:
 
 
 class View:
-    def __init__(self, stdscr, *, mono=False, wide=True):
+    def __init__(self, stdscr, *, mono=False, wide=True, mosaic="sextant"):
         self.stdscr = stdscr
         self.mono = mono
         self.wide = wide
+        self.mosaic = mosaic
         self.colour = False
         self.pairs = set()
         self.stdscr.keypad(True)
@@ -297,6 +298,8 @@ class View:
         return attrs
 
     def _glyph(self, cell, x):
+        if cell.mosaic is not None:
+            return codec.mosaic_glyph(cell.mosaic, style=self.mosaic), 1
         if cell.size in (codec.DOUBLE_WIDTH, codec.DOUBLE_SIZE):
             if x + 1 < COLS:
                 if cell.ch == " ":
@@ -420,7 +423,9 @@ class View:
 
 
 def run(stdscr, args):
-    view = View(stdscr, mono=args.mono, wide=args.wide)
+    view = View(
+        stdscr, mono=args.mono, wide=args.wide, mosaic=args.mosaic
+    )
     client = Client(
         args.connect[0],
         args.connect[1],
@@ -522,6 +527,12 @@ def parse_args(argv=None):
         action=argparse.BooleanOptionalAction,
         default=True,
         help="use fullwidth glyphs for double-width text",
+    )
+    ap.add_argument(
+        "--mosaic",
+        choices=("sextant", "blocks", "plain"),
+        default="sextant",
+        help="mosaic glyph style (default: sextant)",
     )
     ap.add_argument(
         "--mono",

@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Added G1 mosaic cells: `Cell.mosaic` and `Screen.put_mosaic` carry a 0..63
+  2x3 block pattern through the normal `Screen` IR. The renderer emits `SO`/
+  `SI` runs with `REP`, supports mosaic cells in cell diffs, and returns to G0
+  at the cursor; the virtual Minitel and terminal client share the G1 wire
+  mapping and sextant glyph table. The `901` test card now includes a mosaic
+  row, and `docs/authoring-pages.md` documents the page contract.
 - Hardened the page/runtime boundary after the 2026-11-18 external review.
   Double-width and double-height characters now use explicit continuation
   cells, so renders, diffs, the virtual Minitel, and the client agree on the

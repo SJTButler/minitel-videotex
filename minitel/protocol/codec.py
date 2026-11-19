@@ -198,6 +198,192 @@ def mosaic(value):
     return bytes([SO, value, SI])
 
 
+def charset(mosaic=False):
+    """Select G1 semi-graphics (``SO``) or G0 text (``SI``)."""
+    return bytes([SO if mosaic else SI])
+
+
+def g1_byte(pattern):
+    """Encode a 0..63 2x3 block pattern as its canonical G1 byte.
+
+    Pattern bits are ordered top-left (bit 5) to bottom-right (bit 0)::
+
+        5 4
+        3 2
+        1 0
+
+    The five low wire bits are the reverse of pattern bits 5..1, and wire
+    bit 6 carries pattern bit 0. The full block is normalised to ``0x5F``;
+    ``0x7F`` is the obliteration byte and is not emitted.
+    """
+    if not isinstance(pattern, int) or isinstance(pattern, bool):
+        raise TypeError("mosaic pattern must be an int")
+    if not 0 <= pattern <= 63:
+        raise ValueError("mosaic pattern must be 0..63")
+    value = 0x20
+    value += ((pattern >> 5) & 1)
+    value += ((pattern >> 4) & 1) * 2
+    value += ((pattern >> 3) & 1) * 4
+    value += ((pattern >> 2) & 1) * 8
+    value += ((pattern >> 1) & 1) * 16
+    value += (pattern & 1) * 64
+    return 0x5F if value == 0x7F else value
+
+
+def _reverse5(value):
+    return (
+        ((value & 0x01) << 4)
+        | ((value & 0x02) << 2)
+        | (value & 0x04)
+        | ((value & 0x08) >> 2)
+        | ((value & 0x10) >> 4)
+    )
+
+
+def g1_pattern(value):
+    """Decode a G1 byte to a 0..63 pattern, or ``None`` if it is not G1.
+
+    ``0x20..0x3F`` and ``0x60..0x7F`` are the canonical ranges. ``0x5F`` and
+    ``0x7F`` are both the full block. The observed ``0x40..0x5E`` alias of
+    ``0x60..0x7E`` is accepted for capture fidelity; the encoder never emits
+    it.
+    """
+    if not isinstance(value, int) or isinstance(value, bool):
+        raise TypeError("mosaic byte must be an int")
+    if not 0 <= value <= 0x7F:
+        raise ValueError("mosaic byte must be 0..0x7F")
+    if value == 0x5F:
+        return 63
+    if 0x20 <= value <= 0x3F:
+        return _reverse5(value - 0x20) << 1
+    if 0x60 <= value <= 0x7F:
+        return (_reverse5(value - 0x60) << 1) | 1
+    if 0x40 <= value <= 0x5E:
+        return g1_pattern(value | 0x20)
+    return None
+
+
+def repeat_byte(value, count):
+    """Repeat a raw byte with ``REP``, without a charset transition."""
+    if not isinstance(value, int) or not 0 <= value <= 0xFF:
+        raise ValueError("repeat byte must be 0..0xFF")
+    if count <= 0:
+        return b""
+    out = bytearray([value])
+    if count == 1:
+        return bytes(out)
+    remaining = count - 1
+    while remaining > 63:
+        out.extend([REP, 0x40 + 63])
+        remaining -= 63
+    if remaining:
+        out.extend([REP, 0x40 + remaining])
+    return bytes(out)
+
+
+def mosaic_run(patterns):
+    """Encode a sequence of patterns as one G1 run, using ``REP``."""
+    patterns = tuple(patterns)
+    for pattern in patterns:
+        if not isinstance(pattern, int) or isinstance(pattern, bool):
+            raise TypeError("mosaic patterns must be ints")
+        if not 0 <= pattern <= 63:
+            raise ValueError("mosaic patterns must be 0..63")
+    out = bytearray()
+    index = 0
+    while index < len(patterns):
+        value = g1_byte(patterns[index])
+        end = index + 1
+        while end < len(patterns) and g1_byte(patterns[end]) == value:
+            end += 1
+        out += repeat_byte(value, end - index)
+        index = end
+    return bytes(out)
+
+
+_SEXTANT_BRAILLE = (
+    "⠁⠈⠉⠂⠃⠊⠋⠐⠑⠘⠙⠒⠓⠚⠛⠄"
+    "⠅⠌⠍⠆⠎⠏⠔⠕⠜⠝⠖⠗⠞⠟⠠⠡"
+    "⠨⠩⠢⠣⠪⠫⠰⠱⠹⠲⠳⠺⠻⠤⠥⠬"
+    "⠭⠦⠧⠮⠯⠴⠵⠼⠽⠶⠷⠾"
+)
+_MOSAIC_BLOCKS = (
+    " ", "▘", "▝", "▀", "▖", "▌", "▞", "▛",
+    "▗", "▚", "▐", "▜", "▄", "▙", "▟", "█",
+)
+
+
+def _braille_pattern(braille):
+    bits = ord(braille) - 0x2800
+    pattern = 0
+    if bits & 0x01:
+        pattern |= 0x20
+    if bits & 0x08:
+        pattern |= 0x10
+    if bits & 0x02:
+        pattern |= 0x08
+    if bits & 0x10:
+        pattern |= 0x04
+    if bits & 0x04:
+        pattern |= 0x02
+    if bits & 0x20:
+        pattern |= 0x01
+    return pattern
+
+
+def _build_mosaic_glyphs():
+    glyphs = {0: " ", 21: "▐", 42: "▌", 63: "█"}
+    for index, braille in enumerate(_SEXTANT_BRAILLE):
+        glyphs.setdefault(_braille_pattern(braille), chr(0x1FB00 + index))
+    return glyphs
+
+
+def _block_glyph(pattern):
+    quad = 0
+    if pattern & 0x20:
+        quad |= 0x01
+    if pattern & 0x10:
+        quad |= 0x02
+    if pattern & 0x02:
+        quad |= 0x04
+    if pattern & 0x01:
+        quad |= 0x08
+    glyph = _MOSAIC_BLOCKS[quad]
+    if glyph == " ":
+        if (pattern & 0x0C) == 0x0C:
+            return "▄"
+        if pattern & 0x08:
+            return "▌"
+        if pattern & 0x04:
+            return "▐"
+    return glyph
+
+
+_MOSAIC_GLYPHS = _build_mosaic_glyphs()
+_MOSAIC_BLOCK_GLYPHS = {
+    pattern: _block_glyph(pattern) for pattern in range(64)
+}
+
+
+def mosaic_glyph(pattern, style="sextant"):
+    """Return a display glyph for a 0..63 mosaic pattern.
+
+    ``sextant`` uses the Symbols for Legacy Computing sextants, ``blocks`` a
+    coarser block-element approximation, and ``plain`` a single placeholder.
+    """
+    if not isinstance(pattern, int) or isinstance(pattern, bool):
+        raise TypeError("mosaic pattern must be an int")
+    if not 0 <= pattern <= 63:
+        raise ValueError("mosaic pattern must be 0..63")
+    if style == "sextant":
+        return _MOSAIC_GLYPHS.get(pattern, "▚")
+    if style == "blocks":
+        return _MOSAIC_BLOCK_GLYPHS[pattern]
+    if style == "plain":
+        return " " if pattern == 0 else "▚"
+    raise ValueError("mosaic style must be 'sextant', 'blocks', or 'plain'")
+
+
 def cursor(on=True):
     return bytes([CON if on else COF])
 

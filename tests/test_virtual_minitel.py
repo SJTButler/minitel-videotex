@@ -145,5 +145,55 @@ class DecoderTests(unittest.TestCase):
         self.assertEqual(decoder.screen.row, VM.ROWS - 1)
 
 
+class MosaicDecoderTests(unittest.TestCase):
+    def decode(self, data):
+        decoder = VM.Decoder()
+        decoder.feed(data)
+        return decoder
+
+    def test_g1_byte_sets_pattern_and_glyph(self):
+        decoder = self.decode(b"\x0e\x21\x0f")
+        cell = decoder.screen.rows[1][0]
+        self.assertEqual(cell.mosaic, 32)
+        self.assertEqual(cell.charset, 1)
+        self.assertEqual(
+            decoder.screen.text().splitlines()[1][0], "\U0001FB00"
+        )
+
+    def test_text_after_si(self):
+        decoder = self.decode(b"\x0e\x21\x0fA")
+        self.assertEqual(decoder.screen.rows[1][0].mosaic, 32)
+        self.assertEqual(decoder.screen.rows[1][1].ch, "A")
+        self.assertEqual(decoder.screen.rows[1][1].charset, 0)
+
+    def test_repeat_mosaic(self):
+        decoder = self.decode(b"\x0e\x21\x12\x42\x0f")
+        self.assertEqual(
+            [decoder.screen.rows[1][col].mosaic for col in range(3)],
+            [32, 32, 32],
+        )
+
+    def test_full_block_variants(self):
+        decoder = self.decode(b"\x0e\x5f\x7f\x0f")
+        self.assertEqual(decoder.screen.rows[1][0].mosaic, 63)
+        self.assertEqual(decoder.screen.rows[1][1].mosaic, 63)
+
+    def test_observed_alias(self):
+        decoder = self.decode(b"\x0e\x40\x0f")
+        self.assertEqual(decoder.screen.rows[1][0].mosaic, 1)
+
+    def test_split_g1_feed(self):
+        decoder = VM.Decoder()
+        decoder.feed(b"\x0e")
+        decoder.feed(b"\x21")
+        decoder.feed(b"\x0f")
+        self.assertEqual(decoder.screen.rows[1][0].mosaic, 32)
+
+    def test_clone_preserves_mosaic(self):
+        decoder = self.decode(b"\x0e\x21\x0f")
+        cell = decoder.screen.rows[1][0].clone()
+        self.assertEqual(cell.mosaic, 32)
+
+
 if __name__ == "__main__":
     unittest.main()

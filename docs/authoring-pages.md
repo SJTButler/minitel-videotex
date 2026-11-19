@@ -452,13 +452,40 @@ them. Double-size attributes are not usable in G1 mosaic mode. Cursor
 positioning resets the size to normal, so the renderer always emits position,
 then size, then text.
 
+### Mosaic cells
+
+G1 semi-graphics give each cell a 2x3 block grid. Use `Screen.put_mosaic` for
+one cell; the pattern is a 0..63 bitmap, with bits ordered from top-left to
+bottom-right:
+
+```
+5 4
+3 2
+1 0
+```
+
+```python
+s.put_mosaic(4, 2, 48)                 # top half filled
+s.put_mosaic(4, 3, 63)                 # full block
+s.put_mosaic(5, 0, 1, fg=codec.RED)    # bottom-right pixel
+```
+
+`fg`, `bg`, `inverse`, and `flash` work. Double size and underline do not;
+`put_mosaic` rejects them. `to_text()` renders a Unicode sextant glyph so layout
+tests stay readable; the terminal client can fall back to block elements or a
+single placeholder. The renderer emits `SO`...`SI` around a mosaic run, so text
+after the run is back in G0. One mosaic byte is one screen cell; runs use `REP`,
+and `paint="cell"` diffs mosaic cells like any other cell. Keep mosaics for
+rules, boxes, icons, bars, and small graphics, not photographs.
+
 Use `codec.text` for accents and special characters. `Screen.text` accepts
 Unicode; the renderer encodes it through `codec.text` and raises on characters
 the Minitel cannot represent.
 
-For raw protocol work, `minitel.protocol.codec` exposes `pos`, `home`, `clear`, `fg`,
-`bg`, `inverse`, `flash`, `underline`, `size`, `repeat`, `mosaic`, `cursor`,
-and the input parser. Most pages should not need it beyond constants.
+For raw protocol work, `minitel.protocol.codec` exposes `pos`, `home`, `clear`,
+`fg`, `bg`, `inverse`, `flash`, `underline`, `size`, `repeat`, `mosaic`,
+`charset`, `g1_byte`, `g1_pattern`, `mosaic_run`, `cursor`, and the input
+parser. Most pages should not need it beyond constants.
 
 Presentation hints on a `Screen`:
 

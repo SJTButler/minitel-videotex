@@ -12,6 +12,12 @@ import os
 import socket
 import sys
 
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if ROOT not in sys.path:
+    sys.path.insert(0, ROOT)
+
+from minitel.protocol import codec
+
 ROWS = 25
 COLS = 40
 
@@ -46,11 +52,12 @@ ACCENTS = {
 class Cell:
     __slots__ = (
         "ch", "fg", "bg", "inverse", "flash", "underline", "size",
-        "charset", "continuation",
+        "charset", "mosaic", "continuation",
     )
 
     def __init__(self, ch=" ", fg=7, bg=0, inverse=False, flash=False,
-                 underline=False, size=0, charset=0, continuation=False):
+                 underline=False, size=0, charset=0, mosaic=None,
+                 continuation=False):
         self.ch = ch
         self.fg = fg
         self.bg = bg
@@ -59,6 +66,7 @@ class Cell:
         self.underline = underline
         self.size = size
         self.charset = charset
+        self.mosaic = mosaic
         self.continuation = continuation
 
     def clone(self, ch=None):
@@ -67,6 +75,7 @@ class Cell:
             fg=self.fg, bg=self.bg, inverse=self.inverse,
             flash=self.flash, underline=self.underline,
             size=self.size, charset=self.charset,
+            mosaic=self.mosaic,
             continuation=self.continuation,
         )
 
@@ -79,6 +88,7 @@ class Screen:
         self.col = 0
         self.cursor = False
         self.last_ch = " "
+        self.last_mosaic = None
         self.bell = 0
         self.scroll_mode = False
 
@@ -86,6 +96,7 @@ class Screen:
         self.rows = [[Cell() for _ in range(COLS)] for _ in range(ROWS)]
         self.pen = Cell()
         self.last_ch = " "
+        self.last_mosaic = None
         self.row = 1
         self.col = 0
 
@@ -102,6 +113,7 @@ class Screen:
             self.line_feed()
         cell = self.pen.clone(ch)
         cell.charset = self.pen.charset
+        cell.mosaic = None
         self.rows[self.row][self.col] = cell
         columns = 2 if self.pen.size in (2, 3) else 1
         rows = 2 if self.pen.size in (1, 3) else 1
@@ -113,11 +125,29 @@ class Screen:
                 continuation.continuation = True
                 self.rows[row][col] = continuation
         self.last_ch = ch
+        self.last_mosaic = None
         self.col += columns
+
+    def put_mosaic(self, pattern):
+        if self.col >= COLS:
+            self.col = 0
+            self.line_feed()
+        cell = self.pen.clone(" ")
+        cell.charset = 1
+        cell.mosaic = pattern
+        cell.size = 0
+        cell.continuation = False
+        self.rows[self.row][self.col] = cell
+        self.last_ch = " "
+        self.last_mosaic = pattern
+        self.col += 1
 
     def repeat(self, count):
         for _ in range(count):
-            self.put(self.last_ch)
+            if self.last_mosaic is None:
+                self.put(self.last_ch)
+            else:
+                self.put_mosaic(self.last_mosaic)
 
     def _blank_row(self):
         return [self.pen.clone(" ") for _ in range(COLS)]
@@ -158,7 +188,10 @@ class Screen:
         out = []
         for r in range(ROWS):
             out.append("".join(
-                cell.ch for cell in self.rows[r] if not cell.continuation
+                codec.mosaic_glyph(cell.mosaic)
+                if cell.mosaic is not None
+                else cell.ch
+                for cell in self.rows[r] if not cell.continuation
             ))
         return "\n".join(out)
 
@@ -237,9 +270,16 @@ class Decoder:
             elif b == 0x07:
                 self.screen.bell += 1
                 i += 1
+            elif b == 0x7F and self.screen.pen.charset == 1:
+                self.screen.put_mosaic(63)
+                i += 1
             elif 0x20 <= b <= 0x7E:
                 if self.screen.pen.charset == 1:
-                    self.screen.put("▚")
+                    pattern = codec.g1_pattern(b)
+                    if pattern is None:
+                        self.screen.put("▚")
+                    else:
+                        self.screen.put_mosaic(pattern)
                 else:
                     self.screen.put(chr(b))
                 i += 1
@@ -317,6 +357,12 @@ class Decoder:
         return 3, i + 3
 
 
+def display_glyph(cell):
+    if cell.mosaic is not None:
+        return codec.mosaic_glyph(cell.mosaic)
+    return cell.ch
+
+
 def ansi_cell(cell):
     fg = cell.fg
     bg = cell.bg
@@ -327,7 +373,7 @@ def ansi_cell(cell):
         codes.append("4")
     if cell.flash:
         codes.append("5")
-    return "\x1b[" + ";".join(codes) + "m" + cell.ch + "\x1b[0m"
+    return "\x1b[" + ";".join(codes) + "m" + display_glyph(cell) + "\x1b[0m"
 
 
 def render(screen, color):
@@ -341,7 +387,8 @@ def render(screen, color):
             )
         else:
             line = "".join(
-                cell.ch for cell in screen.rows[r] if not cell.continuation
+                display_glyph(cell)
+                for cell in screen.rows[r] if not cell.continuation
             )
         lines.append(f"{r:02d} |{line}|")
     lines.append("")
