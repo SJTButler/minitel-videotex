@@ -20,12 +20,22 @@ class Location:
 
 
 @dataclass(frozen=True)
+class DayForecast:
+    date: str
+    high: float | None = None
+    low: float | None = None
+    precipitation: float | None = None
+    code: int | None = None
+
+
+@dataclass(frozen=True)
 class Weather:
     place: str
     temperature: float | None = None
     code: int | None = None
     high: float | None = None
     low: float | None = None
+    days: tuple[DayForecast, ...] = ()
 
 
 LOCATIONS = (
@@ -57,6 +67,37 @@ def _first_float(value):
     return _as_float(value)
 
 
+def _series(value):
+    return value if isinstance(value, (list, tuple)) else ()
+
+
+def _parse_days(daily):
+    times = _series(daily.get("time"))
+    highs = _series(daily.get("temperature_2m_max"))
+    lows = _series(daily.get("temperature_2m_min"))
+    rain = _series(daily.get("precipitation_sum"))
+    codes = _series(daily.get("weather_code"))
+    count = max(
+        len(times), len(highs), len(lows), len(rain), len(codes)
+    )
+    days = []
+    for index in range(count):
+        days.append(DayForecast(
+            date=str(times[index]) if index < len(times) else "",
+            high=(
+                _as_float(highs[index]) if index < len(highs) else None
+            ),
+            low=_as_float(lows[index]) if index < len(lows) else None,
+            precipitation=(
+                _as_float(rain[index]) if index < len(rain) else None
+            ),
+            code=(
+                _as_int(codes[index]) if index < len(codes) else None
+            ),
+        ))
+    return tuple(days)
+
+
 def parse_weather(payload, place):
     if not isinstance(payload, dict):
         raise ValueError("invalid weather payload")
@@ -76,6 +117,7 @@ def parse_weather(payload, place):
         ),
         high=_first_float(daily.get("temperature_2m_max")),
         low=_first_float(daily.get("temperature_2m_min")),
+        days=_parse_days(daily),
     )
 
 
@@ -89,8 +131,9 @@ class WeatherSource:
             f"{BASE_URL}?latitude={location.latitude}"
             f"&longitude={location.longitude}"
             "&current=temperature_2m,weather_code"
-            "&daily=temperature_2m_max,temperature_2m_min"
-            "&timezone=auto&forecast_days=1"
+            "&daily=temperature_2m_max,temperature_2m_min,"
+            "precipitation_sum,weather_code"
+            "&timezone=auto&forecast_days=7"
         )
         payload = self._get_json(url, timeout=self.timeout)
         return parse_weather(payload, location.name)

@@ -55,7 +55,7 @@ minitel/       reusable, content-free library
   app.py               registry + profile + session + transport + services
   transport.py         TCP and connection-level pacing
   text.py              remote text sanitising, fit/wrap, domain, age
-minitel_kit/   optional Table/Rect drawing helpers on top of Screen
+minitel_kit/   optional Table/Rect/mosaic/chart drawing helpers on top of Screen
 run_server.py  example CLI wiring: pages + services + MinitelApp
 services/      background services, auto-discovered
   common/
@@ -291,9 +291,9 @@ The news service is the worked example:
 - `minitel/text.py` strips HTML, unescapes entities, transliterates typographic
   punctuation and accents, drops emoji, and wraps to the 40-column screen. Every
   remote title, author, domain, and comment goes through it before `Screen.text`.
-- `minitel_kit/` is optional: `Column`/`Table` and clipped `Rect` helpers draw
-  into a `Screen`, but the core never imports them. Use them or keep your own
-  geometry.
+- `minitel_kit/` is optional: `Column`/`Table`, clipped `Rect`,
+  `MosaicCanvas`, `Bars`, and `Sparkline` draw into a `Screen`, but the core
+  never imports them. Use them or keep your own geometry.
 - `minitel/design/pager.py` provides the `Pager` used by the four-story list.
 - `minitel/data/http.py` provides `get_json()` and `HttpError` for cache threads.
 - `pages/common/layout.py` exposes `BODY`, `ACCENT`, `SECONDARY`, and `WARNING`.

@@ -2,6 +2,7 @@
 
 from .service import (
     LOCATIONS,
+    DayForecast,
     Location,
     Weather,
     WeatherService,
@@ -12,6 +13,7 @@ from .service import (
 
 __all__ = [
     "LOCATIONS",
+    "DayForecast",
     "Location",
     "Weather",
     "WeatherService",

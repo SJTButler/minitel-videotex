@@ -22,8 +22,11 @@ def payload():
     return {
         "current": {"temperature_2m": 12.5, "weather_code": 3},
         "daily": {
-            "temperature_2m_max": [14.2],
-            "temperature_2m_min": [8.1],
+            "time": ["2026-11-19", "2026-11-20"],
+            "temperature_2m_max": [14.2, 15.0],
+            "temperature_2m_min": [8.1, 9.0],
+            "precipitation_sum": [0.0, 2.5],
+            "weather_code": [3, 61],
         },
     }
 
@@ -36,6 +39,34 @@ class ParseTests(unittest.TestCase):
         self.assertEqual(weather.code, 3)
         self.assertEqual(weather.high, 14.2)
         self.assertEqual(weather.low, 8.1)
+        self.assertEqual(len(weather.days), 2)
+        first = weather.days[0]
+        self.assertEqual(first.date, "2026-11-19")
+        self.assertEqual(first.high, 14.2)
+        self.assertEqual(first.low, 8.1)
+        self.assertEqual(first.precipitation, 0.0)
+        self.assertEqual(first.code, 3)
+
+    def test_short_series_fill_with_none(self):
+        weather = parse_weather(
+            {
+                "current": {},
+                "daily": {
+                    "time": ["2026-11-19"],
+                    "temperature_2m_max": [10.0],
+                    "temperature_2m_min": [],
+                    "precipitation_sum": [1.0],
+                    "weather_code": [],
+                },
+            },
+            "PARIS",
+        )
+        self.assertEqual(len(weather.days), 1)
+        day = weather.days[0]
+        self.assertEqual(day.high, 10.0)
+        self.assertIsNone(day.low)
+        self.assertEqual(day.precipitation, 1.0)
+        self.assertIsNone(day.code)
 
     def test_missing_optional_fields(self):
         weather = parse_weather({"current": {}}, "PARIS")
@@ -43,6 +74,7 @@ class ParseTests(unittest.TestCase):
         self.assertIsNone(weather.code)
         self.assertIsNone(weather.high)
         self.assertIsNone(weather.low)
+        self.assertEqual(weather.days, ())
 
     def test_invalid_payload(self):
         with self.assertRaises(ValueError):
@@ -66,6 +98,8 @@ class SourceTests(unittest.TestCase):
         self.assertIn("latitude=51.5072", url)
         self.assertIn("longitude=-0.1276", url)
         self.assertIn("temperature_2m", url)
+        self.assertIn("precipitation_sum", url)
+        self.assertIn("forecast_days=7", url)
         self.assertEqual(timeout, 2.0)
 
 

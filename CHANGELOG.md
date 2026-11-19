@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Added `minitel_kit.MosaicCanvas`, `Bars`, and `Sparkline`, and the `121
+  WEATHER CHART` page. The weather service now caches a seven-day daily
+  forecast with highs, lows, precipitation, and weather codes, and `120` points
+  at the chart for each city.
 - Added G1 mosaic cells: `Cell.mosaic` and `Screen.put_mosaic` carry a 0..63
   2x3 block pattern through the normal `Screen` IR. The renderer emits `SO`/
   `SI` runs with `REP`, supports mosaic cells in cell diffs, and returns to G0

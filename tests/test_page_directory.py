@@ -48,8 +48,8 @@ class PageDirectoryTests(unittest.TestCase):
         self.assertEqual(
             page_numbers(text),
             [
-                "100", "110", "111", "112", "120", "130",
-                "140", "150", "151", "153", "154", "155",
+                "100", "110", "111", "112", "120", "121",
+                "130", "140", "150", "151", "153", "154",
             ],
         )
         self.assertIn("NUMBER:", text[17])
@@ -60,14 +60,14 @@ class PageDirectoryTests(unittest.TestCase):
         self.assertEqual(
             page_numbers(text),
             [
-                "160", "161", "170", "171", "180", "190", "199", "900",
-                "901", "902", "903", "910",
+                "155", "160", "161", "170", "171", "180", "190", "199",
+                "900", "901", "902", "903",
             ],
         )
         session.feed(SUITE)
         self.assertEqual(
             page_numbers(session.screen.to_text().splitlines()),
-            ["911", "912"],
+            ["910", "911", "912"],
         )
 
     def test_hides_internal_pages(self):
@@ -150,11 +150,11 @@ class PageDirectoryTests(unittest.TestCase):
         line = find_line(text, "903")
         self.assertTrue(line.startswith("903*"))
         self.assertIn("BOUNCING BALL", line)
+        session.feed(SUITE)
+        text = session.screen.to_text().splitlines()
         line = find_line(text, "910")
         self.assertTrue(line.startswith("910*"))
         self.assertIn("CAROUSEL: KILO", line)
-        session.feed(SUITE)
-        text = session.screen.to_text().splitlines()
         line = find_line(text, "911")
         self.assertTrue(line.startswith("911*"))
         self.assertIn("CAROUSEL: NEWS", line)
@@ -191,7 +191,7 @@ class PageDirectoryTests(unittest.TestCase):
         session = make_session(registry)
         self.assertIn("REGISTERED PAGES 1/3", session.screen.to_text())
         lines = session.screen.to_text().splitlines()
-        self.assertTrue(lines[16].startswith("155"))
+        self.assertTrue(lines[16].startswith("154"))
         session.feed(SUITE)
         text = session.screen.to_text()
         self.assertIn("REGISTERED PAGES 2/3", text)
@@ -199,15 +199,15 @@ class PageDirectoryTests(unittest.TestCase):
         self.assertEqual(
             page_numbers(lines),
             [
-                "160", "161", "170", "171", "180", "190", "199", "250",
-                "900", "901", "902", "903",
+                "155", "160", "161", "170", "171", "180", "190", "199",
+                "250", "900", "901", "902",
             ],
         )
         session.feed(SUITE)
         text = session.screen.to_text()
         self.assertIn("REGISTERED PAGES 3/3", text)
         self.assertEqual(
-            page_numbers(text.splitlines()), ["910", "911", "912"]
+            page_numbers(text.splitlines()), ["903", "910", "911", "912"]
         )
 
 

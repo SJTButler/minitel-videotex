@@ -911,7 +911,9 @@ and is never imported by `minitel/`; a service can import it, replace it, or
 draw the same cells itself.
 
 ```python
-from minitel_kit import Column, Rect, Table
+from minitel_kit import (
+    Bars, Column, MosaicCanvas, Rect, Sparkline, Table
+)
 
 departures = Table(
     Column("TIME", 5),
@@ -924,13 +926,22 @@ departures.row(screen, 6, ("12:00", "OXFORD", "2", "ON TIME"))
 
 detail = Rect(top=4, left=19, height=17, width=21)
 detail.text(screen, 0, 0, "OXFORD")
+
+canvas = MosaicCanvas(20, 4)
+canvas.rect(0, 0, 39, 11)
+canvas.draw(screen, 4, 2)
+Bars(18, 4, minimum=0).draw(screen, 12, 2, (3, 5, 2, 7))
+Sparkline(18, 3).draw(screen, 18, 2, (1, 3, 2, 4))
 ```
 
 `Table` owns fixed column widths, alignment, truncation, gap, and per-column
-attributes. `Rect` owns clipped, relative drawing inside a region. Both are
-ordinary `Screen` writers: they do not own cursors, focus, or session state.
-Use them when the geometry is fixed; use direct `Screen` calls for custom
-layouts.
+attributes. `Rect` owns clipped, relative drawing inside a region.
+`MosaicCanvas` is a 2x3 sub-pixel bitmap: `set`/`line`/`rect`/`fill` draw into
+it, and `draw` packs it into mosaic cells, skipping blank cells unless
+`include_blank=True`. `Bars` and `Sparkline` scale values into a fixed cell
+area; `None` values leave a gap. All are ordinary `Screen` writers: they do not
+own cursors, focus, or session state. Use them when the geometry is fixed; use
+direct `Screen` calls for custom layouts.
 
 ## Scroll viewports
 
@@ -1699,6 +1710,7 @@ Keep page numbers stable and descriptive. The example scheme is:
 | `111` | Hacker News headline list |
 | `112` | story detail |
 | `120` | weather: current conditions, forecast, and `120#CODE` city detail |
+| `121` | weather chart: seven-day high/low and precipitation, `121#CODE` city chart |
 | `130` | about / guide |
 | `140` | guestbook |
 | `150` | live scores or next fixtures (`5`), `150#CODE` league direct entry; `151` match detail |

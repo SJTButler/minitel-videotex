@@ -96,6 +96,12 @@ def weather_summary(ctx):
             fit(f"DIRECT: {_direct_codes(service)}", codec.COLS),
             fg=SECONDARY,
         )
+        s.text(
+            15,
+            0,
+            f"CHART: 121#{service.locations[0].code}",
+            fg=SECONDARY,
+        )
     page_input(s, ctx)
     footer(s)
     return s
@@ -156,6 +162,12 @@ def weather_detail(ctx):
     s.text(11, 0, "SOURCE: OPEN-METEO", fg=SECONDARY)
     page_status = _status([(location, snapshot)])
     s.text(13, 0, page_status.text[:codec.COLS], fg=page_status.colour)
+    s.text(
+        15,
+        0,
+        f"CHART: 121#{location.code}",
+        fg=SECONDARY,
+    )
     page_input(s, ctx)
     key_footer(s, ("RETOUR=WEATHER", "SOMMAIRE=HOME"))
     return s
