@@ -25,7 +25,7 @@ def _dial(now):
     for index in range(12):
         angle = -pi / 2 + index * pi / 6
         inner = 0.72 if index % 3 == 0 else 0.82
-        outer = 1.0
+        outer = 0.90
         canvas.line(
             cx + cos(angle) * rx * inner,
             cy + sin(angle) * ry * inner,
