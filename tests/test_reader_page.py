@@ -25,6 +25,7 @@ RETOUR = bytes([0x13, 0x42])
 GUIDE = bytes([0x13, 0x44])
 SUITE = bytes([0x13, 0x48])
 ANNULATION = bytes([0x13, 0x45])
+SOMMAIRE = bytes([0x13, 0x46])
 
 
 def load_virtual_minitel():
@@ -329,10 +330,26 @@ class ReaderPageTests(unittest.TestCase):
         self.assertEqual(session.current.number, "161#BETA")
         session.feed(GUIDE)
         self.assertEqual(session.current.number, "160")
+        self.assertIn("160", session._page_state)
         self.assertEqual(session.values[LINE_FIELD], "BETA PAGE")
         self.assertIn("1 RESULT", row(session, 4))
         session.feed(ENVOI)
         self.assertEqual(session.current.number, "161#BETA")
+
+    def test_index_sommaire_starts_fresh(self):
+        session = make_session()
+        session.feed(b"BETA PAGE")
+        session.feed(ENVOI)
+        session.feed(ENVOI)
+        self.assertEqual(session.current.number, "161#BETA")
+
+        session.feed(SOMMAIRE)
+
+        self.assertEqual(session.current.number, "160")
+        self.assertEqual(session.values[LINE_FIELD], "")
+        state = session._page_state.get("160", {})
+        self.assertNotIn("reader_query", state)
+        self.assertNotIn("reader_reset", state)
 
     def test_anchor_text_matches_target(self):
         session = make_session()

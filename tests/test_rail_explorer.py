@@ -126,6 +126,10 @@ class FakeTrainService:
         )
 
 
+def page_state(session):
+    return session._page_state[session.current.number]
+
+
 def make_session(service):
     registry = pages.build_registry()
     session = Session(
@@ -237,7 +241,7 @@ class RailExplorerTests(unittest.TestCase):
 
     def test_pick_phase_lists_trains(self):
         self.assertEqual(self.session.current.number, "171#FTN")
-        self.assertEqual(self.session.state["rail_phase"], "pick")
+        self.assertEqual(page_state(self.session)["rail_phase"], "pick")
         text = self.session.screen.to_text()
         self.assertIn("PICK A TRAIN FROM FTN", text)
         self.assertIn("HAVANT", text)
@@ -246,10 +250,10 @@ class RailExplorerTests(unittest.TestCase):
 
     def test_pick_commit_switches_to_calls_and_clears_right(self):
         self.session.feed(ENVOI)
-        self.assertEqual(self.session.state["rail_phase"], "explore")
-        self.assertEqual(self.session.state["rail_base"], "FTN")
-        self.assertEqual(self.session.state["rail_alight"], None)
-        self.assertEqual(self.session.state["rail_path"], ["FTN"])
+        self.assertEqual(page_state(self.session)["rail_phase"], "explore")
+        self.assertEqual(page_state(self.session)["rail_base"], "FTN")
+        self.assertEqual(page_state(self.session)["rail_alight"], None)
+        self.assertEqual(page_state(self.session)["rail_path"], ["FTN"])
         self.assertEqual(self.session.focused_region, "calls")
         text = self.session.screen.to_text()
         self.assertIn("CALLS", text)
@@ -260,8 +264,8 @@ class RailExplorerTests(unittest.TestCase):
         self.session.feed(ENVOI)  # take train T1
         self.session.feed(ENVOI)  # commit HAVANT
 
-        self.assertEqual(self.session.state["rail_alight"], "HAV")
-        self.assertEqual(self.session.state["rail_path"], ["FTN", "HAV"])
+        self.assertEqual(page_state(self.session)["rail_alight"], "HAV")
+        self.assertEqual(page_state(self.session)["rail_path"], ["FTN", "HAV"])
         self.assertEqual(self.session.focused_region, "trains")
         self.assertIn(("HAV", None), self.service.departure_calls)
         text = self.session.screen.to_text()
@@ -280,9 +284,9 @@ class RailExplorerTests(unittest.TestCase):
         self.session.feed(ENVOI)
         self.session.feed(ENVOI)  # take T3 at HAVANT
 
-        self.assertEqual(self.session.state["rail_base"], "HAV")
-        self.assertEqual(self.session.state["rail_alight"], None)
-        self.assertEqual(self.session.state["rail_path"], ["FTN", "HAV"])
+        self.assertEqual(page_state(self.session)["rail_base"], "HAV")
+        self.assertEqual(page_state(self.session)["rail_alight"], None)
+        self.assertEqual(page_state(self.session)["rail_path"], ["FTN", "HAV"])
         self.assertEqual(self.session.focused_region, "calls")
         text = self.session.screen.to_text()
         self.assertIn("NO STATION", text)
@@ -290,7 +294,7 @@ class RailExplorerTests(unittest.TestCase):
 
         self.session.feed(ENVOI)  # commit ANG
         self.assertEqual(
-            self.session.state["rail_path"], ["FTN", "HAV", "ANG"]
+            page_state(self.session)["rail_path"], ["FTN", "HAV", "ANG"]
         )
         self.assertIn(
             "PATH FTN > HAV > ANG  0:26",
@@ -338,21 +342,21 @@ class RailExplorerTests(unittest.TestCase):
         self.session.feed(ENVOI)  # B -> C
         self.session.feed(ENVOI)  # C -> D
 
-        self.assertEqual(self.session.state["rail_path"], ["FTN", "HAV"])
-        self.assertEqual(self.session.state["rail_alight"], None)
+        self.assertEqual(page_state(self.session)["rail_path"], ["FTN", "HAV"])
+        self.assertEqual(page_state(self.session)["rail_alight"], None)
 
         self.session.feed(RETOUR)  # D -> C
         self.assertEqual(self.session.focused_region, "trains")
-        self.assertEqual(self.session.state["rail_alight"], "HAV")
+        self.assertEqual(page_state(self.session)["rail_alight"], "HAV")
         self.assertIn("Angmering", self.session.screen.to_text())
 
         self.session.feed(RETOUR)  # C -> B
         self.assertEqual(self.session.focused_region, "calls")
-        self.assertEqual(self.session.state["rail_alight"], None)
+        self.assertEqual(page_state(self.session)["rail_alight"], None)
         self.assertIn("NO STATION", self.session.screen.to_text())
 
         self.session.feed(RETOUR)  # B -> A
-        self.assertEqual(self.session.state["rail_phase"], "pick")
+        self.assertEqual(page_state(self.session)["rail_phase"], "pick")
         self.assertIn(
             "PICK A TRAIN FROM FTN", self.session.screen.to_text()
         )
@@ -368,13 +372,13 @@ class RailExplorerTests(unittest.TestCase):
 
         session.feed(SUITE)  # trains: EXETER -> PLYMOUTH
         session.feed(ENVOI)  # take Plymouth
-        self.assertEqual(session.state["rail_base"], "ANG")
-        self.assertEqual(session.state["rail_alight"], None)
+        self.assertEqual(page_state(session)["rail_base"], "ANG")
+        self.assertEqual(page_state(session)["rail_alight"], None)
 
         session.feed(RETOUR)
 
         self.assertEqual(session.focused_region, "trains")
-        self.assertEqual(session.state["rail_alight"], "ANG")
+        self.assertEqual(page_state(session)["rail_alight"], "ANG")
         self.assertEqual(session.regions["calls"].cursor.selected, 1)
         self.assertEqual(session.regions["trains"].cursor.selected, 1)
         self.assertIn("PLYMOUTH", session.screen.to_text())
@@ -383,11 +387,19 @@ class RailExplorerTests(unittest.TestCase):
         self.session.feed(RETOUR)
         self.assertEqual(self.session.current.number, "170")
 
+    def test_leaving_the_explorer_discards_page_state(self):
+        self.assertIn("171#FTN", self.session._page_state)
+
+        self.session.feed(RETOUR)
+
+        self.assertEqual(self.session.current.number, "170")
+        self.assertNotIn("171#FTN", self.session._page_state)
+
     def test_filtered_entry(self):
         session = make_session(FakeTrainService())
         session.navigate("171#FTNHAV")
 
-        self.assertEqual(session.state["rail_filter"], "HAV")
+        self.assertEqual(page_state(session)["rail_filter"], "HAV")
         self.assertEqual(
             session.registry.get("171#FTNHAV").extension, "FTNHAV"
         )

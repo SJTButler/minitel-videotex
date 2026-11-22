@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+- Added page-scoped state: `ctx.page_state` is keyed by the full page route,
+  created lazily, discarded on leave unless the page declares
+  `retain_state=True`, and pruned once the route leaves history. `SOMMAIRE`
+  clears all page state and a page failure clears only the failing page's
+  state. `ctx.add_resource(resource, scope="page")` closes short-lived handles
+  with the matching page state; connection-scoped resources are unchanged.
+  The Wikipedia index and Rail Explorer now keep their own state instead of
+  namespacing keys in the shared session dict.
+
 - Double-width rows now use span-aware cell diffs: the anchor and continuation
   are repainted as one unit, so a changed double-width run no longer repaints
   the whole row. Double-height/double-size and scroll/shift rows keep the row

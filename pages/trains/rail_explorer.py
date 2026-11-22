@@ -113,24 +113,24 @@ def _calls_after(detail, base):
 
 def _snapshot(ctx):
     return {
-        PHASE: ctx.state.get(PHASE),
-        ORIGIN: ctx.state.get(ORIGIN),
-        FILTER: ctx.state.get(FILTER, ""),
-        BASE: ctx.state.get(BASE),
-        TRAIN: ctx.state.get(TRAIN),
-        ALIGHT: ctx.state.get(ALIGHT),
-        PATH: list(ctx.state.get(PATH, [])),
-        START: ctx.state.get(START),
-        TOTAL: ctx.state.get(TOTAL, 0),
+        PHASE: ctx.page_state.get(PHASE),
+        ORIGIN: ctx.page_state.get(ORIGIN),
+        FILTER: ctx.page_state.get(FILTER, ""),
+        BASE: ctx.page_state.get(BASE),
+        TRAIN: ctx.page_state.get(TRAIN),
+        ALIGHT: ctx.page_state.get(ALIGHT),
+        PATH: list(ctx.page_state.get(PATH, [])),
+        START: ctx.page_state.get(START),
+        TOTAL: ctx.page_state.get(TOTAL, 0),
         FOCUS: ctx.focused_region,
     }
 
 
 def _push_back(ctx):
-    stack = list(ctx.state.get(STACK, []))
+    stack = list(ctx.page_state.get(STACK, []))
     stack.append(_snapshot(ctx))
     del stack[:-20]
-    ctx.state[STACK] = stack
+    ctx.page_state[STACK] = stack
 
 
 def _restore(ctx, snapshot):
@@ -138,9 +138,9 @@ def _restore(ctx, snapshot):
         PHASE, ORIGIN, FILTER, BASE, TRAIN, ALIGHT, PATH, START, TOTAL,
     ):
         if key == PATH:
-            ctx.state[PATH] = list(snapshot.get(PATH, []))
+            ctx.page_state[PATH] = list(snapshot.get(PATH, []))
         else:
-            ctx.state[key] = snapshot.get(key)
+            ctx.page_state[key] = snapshot.get(key)
     ctx.focus_region(snapshot.get(FOCUS, "calls"))
 
 
@@ -154,7 +154,7 @@ def _blank(ctx):
     )
     screen.text(
         3, 0,
-        (ctx.state.get(ERROR) or "USE 171#FROM OR 171#FROMTO")[:40],
+        (ctx.page_state.get(ERROR) or "USE 171#FROM OR 171#FROMTO")[:40],
         fg=WARNING,
     )
     screen.text(5, 0, "THE PATH IS BUILT BY ENVOI HOPS.", fg=SECONDARY)
@@ -190,7 +190,7 @@ def _draw_pick(screen, ctx, choice, items, snapshot, origin, filter_to):
     for row, _index, departure, selected in choice.rows(items):
         train_row(screen, 5 + row, departure, inverse=selected)
     screen.text(17, 0, choice.label)
-    screen.text(19, 0, "PATH " + " > ".join(ctx.state.get(PATH, [])[-5:]))
+    screen.text(19, 0, "PATH " + " > ".join(ctx.page_state.get(PATH, [])[-5:]))
     screen.text(20, 0, "SOURCE: REALTIME TRAINS", fg=SECONDARY)
     screen.text(21, 0, "ENVOI=TAKE TRAIN")
     screen.text(22, 0, "RETOUR=BACK  SOMMAIRE=HOME")
@@ -201,8 +201,8 @@ def _draw_explore(
     screen, ctx, calls_choice, calls, trains_choice, trains,
     snapshot, alight, alight_arrival,
 ):
-    train = ctx.state.get(TRAIN)
-    base = ctx.state.get(BASE, "")
+    train = ctx.page_state.get(TRAIN)
+    base = ctx.page_state.get(BASE, "")
     if train is not None:
         context = f"{train.scheduled} FROM {base}"
         if alight:
@@ -250,8 +250,8 @@ def _draw_explore(
     left.text(screen, 14, 0, calls_choice.label)
     if alight:
         right.text(screen, 14, 0, trains_choice.label)
-    path = ctx.state.get(PATH, [])
-    total = ctx.state.get(TOTAL, 0)
+    path = ctx.page_state.get(PATH, [])
+    total = ctx.page_state.get(TOTAL, 0)
     suffix = f"  {_duration(total)}" if total else ""
     screen.text(
         20, 0,
@@ -269,41 +269,41 @@ def _draw_explore(
 def _screen(ctx):
     token = ctx.take_extension()
     if token is None and ctx.extension is None:
-        ctx.state[PHASE] = "blank"
-        ctx.state[ERROR] = "USE 171#FROM OR 171#FROMTO"
-        ctx.state[PATH] = []
-        ctx.state[START] = None
-        ctx.state[TOTAL] = 0
-        ctx.state[STACK] = []
+        ctx.page_state[PHASE] = "blank"
+        ctx.page_state[ERROR] = "USE 171#FROM OR 171#FROMTO"
+        ctx.page_state[PATH] = []
+        ctx.page_state[START] = None
+        ctx.page_state[TOTAL] = 0
+        ctx.page_state[STACK] = []
     if token is not None:
         route = parse_route(token)
         if route is None:
-            ctx.state[PHASE] = "blank"
-            ctx.state[ERROR] = "USE 171#FROM OR 171#FROMTO"
-            ctx.state[PATH] = []
-            ctx.state[START] = None
-            ctx.state[TOTAL] = 0
-            ctx.state[STACK] = []
+            ctx.page_state[PHASE] = "blank"
+            ctx.page_state[ERROR] = "USE 171#FROM OR 171#FROMTO"
+            ctx.page_state[PATH] = []
+            ctx.page_state[START] = None
+            ctx.page_state[TOTAL] = 0
+            ctx.page_state[STACK] = []
         else:
             origin, filter_to = route
-            ctx.state[PHASE] = "pick"
-            ctx.state[ORIGIN] = origin
-            ctx.state[FILTER] = filter_to
-            ctx.state[BASE] = origin
-            ctx.state[TRAIN] = None
-            ctx.state[ALIGHT] = None
-            ctx.state[PATH] = [origin]
-            ctx.state[START] = None
-            ctx.state[TOTAL] = 0
-            ctx.state[STACK] = []
-            ctx.state[ERROR] = None
+            ctx.page_state[PHASE] = "pick"
+            ctx.page_state[ORIGIN] = origin
+            ctx.page_state[FILTER] = filter_to
+            ctx.page_state[BASE] = origin
+            ctx.page_state[TRAIN] = None
+            ctx.page_state[ALIGHT] = None
+            ctx.page_state[PATH] = [origin]
+            ctx.page_state[START] = None
+            ctx.page_state[TOTAL] = 0
+            ctx.page_state[STACK] = []
+            ctx.page_state[ERROR] = None
 
-    phase = ctx.state.get(PHASE)
+    phase = ctx.page_state.get(PHASE)
     if phase not in ("pick", "explore"):
         return _blank(ctx)
 
-    origin = ctx.state.get(ORIGIN)
-    filter_to = ctx.state.get(FILTER, "")
+    origin = ctx.page_state.get(ORIGIN)
+    filter_to = ctx.page_state.get(FILTER, "")
     service = ctx.service("train")
     configured = service is not None and getattr(service, "configured", False)
 
@@ -322,17 +322,17 @@ def _screen(ctx):
             if pick_snapshot.has_value else ()
         )
     elif phase == "explore" and configured:
-        train = ctx.state.get(TRAIN)
+        train = ctx.page_state.get(TRAIN)
         if train is not None:
             calls_snapshot = service.service(train.unique_identity)
             detail = calls_snapshot.value if calls_snapshot.has_value else None
-            calls = _calls_after(detail, ctx.state.get(BASE, ""))
-        alight = ctx.state.get(ALIGHT)
+            calls = _calls_after(detail, ctx.page_state.get(BASE, ""))
+        alight = ctx.page_state.get(ALIGHT)
         if alight and detail is not None:
             arrival = _arrival_at(detail, alight)
             if arrival:
-                ctx.state[TOTAL] = _elapsed(
-                    ctx.state.get(START), arrival
+                ctx.page_state[TOTAL] = _elapsed(
+                    ctx.page_state.get(START), arrival
                 )
             trains_snapshot = service.departures(
                 alight, time_from=arrival
@@ -351,10 +351,10 @@ def _screen(ctx):
         calls_key = ("pick", origin, filter_to)
         calls_items = pick_items
     else:
-        train = ctx.state.get(TRAIN)
+        train = ctx.page_state.get(TRAIN)
         calls_key = train.unique_identity if train is not None else None
         calls_items = calls
-    trains_key = ctx.state.get(ALIGHT)
+    trains_key = ctx.page_state.get(ALIGHT)
 
     calls_choice = ctx.set_choice(
         calls_items,
@@ -376,16 +376,16 @@ def _screen(ctx):
             screen, ctx, calls_choice, pick_items, pick_snapshot,
             origin, filter_to,
         )
-    alight_stop = _arrival_at(detail, ctx.state.get(ALIGHT))
+    alight_stop = _arrival_at(detail, ctx.page_state.get(ALIGHT))
     return _draw_explore(
         screen, ctx, calls_choice, calls, trains_choice, trains,
         trains_snapshot or calls_snapshot,
-        ctx.state.get(ALIGHT), alight_stop,
+        ctx.page_state.get(ALIGHT), alight_stop,
     )
 
 
 def _submit(ctx, line):
-    phase = ctx.state.get(PHASE)
+    phase = ctx.page_state.get(PHASE)
     focus = ctx.focused_region
     if focus == "calls":
         committed = ctx.region("calls").committed
@@ -393,36 +393,36 @@ def _submit(ctx, line):
             return _current(ctx)
         _push_back(ctx)
         if phase == "pick":
-            ctx.state[TRAIN] = committed
-            ctx.state[BASE] = ctx.state.get(ORIGIN)
-            ctx.state[PHASE] = "explore"
-            ctx.state[ALIGHT] = None
-            ctx.state[PATH] = [ctx.state.get(ORIGIN)]
-            ctx.state[START] = _start_at(committed)
-            ctx.state[TOTAL] = 0
+            ctx.page_state[TRAIN] = committed
+            ctx.page_state[BASE] = ctx.page_state.get(ORIGIN)
+            ctx.page_state[PHASE] = "explore"
+            ctx.page_state[ALIGHT] = None
+            ctx.page_state[PATH] = [ctx.page_state.get(ORIGIN)]
+            ctx.page_state[START] = _start_at(committed)
+            ctx.page_state[TOTAL] = 0
             ctx.focus_region("calls")
         else:
             station = str(committed).strip().upper()
             if not valid_crs(station):
                 return _current(ctx)
-            base = ctx.state.get(BASE, "")
-            path = list(ctx.state.get(PATH, []))
+            base = ctx.page_state.get(BASE, "")
+            path = list(ctx.page_state.get(PATH, []))
             if base in path:
                 path = path[:path.index(base) + 1]
             else:
                 path = [base] if base else []
             path.append(station)
-            ctx.state[PATH] = path
-            ctx.state[ALIGHT] = station
+            ctx.page_state[PATH] = path
+            ctx.page_state[ALIGHT] = station
             service = ctx.service("train")
-            train = ctx.state.get(TRAIN)
+            train = ctx.page_state.get(TRAIN)
             if service is not None and train is not None:
                 snapshot = service.service(train.unique_identity)
                 detail = snapshot.value if snapshot.has_value else None
                 arrival = _arrival_at(detail, station)
                 if arrival:
-                    ctx.state[TOTAL] = _elapsed(
-                        ctx.state.get(START), arrival
+                    ctx.page_state[TOTAL] = _elapsed(
+                        ctx.page_state.get(START), arrival
                     )
             ctx.focus_region("trains")
         return _current(ctx)
@@ -432,27 +432,27 @@ def _submit(ctx, line):
         if committed is None:
             return _current(ctx)
         _push_back(ctx)
-        alight = ctx.state.get(ALIGHT)
-        ctx.state[BASE] = alight
-        ctx.state[TRAIN] = committed
-        ctx.state[ALIGHT] = None
-        path = list(ctx.state.get(PATH, []))
+        alight = ctx.page_state.get(ALIGHT)
+        ctx.page_state[BASE] = alight
+        ctx.page_state[TRAIN] = committed
+        ctx.page_state[ALIGHT] = None
+        path = list(ctx.page_state.get(PATH, []))
         if not path or path[-1] != alight:
             if alight in path:
                 path = path[:path.index(alight) + 1]
             elif alight:
                 path.append(alight)
-        ctx.state[PATH] = path
+        ctx.page_state[PATH] = path
         ctx.focus_region("calls")
     return _current(ctx)
 
 
 def _on_back(ctx):
-    stack = list(ctx.state.get(STACK, []))
+    stack = list(ctx.page_state.get(STACK, []))
     if not stack:
         return False
     snapshot = stack.pop()
-    ctx.state[STACK] = stack
+    ctx.page_state[STACK] = stack
     _restore(ctx, snapshot)
     return True
 
