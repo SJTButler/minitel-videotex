@@ -128,6 +128,10 @@ class PageContext:
     def state(self):
         return self._session.state
 
+    @property
+    def page_state(self):
+        return self._session._page_state_for(self.page.number)
+
     def service(self, name, default=None, **unsupported):
         _reject_unknown(unsupported, "service")
         if name not in self.page.requires:
@@ -136,8 +140,16 @@ class PageContext:
             )
         return self._session.services.get(name, default)
 
-    def add_resource(self, resource):
-        return self._session.add_resource(resource)
+    def add_resource(self, resource, *, scope="connection"):
+        if scope not in ("connection", "page"):
+            raise PageDeclarationError(
+                "resource scope must be 'connection' or 'page'"
+            )
+        return self._session.add_resource(
+            resource,
+            scope=scope,
+            page_key=self.page.number if scope == "page" else None,
+        )
 
     def set_regions(self, *regions, default_focus=None):
         raise PageDeclarationError(
@@ -705,6 +717,7 @@ class Page:
     announce_channel = None
     regions = ()
     default_focus = None
+    retain_state = False
 
     def render(self, ctx: PageContext) -> Screen:
         raise NotImplementedError
@@ -733,7 +746,7 @@ class FunctionPage(Page):
                  no_screensaver=False, scroll=False, paint=None, requires=(),
                  extensions=False, header=None, announce=None,
                  announce_channel=None, meta=None, regions=(),
-                 default_focus=None):
+                 default_focus=None, retain_state=False):
         if screensaver is not None and (
             not isinstance(screensaver, str) or not screensaver
         ):
@@ -783,6 +796,7 @@ class FunctionPage(Page):
         self.meta = dict(meta or {})
         self.regions = tuple(regions)
         self.default_focus = default_focus
+        self.retain_state = bool(retain_state)
         validate_regions(
             self.regions,
             default_focus=self.default_focus,
@@ -834,6 +848,7 @@ class ExtensionPage(Page):
         self.announce_channel = base.announce_channel
         self.regions = base.regions
         self.default_focus = base.default_focus
+        self.retain_state = base.retain_state
         self.meta = {
             **(getattr(base, "meta", {}) or {}),
             "extension": token,
@@ -860,7 +875,8 @@ def page(number, *, title="", aliases=(), on_submit=None, on_key=None,
          on_back=None, transient=False, back_page=None, extension_back_page=None,
          screensaver=None, no_screensaver=False, scroll=False, paint=None,
          requires=(), extensions=False, header=None, announce=None,
-         announce_channel=None, meta=None, regions=(), default_focus=None):
+         announce_channel=None, meta=None, regions=(), default_focus=None,
+         retain_state=False):
     def decorator(fn):
         return FunctionPage(
             number,
@@ -889,6 +905,7 @@ def page(number, *, title="", aliases=(), on_submit=None, on_key=None,
             meta=meta,
             regions=regions,
             default_focus=default_focus,
+            retain_state=retain_state,
         )
     return decorator
 

@@ -79,7 +79,9 @@ class Session(
         self.regions_default_focus = None
         self._region_memory = {}
         self._focus_memory = {}
+        self._page_state = {}
         self._resources = []
+        self._resource_order = 0
         self._closed = False
         self._pager_carousel = None
         self._pager_carousel_next = None
@@ -188,6 +190,7 @@ class Session(
         self.page_error = where
         if disable_tick:
             self._ticks_disabled.add(self.current.number)
+        self._drop_page_state(self.current.number)
         self._clear_page_cursors()
         self.screensaver_active = False
         self._pager_carousel = None
@@ -694,21 +697,83 @@ class Session(
         self.status_text = None
         self._last_body_tick = self.clock()
 
-    def add_resource(self, resource):
+    def _page_state_for(self, page_key):
+        return self._page_state.setdefault(page_key, {})
+
+    def _drop_page_state(self, page_key):
+        self._page_state.pop(page_key, None)
+        self._close_page_resources(page_key)
+
+    def _page_resource_keys(self):
+        return {
+            page_key
+            for _resource, page_key, _order in self._resources
+            if page_key is not None
+        }
+
+    def _close_page_resources(self, page_key):
+        closing = []
+        remaining = []
+        for entry in self._resources:
+            if entry[1] == page_key:
+                closing.append(entry)
+            else:
+                remaining.append(entry)
+        self._resources = remaining
+        for resource, _key, _order in reversed(closing):
+            hook = getattr(resource, "close", None)
+            if hook is None:
+                continue
+            try:
+                hook()
+            except Exception as exc:
+                try:
+                    self.log(f"page resource close error ({page_key}): {exc!r}")
+                except Exception:
+                    pass
+
+    def _prune_page_state(self):
+        reachable = {self.current.number}
+        reachable.update(page.number for page in self.history)
+        stale = (set(self._page_state) | self._page_resource_keys()) - reachable
+        for page_key in list(stale):
+            self._drop_page_state(page_key)
+
+    def _clear_page_state(self):
+        for page_key in list(self._page_state) + list(self._page_resource_keys()):
+            self._drop_page_state(page_key)
+
+    def _leave_page(self, page):
+        if not getattr(page, "retain_state", False):
+            self._drop_page_state(page.number)
+
+    def add_resource(self, resource, *, scope="connection", page_key=None):
         if self._closed:
             raise RuntimeError("session is closed")
         if resource is None:
             raise TypeError("resource must not be None")
-        if not any(existing is resource for existing in self._resources):
-            self._resources.append(resource)
+        if scope not in ("connection", "page"):
+            raise ValueError("resource scope must be 'connection' or 'page'")
+        if scope == "page" and page_key is None:
+            raise ValueError("page-scoped resources need a page key")
+        if any(existing is resource for existing, _key, _order in self._resources):
+            return resource
+        self._resource_order += 1
+        self._resources.append((
+            resource,
+            page_key if scope == "page" else None,
+            self._resource_order,
+        ))
         return resource
 
     def close(self):
         if self._closed:
             return
         self._closed = True
+        records = self._resources
+        self._resources = []
         errors = []
-        for resource in reversed(self._resources):
+        for resource, _key, _order in reversed(records):
             hook = getattr(resource, "close", None)
             if hook is None:
                 continue
@@ -716,7 +781,6 @@ class Session(
                 hook()
             except Exception as exc:
                 errors.append(exc)
-        self._resources.clear()
         if errors:
             raise errors[0]
 

@@ -70,7 +70,8 @@ The decorator form is the shortest:
       transient=False, back_page=None, extension_back_page=None,
       screensaver=None, no_screensaver=False, scroll=False, paint=None,
       requires=(), extensions=False, header=None, announce=None,
-      announce_channel=None, meta=None, regions=(), default_focus=None)
+      announce_channel=None, meta=None, regions=(), default_focus=None,
+      retain_state=False)
 def render(ctx):
     return Screen()
 ```
@@ -94,6 +95,9 @@ def render(ctx):
 - `back_page="111"` is the logical `RETOUR` target for direct entry. If history
   does not already point there, `RETOUR` navigates there without pushing the
   current page; the next `RETOUR` follows the saved history.
+- `retain_state=True` keeps this page's `ctx.page_state` while the page can be
+  reached again as the current page or through history. Without it, page state
+  is discarded on leave. See [Page state and lifecycle](#page-state-and-lifecycle).
 - `screensaver="group"` declares this page as part of a screensaver sequence;
   see [Screensavers](#screensavers).
 - `no_screensaver=True` suppresses automatic screensaver takeover while this
@@ -162,9 +166,10 @@ Every `render`, `on_submit`, `on_form`, and `on_key` receives a
 | `ctx.extension` | the route token for `number#token`, or `None` on the base page |
 | `ctx.line` | the active field's value |
 | `ctx.last_key` | the last submitted line (used by the not-found page) |
-| `ctx.state` | a per-session dict for page state |
+| `ctx.state` | a per-session dict shared by every page; use for cross-page handoffs |
+| `ctx.page_state` | a dict scoped to the current page key (`number` or `number#token`) |
 | `ctx.service(name, default=None)` | look up a service declared in `requires` |
-| `ctx.add_resource(resource)` | register a per-session object to close on disconnect |
+| `ctx.add_resource(resource, *, scope="connection")` | register an object to close on leave or disconnect |
 | `ctx.active_name` | the active field name, including a pending focus |
 | `ctx.values` | all field values for the current page |
 | `ctx.input_value` | the value of the ambient `PAGE:` line |
@@ -414,6 +419,47 @@ prevent the other resources from closing.
 Use `ctx.add_resource` for stores and connection-scoped handles. Do not register
 a process-wide service; the app owns service lifecycle. Do not add a resource
 after the session has closed.
+
+## Page state and lifecycle
+
+`ctx.state` is connection-scoped and shared by every page; use it for values
+that cross a page boundary, such as a story chosen on one page and read on the
+next. `ctx.page_state` is page-scoped: its key is the full route, so `171` and
+`171#KGX` have separate dicts, and two pages can use the same logical key
+without colliding.
+
+Page state is created lazily and discarded when the page is left unless the
+page declares `retain_state=True`:
+
+```python
+@page("160", title="INDEX", retain_state=True)
+def index(ctx):
+    query = ctx.page_state.get("query", "")
+    ...
+```
+
+A retained page keeps its state while its route is still reachable: the page is
+current, or its route appears in history. Returning with `RETOUR` restores the
+dict; direct entry after `SOMMAIRE`, or after its history entry is gone, starts
+fresh. `SOMMAIRE` clears all page state. A page failure clears the failing
+page's state and page-scoped resources; other pages' retained state survives
+because the user can still return to them. Ticks, re-renders, and submits while
+the page is current do not clear page state.
+
+Page-scoped resources close when their page state is discarded:
+
+```python
+handle = SomeShortLivedHandle()
+ctx.add_resource(handle, scope="page")
+```
+
+The default `scope="connection"` stays unchanged (D016): connection-scoped
+resources close once when the session ends, in reverse registration order.
+Page-scoped resources close earlier, when the page is left, pruned, or fails.
+A close error is logged and does not block navigation.
+
+Do not use `page_state` as a cache; expensive data belongs in a service
+snapshot. Do not use it for cross-page handoffs; keep those in `ctx.state`.
 
 ## Screen and attributes
 
@@ -1902,6 +1948,9 @@ Add a Minitel page in pages/ using the existing library.
 - Call page_input(s, ctx) for a single field, or ctx.add_field(...) and
   form=True/on_form(ctx, values) for a multi-field form.
 - Use ctx.state for per-session data.
+- Use `ctx.page_state` for page-owned scratch state and `ctx.state` only for
+  values that cross a page boundary. Register page-scoped handles with
+  `scope="page"`; keep connection-scoped stores as they are.
 - Add a 1-2 digit numeric alias to put the page on the home menu.
 - Run: uv run python -m unittest discover -s tests -v
 - Inspect: uv run python tools/virtual_minitel.py --connect 127.0.0.1:43620 --plain
