@@ -296,7 +296,7 @@ try to put the article in a pane beside the index.
 
 A scroll page is the natural fit for a growing log: one `Viewport` with
 `follow=True` keeps the tail visible, and `SUITE`/`RETOUR` step one line while
-the data tick appends lines. The footer and source line sit in the page body;
+a sports service wake appends lines. The footer and source line sit in the page body;
 each repainted row costs bytes, so keep the footer short and stable. If the
 page changes on idle, omit the screensaver rather than adding a page timer.
 

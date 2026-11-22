@@ -171,8 +171,6 @@ def detail_screen(ctx):
     requires=("sports",),
     back_page=LIVE_PAGE,
     extension_back_page=LIVE_PAGE,
-    tick_interval=5.0,
-    on_tick=detail_screen,
     extensions=True,
 )
 def match_detail(ctx):

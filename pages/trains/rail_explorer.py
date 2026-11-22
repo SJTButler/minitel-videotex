@@ -467,7 +467,7 @@ def _on_back(ctx):
     on_submit=_submit,
     on_back=_on_back,
     on_tick=_screen,
-    tick_interval=1.0,
+    tick_interval=30.0,
     regions=(
         Region(
             "calls",

@@ -174,7 +174,7 @@ def submit_tables(ctx, line):
     TABLES_PAGE,
     title="TABLES",
     requires=("sports",),
-    tick_interval=5.0,
+    tick_interval=60.0,
     on_submit=submit_tables,
     on_tick=tables_screen,
     extensions=True,

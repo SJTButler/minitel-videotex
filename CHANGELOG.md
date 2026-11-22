@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- Added service change wakes: `ResourceCache` announces completed loads, the
+  cache-backed news, train, and Wikipedia services plus the sports poller expose
+  an `on_change` seam, and the app repaints the current page once when a
+  required service changes. On-demand pages now use 30-60 second maintenance
+  ticks instead of 1-2 second catch-up ticks, and the sports pages that only
+  read the poller snapshot drop their 5 second ticks; a cold load appears as
+  soon as the loader finishes instead of waiting for the next tick.
+
 - Added page-scoped state: `ctx.page_state` is keyed by the full page route,
   created lazily, discarded on leave unless the page declares
   `retain_state=True`, and pruned once the route leaves history. `SOMMAIRE`

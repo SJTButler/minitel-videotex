@@ -108,7 +108,7 @@ def _submit(ctx, line):
     title="WIKIPEDIA",
     aliases=("6",),
     requires=("wikipedia",),
-    tick_interval=1.0,
+    tick_interval=30.0,
     retain_state=True,
     header=AnnouncementHeader(),
     on_submit=_submit,

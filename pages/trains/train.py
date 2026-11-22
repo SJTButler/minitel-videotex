@@ -145,7 +145,7 @@ def _submit(ctx, values):
     form=True,
     on_form=_submit,
     on_tick=_screen,
-    tick_interval=1.0,
+    tick_interval=30.0,
     no_screensaver=True,
     back_page="100",
     extensions=True,

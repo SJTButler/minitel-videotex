@@ -133,8 +133,6 @@ def vidiprinter_screen(ctx):
     title="VIDIPRINTER",
     requires=("sports",),
     back_page="150",
-    tick_interval=5.0,
-    on_tick=vidiprinter_screen,
     scroll=True,
     no_screensaver=True,
 )

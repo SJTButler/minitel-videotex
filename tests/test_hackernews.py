@@ -245,14 +245,14 @@ class ListTests(unittest.TestCase):
         self.assertIn("'HELLO' - WORLD", text)
         render(session.screen)
 
-    def test_list_tick_diff_restores_cursor(self):
+    def test_list_refresh_diff_restores_cursor(self):
         service = FakeService(
             front_sequence=[Snapshot(loading=True), loaded(stories(5))]
         )
         session = make_session(service)
         self.assertIn("FETCHING HACKER NEWS", session.screen.to_text())
 
-        action = session.tick()
+        action = session.refresh()
         self.assertIn(codec.pos(20, 6), action.raw)
         self.assertIn(codec.cursor(False), action.raw)
         self.assertIn("STORY 1", session.screen.to_text())
@@ -324,7 +324,7 @@ class DetailTests(unittest.TestCase):
         self.assertIn("NO STORY SELECTED.", text)
         self.assertIn("OPEN NEWS, PICK 1-4.", text)
 
-    def test_comment_loads_on_tick(self):
+    def test_comment_loads_on_refresh(self):
         story = Story(1, "A TITLE", comments=2)
         service = FakeService(front=loaded([story]))
         service.comment_sequence[1] = [
@@ -336,7 +336,7 @@ class DetailTests(unittest.TestCase):
         session.navigate("112")
         self.assertIn("LOADING COMMENT...", session.screen.to_text())
 
-        session.tick()
+        session.refresh()
         self.assertIn("LATE COMMENT", session.screen.to_text())
         self.assertIn("- BOB", session.screen.to_text())
 

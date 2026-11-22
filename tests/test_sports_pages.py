@@ -386,13 +386,13 @@ class LivePageTests(unittest.TestCase):
         self.assertIn("SPORTS FEED NOT CONFIGURED", text)
         self.assertIn("SET FOOTBALL_API_KEY.", text)
 
-    def test_tick_picks_up_background_load_and_cursor(self):
+    def test_refresh_picks_up_background_load_and_cursor(self):
         service = FakeSports(FeedSnapshot(loading=True))
         session = make_session(service)
         self.assertIn("LOADING MATCHES...", session.screen.to_text())
 
         service._snapshot = loaded_snapshot([ars_che()])
-        action = session.tick()
+        action = session.refresh()
         self.assertIn(codec.pos(20, 6), action.raw)
         self.assertIn(codec.cursor(False), action.raw)
         self.assertIn("ARS", session.screen.to_text())
@@ -457,7 +457,7 @@ class VidiprinterPageTests(unittest.TestCase):
         service._snapshot = loaded_snapshot(
             [ars_che()], alerts=[alert]
         )
-        action = session.tick()
+        action = session.refresh()
         self.assertIsNotNone(action.screen)
         self.assertTrue(action.screen.force_full)
         self.assertEqual(action.screen.paint_order, "up")

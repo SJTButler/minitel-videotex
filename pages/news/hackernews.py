@@ -195,7 +195,7 @@ def submit_list(ctx, line):
     NEWS_PAGE,
     title="HACKER NEWS",
     requires=("hackernews",),
-    tick_interval=2.0,
+    tick_interval=30.0,
     on_submit=submit_list,
     on_tick=list_screen,
     no_screensaver=True
@@ -286,7 +286,7 @@ def detail_screen(ctx):
     title="STORY",
     requires=("hackernews",),
     back_page=NEWS_PAGE,
-    tick_interval=1.0,
+    tick_interval=30.0,
     on_tick=detail_screen,
 )
 def story(ctx):

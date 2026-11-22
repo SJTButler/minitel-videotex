@@ -162,7 +162,7 @@ def _on_key(ctx, key):
     requires=("wikipedia",),
     extensions=True,
     scroll=True,
-    tick_interval=1.0,
+    tick_interval=30.0,
     header=AnnouncementHeader(),
     back_page=INDEX_PAGE,
     extension_back_page=INDEX_PAGE,
