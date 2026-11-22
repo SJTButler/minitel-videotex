@@ -91,6 +91,35 @@ def service(source, **kwargs):
 
 
 class FeedTests(unittest.TestCase):
+    def test_change_callback_fires_after_a_refresh(self):
+        feed = service(FakeSource([FetchResult((match(),))]))
+        events = []
+        feed.on_change(lambda: events.append(True))
+
+        asyncio.run(feed.refresh_once())
+
+        self.assertEqual(len(events), 1)
+
+    def test_change_callback_fires_after_a_failure(self):
+        feed = service(FakeSource([RuntimeError("offline")]))
+        events = []
+        feed.on_change(lambda: events.append(True))
+
+        asyncio.run(feed.refresh_once())
+
+        self.assertEqual(len(events), 1)
+
+    def test_change_callback_fires_when_standings_load(self):
+        source = FakeSource([FetchResult((match(),))])
+        feed = service(source)
+        events = []
+        feed.on_change(lambda: events.append(True))
+
+        feed.standings("PL")
+
+        self.assertEqual(source.standings_calls, 1)
+        self.assertEqual(len(events), 1)
+
     def test_alert_history_is_bounded(self):
         feed = service(FakeSource([FetchResult((match(),))]))
         for minute in range(250):

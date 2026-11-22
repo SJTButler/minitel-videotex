@@ -5,7 +5,7 @@ import time
 from typing import Protocol
 
 from minitel.data.cache import ResourceCache
-from minitel.data.services import service
+from minitel.data.services import ChangeNotifier, service
 
 from services.common.config import env_seconds, load_env_file
 
@@ -18,7 +18,7 @@ class TrainSource(Protocol):
     def departures(self, origin, destination=None, *, time_from=None): ...
 
 
-class TrainService:
+class TrainService(ChangeNotifier):
     def __init__(
         self,
         source,
@@ -28,6 +28,7 @@ class TrainService:
         max_entries=16,
         clock=time.monotonic,
     ):
+        super().__init__()
         self.source = source
         self.configured = bool(
             source is not None and getattr(source, "configured", True)
@@ -37,12 +38,14 @@ class TrainService:
             retry_delay,
             max_entries=max_entries,
             clock=clock,
+            notify=self._changed,
         )
         self.service_cache = ResourceCache(
             300.0,
             retry_delay,
             max_entries=max_entries,
             clock=clock,
+            notify=self._changed,
         )
 
     def departures(self, origin, destination=None, *, time_from=None):

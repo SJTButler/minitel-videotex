@@ -5,6 +5,7 @@ from dataclasses import dataclass
 from typing import Protocol
 
 from minitel.data.cache import ResourceCache, Snapshot
+from minitel.data.services import ChangeNotifier
 
 
 @dataclass(frozen=True)
@@ -80,16 +81,18 @@ def match_prefix(document, buffer):
     return "", ()
 
 
-class ReaderService:
+class ReaderService(ChangeNotifier):
     """Cache a ReaderSource with one loader per document or search query."""
 
     def __init__(self, source, *, ttl=3600.0, retry_delay=300.0,
                  max_entries=64, clock=time.monotonic, thread_factory=None):
+        super().__init__()
         self.source = source
         self.clock = clock
         self.cache = ResourceCache(
             ttl, retry_delay, max_entries=max_entries,
             clock=clock, thread_factory=thread_factory,
+            notify=self._changed,
         )
 
     def document(self, token):

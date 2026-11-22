@@ -201,6 +201,53 @@ class CacheTests(unittest.TestCase):
         self.assertTrue(snapshot.has_value)
         self.assertFalse(snapshot.loading)
 
+    def test_notify_fires_after_a_loader_completes(self):
+        clock = Clock()
+        factory = Factory()
+        events = []
+        cache = ResourceCache(
+            clock=clock, thread_factory=factory, notify=events.append
+        )
+
+        cache.get("k", lambda: "value")
+
+        self.assertEqual(events, ["k"])
+        self.assertEqual(cache.snapshot("k").value, "value")
+
+    def test_notify_fires_after_load_now(self):
+        events = []
+        cache = ResourceCache(notify=events.append)
+
+        cache.load_now("k", lambda: "value")
+
+        self.assertEqual(events, ["k"])
+
+    def test_notify_does_not_fire_for_a_fresh_hit(self):
+        events = []
+        cache = ResourceCache(notify=events.append)
+        cache.load_now("k", lambda: "value")
+        events.clear()
+
+        cache.get("k", lambda: "other")
+
+        self.assertEqual(events, [])
+
+    def test_notify_fires_after_a_failed_load(self):
+        clock = Clock()
+        factory = Factory()
+        events = []
+        cache = ResourceCache(
+            clock=clock, thread_factory=factory, notify=events.append
+        )
+
+        def fail():
+            raise RuntimeError("offline")
+
+        cache.get("k", fail)
+
+        self.assertEqual(events, ["k"])
+        self.assertIsInstance(cache.snapshot("k").error, RuntimeError)
+
 
 if __name__ == "__main__":
     unittest.main()

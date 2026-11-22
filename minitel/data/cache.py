@@ -35,7 +35,7 @@ class ResourceCache:
     """A process-wide cache whose ``get`` never waits for the loader."""
 
     def __init__(self, ttl=300.0, retry_delay=60.0, max_entries=128,
-                 clock=time.monotonic, thread_factory=None):
+                 clock=time.monotonic, thread_factory=None, notify=None):
         if max_entries < 1:
             raise ValueError("max_entries must be positive")
         self.ttl = ttl
@@ -43,6 +43,7 @@ class ResourceCache:
         self.max_entries = max_entries
         self.clock = clock
         self.thread_factory = thread_factory
+        self.notify = notify
         self._entries = {}
         self._lock = threading.Lock()
 
@@ -107,7 +108,8 @@ class ResourceCache:
                 entry = _Entry(Snapshot(), last_used=self.clock())
                 self._entries[key] = entry
             snapshot = self._store(entry, value, error)
-            return snapshot
+        self._notify(key)
+        return snapshot
 
     def _is_fresh(self, entry, now):
         snapshot = entry.snapshot
@@ -159,6 +161,14 @@ class ResourceCache:
             thread = self.thread_factory(self._load, (key, loader))
         thread.start()
 
+    def _notify(self, key):
+        if self.notify is None:
+            return
+        try:
+            self.notify(key)
+        except Exception:
+            pass
+
     def _load(self, key, loader):
         value = None
         error = None
@@ -173,3 +183,4 @@ class ResourceCache:
                 entry = _Entry(Snapshot(), last_used=self.clock())
                 self._entries[key] = entry
             self._store(entry, value, error)
+        self._notify(key)

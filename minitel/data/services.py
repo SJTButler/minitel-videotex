@@ -14,6 +14,25 @@ class ServiceSpec:
     description: str = ""
 
 
+class ChangeNotifier:
+    """Optional service seam for cheap data-change announcements."""
+
+    def __init__(self):
+        self._change_callback = None
+
+    def on_change(self, callback):
+        self._change_callback = callback
+
+    def _changed(self, key=None):
+        callback = self._change_callback
+        if callback is None:
+            return
+        try:
+            callback()
+        except Exception:
+            pass
+
+
 def service(key, *, description=""):
     if not isinstance(key, str) or not key.strip():
         raise TypeError("service key must be a non-empty string")

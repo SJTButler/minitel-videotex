@@ -5,7 +5,7 @@ from dataclasses import dataclass
 
 from minitel.data.cache import ResourceCache
 from minitel.data.http import get_json
-from minitel.data.services import service
+from minitel.data.services import ChangeNotifier, service
 from minitel.text import domain
 
 FRONT_PAGE_URL = (
@@ -122,18 +122,21 @@ class HackerNewsSource:
         return None
 
 
-class HackerNewsService:
+class HackerNewsService(ChangeNotifier):
     def __init__(self, source=None, front_ttl=300, comment_ttl=1800,
                  retry_delay=60, max_comments=64, clock=time.monotonic,
                  thread_factory=None):
+        super().__init__()
         self.source = source or HackerNewsSource()
         self.front_cache = ResourceCache(
             front_ttl, retry_delay, max_entries=1,
             clock=clock, thread_factory=thread_factory,
+            notify=self._changed,
         )
         self.comment_cache = ResourceCache(
             comment_ttl, retry_delay, max_entries=max_comments,
             clock=clock, thread_factory=thread_factory,
+            notify=self._changed,
         )
 
     async def start(self):

@@ -8,7 +8,7 @@ from datetime import date, datetime, timedelta, timezone
 
 from minitel.data.cache import ResourceCache, Snapshot
 from minitel.data.http import HttpError
-from minitel.data.services import service
+from minitel.data.services import ChangeNotifier, service
 
 from .config import SportsConfig
 from .models import Alert, FeedSnapshot, MatchStatus, alert_key
@@ -53,10 +53,11 @@ def _error_text(exc):
     return (str(exc) or exc.__class__.__name__)[:80]
 
 
-class SportsService:
+class SportsService(ChangeNotifier):
     def __init__(self, config=None, source=None, clock=time.monotonic,
                  wall_clock=time.time, today=local_today,
                  thread_factory=None):
+        super().__init__()
         self.config = config or SportsConfig.from_env()
         self.source = source
         if self.source is None and self.config.configured:
@@ -80,6 +81,7 @@ class SportsService:
             max_entries=max(1, len(self.config.competitions)),
             clock=clock,
             thread_factory=thread_factory,
+            notify=self._changed,
         )
 
     @property
@@ -175,6 +177,7 @@ class SportsService:
             loading=False,
             error=_error_text(exc),
         )
+        self._changed()
 
     def _retry_delay(self, exc):
         delay = self.config.retry_delay
@@ -213,6 +216,7 @@ class SportsService:
             match_date=match_date,
             upcoming=upcoming,
         )
+        self._changed()
 
     def _backfill_alerts(self, matches):
         events = []

@@ -4,6 +4,7 @@ import asyncio
 import socket
 import time
 import traceback
+from contextlib import suppress
 
 from . import transport
 from .data.services import ServiceRegistry
@@ -14,6 +15,16 @@ from .session import Session
 from .session.screensaver import Screensaver
 from .terminal.power import PowerSignals
 from .terminal.profiles import M1
+
+
+class _Wake:
+    """One connection's pending service-change keys and wait event."""
+
+    __slots__ = ("event", "keys")
+
+    def __init__(self):
+        self.event = asyncio.Event()
+        self.keys = set()
 
 
 class MinitelApp:
@@ -44,6 +55,9 @@ class MinitelApp:
         )
         self.clock = clock or time.monotonic
         self.wall_clock = wall_clock or time.time
+        self._loop = None
+        self._wakes = set()
+        self._wake_enabled = False
         self.screensaver = (
             Screensaver.from_spec(
                 registry,
@@ -94,6 +108,40 @@ class MinitelApp:
         if action.screen is not None:
             await self.send(pacer, action.screen, log, scroll)
 
+    def _service_changed(self, key):
+        loop = self._loop
+        if loop is None or loop.is_closed():
+            return
+        try:
+            loop.call_soon_threadsafe(self._dispatch_change, key)
+        except RuntimeError:
+            pass
+
+    def _dispatch_change(self, key):
+        for wake in tuple(self._wakes):
+            wake.keys.add(key)
+            wake.event.set()
+
+    def _wake_action(self, session, changed):
+        if not changed:
+            return None
+        if getattr(session, "paused", False):
+            return None
+        if getattr(session, "page_error", None) is not None:
+            return None
+        if getattr(session, "screensaver_active", False):
+            return None
+        field = getattr(session, "active_field", None)
+        if field is not None and getattr(field, "cursor", None) == "auto":
+            values = getattr(session, "values", {}) or {}
+            if values.get(field.name, ""):
+                return None
+        page = getattr(session, "current", None)
+        required = set(getattr(page, "requires", ()) or ())
+        if not (set(changed) & required):
+            return None
+        return session.refresh()
+
     async def _apply_actions(self, pacer, actions, log, scroll=None):
         pending = bytearray()
         for action in actions:
@@ -131,6 +179,11 @@ class MinitelApp:
         session = self.new_session()
         session.log = log
         pacer = transport.PacedWriter(writer, self.cps)
+        wake = _Wake() if self._wake_enabled else None
+        if wake is not None:
+            self._wakes.add(wake)
+        read_task = None
+        wake_task = None
         try:
             echo = session.echo_override()
             await pacer.write(echo)
@@ -141,35 +194,90 @@ class MinitelApp:
                 log,
                 getattr(session, "scroll_mode", None),
             )
+            read_task = asyncio.create_task(reader.read(64))
+            if wake is not None:
+                wake_task = asyncio.create_task(wake.event.wait())
+
             while True:
                 interval = session.next_timeout()
-                if interval is None:
-                    data = await reader.read(64)
-                else:
-                    try:
-                        data = await asyncio.wait_for(reader.read(64), timeout=interval)
-                    except asyncio.TimeoutError:
+                if wake_task is None:
+                    if interval is None:
+                        data = await read_task
+                    else:
+                        try:
+                            data = await asyncio.wait_for(
+                                asyncio.shield(read_task), timeout=interval
+                            )
+                        except asyncio.TimeoutError:
+                            await self._apply_action(
+                                pacer,
+                                session.on_timeout(),
+                                log,
+                                getattr(session, "scroll_mode", None),
+                            )
+                            continue
+                    if not data:
+                        break
+                    read_task = asyncio.create_task(reader.read(64))
+                    log("RX " + " ".join(f"{b:02X}" for b in data))
+                    await self._apply_actions(
+                        pacer,
+                        session.feed(data),
+                        log,
+                        getattr(session, "scroll_mode", None),
+                    )
+                    continue
+
+                done, _ = await asyncio.wait(
+                    {read_task, wake_task},
+                    timeout=interval,
+                    return_when=asyncio.FIRST_COMPLETED,
+                )
+                if not done:
+                    await self._apply_action(
+                        pacer,
+                        session.on_timeout(),
+                        log,
+                        getattr(session, "scroll_mode", None),
+                    )
+                    continue
+                if read_task in done:
+                    data = read_task.result()
+                    if not data:
+                        break
+                    read_task = asyncio.create_task(reader.read(64))
+                    log("RX " + " ".join(f"{b:02X}" for b in data))
+                    await self._apply_actions(
+                        pacer,
+                        session.feed(data),
+                        log,
+                        getattr(session, "scroll_mode", None),
+                    )
+                if wake_task in done:
+                    changed = set(wake.keys)
+                    wake.keys.clear()
+                    wake.event.clear()
+                    wake_task = asyncio.create_task(wake.event.wait())
+                    action = self._wake_action(session, changed)
+                    if action is not None:
                         await self._apply_action(
                             pacer,
-                            session.on_timeout(),
+                            action,
                             log,
                             getattr(session, "scroll_mode", None),
                         )
-                        continue
-                if not data:
-                    break
-                log("RX " + " ".join(f"{b:02X}" for b in data))
-                await self._apply_actions(
-                    pacer,
-                    session.feed(data),
-                    log,
-                    getattr(session, "scroll_mode", None),
-                )
         except (ConnectionResetError, BrokenPipeError):
             pass
         except Exception:
             self.log(peer, "session error:\n" + traceback.format_exc().rstrip())
         finally:
+            for task in (read_task, wake_task):
+                if task is not None and not task.done():
+                    task.cancel()
+                    with suppress(asyncio.CancelledError):
+                        await task
+            if wake is not None:
+                self._wakes.discard(wake)
             self.log(peer, "disconnect")
             try:
                 session.close()
@@ -208,6 +316,13 @@ class MinitelApp:
             raise RuntimeError(
                 "missing services for header: " + ", ".join(missing)
             )
+        self._loop = asyncio.get_running_loop()
+        self._wake_enabled = False
+        for key, service in self.services.items():
+            install = getattr(service, "on_change", None)
+            if callable(install):
+                install(lambda key=key: self._service_changed(key))
+                self._wake_enabled = True
         self._report_orphan_services()
         await self.services.start()
 

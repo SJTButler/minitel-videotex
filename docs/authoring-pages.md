@@ -1275,6 +1275,9 @@ def dynamic(ctx):
 - A full page is ~240 bytes (~1.8 s at 1200). A small region is ~15 bytes
   (~0.11 s). Do not full-repaint at 1 Hz on the M1; `paint="full"` is for
   deliberate full-screen updates, not frequent ticks.
+- A tick is for time-based updates, not for waiting on a cache load. A
+  required service change wakes the current page; see
+  [Service change wakes](#service-change-wakes).
 
 **Raw tick frames.** A page can still return only a dynamic region as raw
 bytes. The session prepends a full attribute reset and appends `pos(input)`
@@ -1605,8 +1608,9 @@ The library pieces:
   `value`, `loaded_at`, `error`, `loading`, `has_value`, and `age()`. On a failed
   refresh the old value is kept and `error` is set. `load_now()` is synchronous
   and exists for tests and prewarming; `retry()` clears a failed-load backoff
-  and triggers a fresh load. Inject `clock` and `thread_factory` for
-  deterministic tests.
+  and triggers a fresh load. `notify(key)` is called after a loader finishes
+  (success or error) and after `load_now`; services use it to announce a
+  change. Inject `clock` and `thread_factory` for deterministic tests.
 - `minitel/data/http.py` - `get_json(url, headers=None, timeout=10.0)` raises
   `HttpError` with `status`, `body`, and `retry_after`.
   `get_json_response(...)` returns a `JsonResponse(payload, status, headers)`
@@ -1623,14 +1627,35 @@ The library pieces:
 - `minitel/design/pager.py` - a frozen `Pager(total, page_size, offset)` with
   `clamp()`, `window()`, `next(wrap=True)`, `prev(wrap=True)`, and `label`.
 
+### Service change wakes
+
+A page whose data arrives after the first paint does not need a 1 Hz catch-up
+tick. A cache-backed service may implement `on_change(callback)`. The app
+installs one callback per service at startup; the service calls it (from a
+loader thread or its poller) when its data may have changed. The app then
+repaints each connection whose current page declares that service in
+`requires`, using the normal render/diff path. The page gets no new hook: the
+service key is the routing key.
+
+The wake is a refresh, not a tick. It may change layout, it does not reset
+idle time or a pager carousel deadline, and it is suppressed while the
+session is paused, showing `PAGE ERROR`, or running the screensaver. It is
+also suppressed while an active `cursor="auto"` field contains text. Form
+pages do repaint during typing; the same value and focus preservation as a
+tick applies.
+
+Keep `tick_interval` for genuine time-based updates and animation. A page
+that must keep calling `cache.get` to trigger a TTL refresh can use a slow
+maintenance tick (30-60 s); do not poll at 1 Hz to catch a cold load.
+
 The news example is split along the same lines:
 
 - `pages/news/directory.py` renders `110`, a data-driven directory. `NEWS_SERVICES` is the
   extension point; a matching number opens its page, and other numbers fall
   through to normal registry routing.
 - `pages/news/hackernews.py` renders `111` (four stories with a blank separator row,
-  `1`-`4` + `ENVOI` selects) and `112` (metadata first, comment on a later
-  tick). `111` registers its window with `ctx.set_pager`, so the session handles
+  `1`-`4` + `ENVOI` selects) and `112` (metadata first, comment after the
+  service wake). `111` registers its window with `ctx.set_pager`, so the session handles
   `SUITE`/`RETOUR`; `RETOUR` walks back through pages and only leaves from page
   1. `112` declares `back_page="111"`, so typing `112` directly returns to the
   list first, then follows the existing history. A selected `Story` is kept in
@@ -1638,7 +1663,7 @@ The news example is split along the same lines:
 - `services/news/service.py` owns the Hacker News URLs and field names, parses
   `Story`/`Comment` objects, and wraps one `ResourceCache` for the front page
   and one for comments. The cache does not block a page paint; the first paint
-  shows `LOADING` and a later tick shows the data.
+  shows `LOADING` and the service change wake shows the data.
 
 The weather page is a second, deliberately different cached source:
 
