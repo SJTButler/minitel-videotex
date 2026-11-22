@@ -401,9 +401,9 @@ class CellDiffTests(unittest.TestCase):
 
     def test_double_size_row_uses_row_path(self):
         old = Screen()
-        old.text(5, 0, "BIG", size=codec.DOUBLE_WIDTH)
+        old.text(5, 0, "BIG", size=codec.DOUBLE_SIZE)
         new = Screen()
-        new.text(5, 0, "BAG", size=codec.DOUBLE_WIDTH)
+        new.text(5, 0, "BAG", size=codec.DOUBLE_SIZE)
 
         with patch("minitel.render.render.cell_diff_row_bytes") as cell:
             diff = render_diff(old, new, paint="cell")
@@ -729,6 +729,117 @@ class MosaicRenderTests(unittest.TestCase):
         decoded = decode(render(screen))
         self.assertEqual(decoded.pen.charset, 0)
         self.assertTrue(decoded.cursor)
+
+
+class DoubleWidthCellDiffTests(unittest.TestCase):
+    def double(self, text, row=1, col=0, **attrs):
+        screen = Screen()
+        screen.text(row, col, text, size=codec.DOUBLE_WIDTH, **attrs)
+        return screen
+
+    def test_anchor_change_uses_a_small_span(self):
+        old = self.double("AB")
+        new = self.double("AC")
+
+        diff = render_diff(old, new, paint="cell")
+        self.assertIn(codec.pos(1, 2), diff)
+        self.assertNotIn(bytes([codec.CAN]), diff)
+        self.assertLess(len(diff), 60)
+        self.assertEqual(apply_diff(old, diff).text(), new.to_text())
+
+    def test_changed_run_uses_repeat(self):
+        old = self.double("AAA")
+        new = self.double("BBB")
+
+        diff = render_diff(old, new, paint="cell")
+        self.assertIn(b"\x12\x42", diff)
+        self.assertEqual(apply_diff(old, diff).text(), new.to_text())
+
+    def test_mixed_single_and_double_width(self):
+        old = Screen()
+        old.text(1, 0, "AB", size=codec.DOUBLE_WIDTH)
+        old.text(1, 4, "XY")
+        new = Screen()
+        new.text(1, 0, "AC", size=codec.DOUBLE_WIDTH)
+        new.text(1, 4, "XZ")
+
+        diff = render_diff(old, new, paint="cell")
+        self.assertIn(codec.pos(1, 2), diff)
+        self.assertIn(codec.pos(1, 5), diff)
+        self.assertEqual(apply_diff(old, diff).text(), new.to_text())
+
+    def test_normal_to_double_width(self):
+        old = Screen()
+        old.text(1, 0, "ABCD")
+        new = self.double("AB")
+
+        diff = render_diff(old, new, paint="cell")
+        self.assertEqual(apply_diff(old, diff).text(), new.to_text())
+
+    def test_double_width_to_normal(self):
+        old = self.double("AB")
+        new = Screen()
+        new.text(1, 0, "ABCD")
+
+        diff = render_diff(old, new, paint="cell")
+        self.assertEqual(apply_diff(old, diff).text(), new.to_text())
+
+    def test_double_width_tail_clear(self):
+        old = Screen()
+        old.text(1, 38, "A", size=codec.DOUBLE_WIDTH)
+        new = Screen()
+
+        diff = render_diff(old, new, paint="cell")
+        self.assertIn(bytes([codec.CAN]), diff)
+        self.assertEqual(apply_diff(old, diff).text(), new.to_text())
+
+    def test_double_width_attributes(self):
+        old = self.double("A")
+        new = self.double("B", inverse=True)
+
+        diff = render_diff(old, new, paint="cell")
+        decoded = apply_diff(old, diff)
+        self.assertTrue(decoded.rows[1][0].inverse)
+        self.assertEqual(decoded.rows[1][0].ch, "B")
+
+    def test_continuation_only_change_repaints_the_anchor(self):
+        old = self.double("A")
+        new = old.clone()
+        new.rows[1][1].ch = "X"
+
+        diff = cell_diff_row_bytes(1, old.rows[1], new.rows[1])
+        self.assertIn(codec.pos(1, 0), diff)
+        self.assertNotIn(codec.pos(1, 1), diff)
+
+    def test_double_height_still_uses_the_row_path(self):
+        old = Screen()
+        old.text(1, 0, "AB", size=codec.DOUBLE_HEIGHT)
+        new = Screen()
+        new.text(1, 0, "AC", size=codec.DOUBLE_HEIGHT)
+
+        with patch("minitel.render.render.cell_diff_row_bytes") as cell:
+            diff = render_diff(old, new, paint="cell")
+        cell.assert_not_called()
+        self.assertEqual(apply_diff(old, diff).text(), new.to_text())
+
+    def test_double_size_still_uses_the_row_path(self):
+        old = Screen()
+        old.text(1, 0, "AB", size=codec.DOUBLE_SIZE)
+        new = Screen()
+        new.text(1, 0, "AC", size=codec.DOUBLE_SIZE)
+
+        with patch("minitel.render.render.cell_diff_row_bytes") as cell:
+            diff = render_diff(old, new, paint="cell")
+        cell.assert_not_called()
+        self.assertEqual(apply_diff(old, diff).text(), new.to_text())
+
+    def test_cell_diff_rejects_double_height(self):
+        old = Screen()
+        old.text(1, 0, "A", size=codec.DOUBLE_HEIGHT)
+        new = Screen()
+        new.text(1, 0, "B", size=codec.DOUBLE_HEIGHT)
+        with self.assertRaises(ValueError):
+            cell_diff_row_bytes(1, old.rows[1], new.rows[1])
 
 
 class PackageSurfaceTests(unittest.TestCase):

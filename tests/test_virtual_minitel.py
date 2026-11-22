@@ -80,6 +80,16 @@ class DecoderTests(unittest.TestCase):
         self.assertTrue(decoder.screen.rows[2][1].continuation)
         self.assertTrue(decoder.screen.text().splitlines()[1].startswith("HI"))
 
+    def test_double_width_repeat(self):
+        decoder = self.decode(b"\x1b\x4eAB\x12\x41")
+        self.assertEqual(decoder.screen.rows[1][0].ch, "A")
+        self.assertTrue(decoder.screen.rows[1][1].continuation)
+        self.assertEqual(decoder.screen.rows[1][2].ch, "B")
+        self.assertEqual(decoder.screen.rows[1][4].ch, "B")
+        self.assertEqual(
+            decoder.screen.text().splitlines()[1][:3], "ABB"
+        )
+
     def test_split_repeat(self):
         decoder = VM.Decoder()
         decoder.feed(b"=")

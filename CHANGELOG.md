@@ -2,9 +2,14 @@
 
 ## Unreleased
 
+- Double-width rows now use span-aware cell diffs: the anchor and continuation
+  are repainted as one unit, so a changed double-width run no longer repaints
+  the whole row. Double-height/double-size and scroll/shift rows keep the row
+  path.
 - Turned the `900 CLOCK` screensaver into a mosaic analog face: a static dial
-  with hour/minute hands, a right-aligned date, and a digital `HH:MM` readout.
-  The 30 s tick changes only the hands.
+  with hour/minute hands, a right-aligned date, and a digital `HH:MM:SS`
+  readout. The 1 s tick changes only the seconds span through the double-width
+  cell diff; the hands change once a minute.
 - Added `minitel_kit.MosaicCanvas`, `Bars`, and `Sparkline`, and the `121
   WEATHER CHART` page. The weather service now caches a seven-day daily
   forecast with highs, lows, precipitation, and weather codes, and `120` points

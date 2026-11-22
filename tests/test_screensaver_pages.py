@@ -149,7 +149,7 @@ class ScreensaverPageTests(unittest.TestCase):
 
     def test_clock_page(self):
         self.assertEqual(self.registry.get("900").paint, "cell")
-        self.assertEqual(self.registry.get("900").tick_interval, 30.0)
+        self.assertEqual(self.registry.get("900").tick_interval, 1.0)
         first = time.localtime(0)
         second = time.localtime(1)
         with patch.object(
@@ -165,8 +165,7 @@ class ScreensaverPageTests(unittest.TestCase):
         self.assertIn("LOCAL TIME", text)
         self.assertIn("PRESS ANY KEY", text)
         self.assertFalse(session.screen.cursor_visible)
-        self.assertIsNone(action.screen)
-        self.assertNotIn(bytes([codec.CAN]), action.raw)
+        self.assertLessEqual(len(action.raw), 120)
         mosaic = sum(
             1
             for row in session.screen.rows
@@ -183,6 +182,16 @@ class ScreensaverPageTests(unittest.TestCase):
         diff = render_diff(old, new, paint="cell")
         self.assertNotEqual(diff, b"")
         self.assertLess(len(diff), 300)
+
+    def test_clock_second_changes_cheaply(self):
+        first = time.struct_time((2026, 11, 19, 12, 0, 0, 3, 323, -1))
+        second = time.struct_time((2026, 11, 19, 12, 0, 1, 3, 323, -1))
+        old = clock_page._clock_screen(first)
+        new = clock_page._clock_screen(second)
+        diff = render_diff(old, new, paint="cell")
+        self.assertNotEqual(diff, b"")
+        self.assertLess(len(diff), 80)
+        self.assertIn(codec.pos(1, 26), diff)
 
     def test_test_card_has_a_mosaic_row(self):
         session = Session(

@@ -478,8 +478,8 @@ after the run is back in G0. One mosaic byte is one screen cell; runs use `REP`,
 and `paint="cell"` diffs mosaic cells like any other cell. Keep mosaics for
 rules, boxes, icons, bars, and small graphics, not photographs. The `900 CLOCK`
 screensaver is the worked example: a `MosaicCanvas` dial is painted once and
-the hour/minute hands change on a 30 s tick. Its `HH:MM` is double-width and
-uses the row path when the minute changes.
+the digital `HH:MM:SS` row uses span-aware cell diffs, so only the seconds span
+changes each second and the hour/minute hands change on the minute.
 
 Use `codec.text` for accents and special characters. `Screen.text` accepts
 Unicode; the renderer encodes it through `codec.text` and raises on characters
@@ -1141,11 +1141,13 @@ The mode is a declaration, not a page-local renderer:
 
 Safety barriers are automatic:
 
-- A row containing underline or a non-normal size (`DOUBLE_HEIGHT`,
-  `DOUBLE_WIDTH`, `DOUBLE_SIZE`) never uses cell runs. Underline uses the
-  full-row path because it is line-affecting; non-normal size uses the normal
-  `CAN`-plus-runs row path. Keep inline underline and double-size rows out of
-  cell-paint designs where possible.
+- A row containing underline or a double-height/double-size run never uses
+  cell runs. Double-width rows can use cell runs: the renderer treats the
+  anchor and continuation as one span, writes only the anchor, and never starts
+  a run on a continuation. Underline uses the full-row path because it is
+  line-affecting; double-height and double-size use the normal
+  `CAN`-plus-runs row path. Keep inline underline and double-height/double-size
+  rows out of cell-paint designs where possible.
 - Rows that the terminal has scrolled are repainted as rows; they are new
   content.
 

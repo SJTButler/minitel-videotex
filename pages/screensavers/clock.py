@@ -3,19 +3,7 @@ from math import cos, pi, sin
 from minitel import Screen, codec, page
 from minitel_kit import MosaicCanvas
 
-from ..common.clock import clock_hm, date_text, local_now
-
-CLOCK_MINUTE = "clock_minute"
-
-
-def _minute_key(now):
-    return (
-        now.tm_year,
-        now.tm_mon,
-        now.tm_mday,
-        now.tm_hour,
-        now.tm_min,
-    )
+from ..common.clock import clock_text, date_text, local_now
 
 
 def _dial(now):
@@ -57,7 +45,7 @@ def _clock_screen(now=None):
     now = local_now() if now is None else now
     s = Screen()
     s.text(0, 0, "3615 KILO")
-    s.text(1, 15, clock_hm(now), size=codec.DOUBLE_WIDTH)
+    s.text(1, 12, clock_text(now), size=codec.DOUBLE_WIDTH)
     _dial(now).draw(s, 3, 8)
     date = date_text(now)
     s.text(22, 0, "LOCAL TIME")
@@ -67,24 +55,17 @@ def _clock_screen(now=None):
 
 
 def clock_tick(ctx):
-    now = local_now()
-    key = _minute_key(now)
-    if ctx.state.get(CLOCK_MINUTE) == key:
-        return None
-    ctx.state[CLOCK_MINUTE] = key
-    return _clock_screen(now)
+    return _clock_screen()
 
 
 @page(
     "900",
     title="CLOCK",
-    tick_interval=30.0,
+    tick_interval=1.0,
     on_tick=clock_tick,
     back_page="190",
     screensaver="clock",
     paint="cell",
 )
 def clock(ctx):
-    now = local_now()
-    ctx.state[CLOCK_MINUTE] = _minute_key(now)
-    return _clock_screen(now)
+    return _clock_screen()

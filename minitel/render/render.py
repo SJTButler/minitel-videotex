@@ -1,5 +1,7 @@
 """Render a Screen to a Videotex byte stream."""
 
+from typing import NamedTuple
+
 from ..protocol import codec
 from .screen import Cell, validate_paint
 
@@ -146,6 +148,42 @@ def _row_has_non_normal_size(row):
     return any(cell.size != codec.NORMAL for cell in row)
 
 
+def _row_has_unsupported_size(row):
+    return any(
+        cell.size in (codec.DOUBLE_HEIGHT, codec.DOUBLE_SIZE)
+        for cell in row
+    )
+
+
+class _Span(NamedTuple):
+    start: int
+    end: int
+    anchor: Cell
+
+
+def _row_spans(row):
+    spans = []
+    col = 0
+    while col < codec.COLS:
+        cell = row[col]
+        if cell.continuation:
+            raise ValueError("continuation cell without an anchor")
+        if cell.size == codec.DOUBLE_WIDTH:
+            if (
+                col + 1 >= codec.COLS
+                or not row[col + 1].continuation
+            ):
+                raise ValueError(
+                    "double-width anchor without a continuation"
+                )
+            spans.append(_Span(col, col + 1, cell))
+            col += 2
+        else:
+            spans.append(_Span(col, col, cell))
+            col += 1
+    return spans
+
+
 def _has_non_normal_size(screen):
     return any(_row_has_non_normal_size(row) for row in screen.rows)
 
@@ -167,16 +205,22 @@ def cell_diff_row_bytes(row_index, old_row, new_row):
     if (
         _row_has_underline(old_row)
         or _row_has_underline(new_row)
-        or _row_has_non_normal_size(old_row)
-        or _row_has_non_normal_size(new_row)
+        or _row_has_unsupported_size(old_row)
+        or _row_has_unsupported_size(new_row)
     ):
         raise ValueError(
-            "cell diff requires a row without underline or non-normal size"
+            "cell diff requires a row without underline, double-height, "
+            "or double-size runs"
         )
 
+    spans = _row_spans(new_row)
     changed = [
-        col for col in range(codec.COLS)
-        if old_row[col] != new_row[col]
+        span
+        for span in spans
+        if any(
+            old_row[col] != new_row[col]
+            for col in range(span.start, span.end + 1)
+        )
     ]
     if not changed:
         return b""
@@ -188,31 +232,36 @@ def cell_diff_row_bytes(row_index, old_row, new_row):
         else:
             break
     clear_start = next(
-        (col for col in changed if col >= tail_start), None
+        (span.start for span in changed if span.start >= tail_start),
+        None,
     )
 
     out = bytearray()
     limit = clear_start if clear_start is not None else codec.COLS
     index = 0
-    while index < len(changed) and changed[index] < limit:
+    while index < len(changed) and changed[index].start < limit:
         start = changed[index]
-        run_attrs = attrs(new_row[start])
-        cols = [start]
+        run_attrs = attrs(start.anchor)
+        run = [start]
         index += 1
         while (
             index < len(changed)
-            and changed[index] == cols[-1] + 1
-            and changed[index] < limit
-            and attrs(new_row[changed[index]]) == run_attrs
+            and changed[index].start < limit
+            and changed[index].start == run[-1].end + 1
+            and attrs(changed[index].anchor) == run_attrs
         ):
-            cols.append(changed[index])
+            run.append(changed[index])
             index += 1
-        out += codec.pos(row_index, start)
+        out += codec.pos(row_index, run[0].start)
         state = default_state()
-        out += attr_bytes(state, new_row[start])
-        out += encode_run([new_row[col] for col in cols])
-        if new_row[start].mosaic is not None:
+        out += attr_bytes(state, run[0].anchor)
+        if run[0].anchor.size != codec.NORMAL:
+            out += codec.size(run[0].anchor.size)
+        out += encode_run([span.anchor for span in run])
+        if run[0].anchor.mosaic is not None:
             out += codec.charset(False)
+        if run[0].anchor.size != codec.NORMAL:
+            out += codec.size(codec.NORMAL)
 
     if clear_start is not None:
         out += codec.pos(row_index, clear_start)
@@ -237,8 +286,8 @@ def paint_diff_row(out, row_index, old_row, new_row, *, paint, header_paint):
         _row_has_underline(old_row) or _row_has_underline(new_row)
     )
     sized = (
-        _row_has_non_normal_size(old_row)
-        or _row_has_non_normal_size(new_row)
+        _row_has_unsupported_size(old_row)
+        or _row_has_unsupported_size(new_row)
     )
     if mode == "cell" and not underline and not sized:
         out += cell_diff_row_bytes(row_index, old_row, new_row)
