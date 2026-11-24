@@ -1,8 +1,9 @@
 """980: input echo and tick latency monitor.
 
-The page keeps a one-second heartbeat running while a field is active. If typed
-characters appear in bursts after the heartbeat stalls, the server was busy in
-a paced write and was not reading input.
+The page keeps a one-second heartbeat running while a field is active. Typed
+echo no longer waits behind a paced paint. If echo still arrives in bursts, the
+terminal or the wire is saturated rather than the server being stuck in a
+write.
 """
 
 import time

@@ -1,3 +1,4 @@
+import asyncio
 import unittest
 
 import pages
@@ -276,9 +277,11 @@ class AppTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_handle_asserts_the_local_echo_mode_before_the_first_page(self):
         writes = []
+        ready = asyncio.Event()
 
         class Reader:
             async def read(self, size):
+                await ready.wait()
                 return b""
 
         class Writer:
@@ -287,6 +290,8 @@ class AppTests(unittest.IsolatedAsyncioTestCase):
 
             def write(self, data):
                 writes.append(data)
+                if len(writes) >= 2:
+                    ready.set()
 
             async def drain(self):
                 pass
@@ -319,9 +324,11 @@ class AppTests(unittest.IsolatedAsyncioTestCase):
 
         registry.add(scrolling)
         writes = []
+        ready = asyncio.Event()
 
         class Reader:
             async def read(self, size):
+                await ready.wait()
                 return b""
 
         class Writer:
@@ -330,6 +337,8 @@ class AppTests(unittest.IsolatedAsyncioTestCase):
 
             def write(self, data):
                 writes.append(data)
+                if len(writes) >= 2:
+                    ready.set()
 
             async def drain(self):
                 pass

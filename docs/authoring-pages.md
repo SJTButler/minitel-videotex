@@ -1549,6 +1549,12 @@ Form focus uses `refresh()` and the diff, so a footer built from
 `ctx.active_name` updates automatically. Only the footer rows and cursor are
 sent.
 
+Writes are queued per connection. A keypress during a paint is read and
+parsed immediately: typing echo stays ordered, and a key that navigates
+abandons the stale full paint between chunks and full-paints the new page.
+Later ticks and wake refreshes enqueue behind the drain instead of blocking
+input.
+
 ## Live data and services
 
 Keep network calls out of `render`, `on_submit`, `on_key`, and `on_tick`. Fetch

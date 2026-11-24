@@ -1,10 +1,11 @@
 """981: full-paint flood.
 
 Turn the flood on and the page forces a full 40x25 paint every tick. At the M1
-serial rate one paint takes several seconds, during which the server is writing
-and the dongle is blocked on its UART. Use it to reproduce delayed or lost
-keypresses. The flood auto-stops after a few passes so the terminal cannot be
-stranded; GUIDE also stops it early.
+serial rate one paint takes several seconds. Input is still read while writes
+drain: typing echoes immediately, and SOMMAIRE abandons the stale paint and
+full-paints home. Use it to watch abort and echo behaviour on the wire. The
+flood auto-stops after a few passes so the terminal cannot be stranded; GUIDE
+also stops it early.
 """
 
 from minitel.pagemodel import page

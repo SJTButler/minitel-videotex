@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Added a per-connection writer queue: input is read and parsed while a paced
+  paint drains, typed echo stays in order, and a full paint supersedes queued
+  full paints and abandons an in-flight one between chunks. A broken writer
+  closes the session through the existing error path; `SENT page` logging now
+  comes from the drain. The latency and flood diagnostics describe the
+  remaining wire limit instead of the old read stall.
+
 - Added service change wakes: `ResourceCache` announces completed loads, the
   cache-backed news, train, and Wikipedia services plus the sports poller expose
   an `on_change` seam, and the app repaints the current page once when a

@@ -93,16 +93,18 @@ class MinitelApp:
 
     async def send(self, pacer, screen, log, scroll=None):
         data = render_screen(screen, scroll=scroll)
-        await pacer.write(data)
-        log(f"SENT page ({len(data)} bytes)")
+        await pacer.write(
+            data,
+            supersedes=True,
+            label=f"SENT page ({len(data)} bytes)",
+        )
 
     async def _apply_action(self, pacer, action, log, scroll=None):
         if action.power is not None:
             log("POWER off" if not action.power else "POWER on")
         if action.raw:
-            await pacer.write(action.raw)
-            if len(action.raw) > 4:
-                log(f"RAW {len(action.raw)} bytes")
+            label = f"RAW {len(action.raw)} bytes" if len(action.raw) > 4 else None
+            await pacer.write(action.raw, label=label)
         if action.page is not None:
             log(f"PAGE {action.page.number}")
         if action.screen is not None:
@@ -154,15 +156,21 @@ class MinitelApp:
                 pending.extend(action.raw)
                 continue
             if pending:
-                await pacer.write(bytes(pending))
-                if len(pending) > 4:
-                    log(f"RAW {len(pending)} bytes")
+                label = (
+                    f"RAW {len(pending)} bytes"
+                    if len(pending) > 4
+                    else None
+                )
+                await pacer.write(bytes(pending), label=label)
                 pending.clear()
             await self._apply_action(pacer, action, log, scroll)
         if pending:
-            await pacer.write(bytes(pending))
-            if len(pending) > 4:
-                log(f"RAW {len(pending)} bytes")
+            label = (
+                f"RAW {len(pending)} bytes"
+                if len(pending) > 4
+                else None
+            )
+            await pacer.write(bytes(pending), label=label)
 
     async def handle(self, reader, writer):
         peer = writer.get_extra_info("peername")
@@ -178,15 +186,16 @@ class MinitelApp:
 
         session = self.new_session()
         session.log = log
-        pacer = transport.PacedWriter(writer, self.cps)
+        pacer = transport.PacedWriter(writer, self.cps, log=log)
         wake = _Wake() if self._wake_enabled else None
         if wake is not None:
             self._wakes.add(wake)
         read_task = None
         wake_task = None
+        dead_task = None
         try:
             echo = session.echo_override()
-            await pacer.write(echo)
+            await pacer.write(echo, preserve=True)
             log(f"ECHO local {'off' if self.echo else 'on'}")
             await self.send(
                 pacer,
@@ -195,41 +204,17 @@ class MinitelApp:
                 getattr(session, "scroll_mode", None),
             )
             read_task = asyncio.create_task(reader.read(64))
+            dead_task = asyncio.create_task(pacer.dead.wait())
             if wake is not None:
                 wake_task = asyncio.create_task(wake.event.wait())
 
             while True:
                 interval = session.next_timeout()
-                if wake_task is None:
-                    if interval is None:
-                        data = await read_task
-                    else:
-                        try:
-                            data = await asyncio.wait_for(
-                                asyncio.shield(read_task), timeout=interval
-                            )
-                        except asyncio.TimeoutError:
-                            await self._apply_action(
-                                pacer,
-                                session.on_timeout(),
-                                log,
-                                getattr(session, "scroll_mode", None),
-                            )
-                            continue
-                    if not data:
-                        break
-                    read_task = asyncio.create_task(reader.read(64))
-                    log("RX " + " ".join(f"{b:02X}" for b in data))
-                    await self._apply_actions(
-                        pacer,
-                        session.feed(data),
-                        log,
-                        getattr(session, "scroll_mode", None),
-                    )
-                    continue
-
+                waiting = {read_task, dead_task}
+                if wake_task is not None:
+                    waiting.add(wake_task)
                 done, _ = await asyncio.wait(
-                    {read_task, wake_task},
+                    waiting,
                     timeout=interval,
                     return_when=asyncio.FIRST_COMPLETED,
                 )
@@ -241,6 +226,9 @@ class MinitelApp:
                         getattr(session, "scroll_mode", None),
                     )
                     continue
+                if dead_task in done:
+                    pacer.raise_if_dead()
+                    break
                 if read_task in done:
                     data = read_task.result()
                     if not data:
@@ -253,7 +241,7 @@ class MinitelApp:
                         log,
                         getattr(session, "scroll_mode", None),
                     )
-                if wake_task in done:
+                if wake_task is not None and wake_task in done:
                     changed = set(wake.keys)
                     wake.keys.clear()
                     wake.event.clear()
@@ -271,7 +259,7 @@ class MinitelApp:
         except Exception:
             self.log(peer, "session error:\n" + traceback.format_exc().rstrip())
         finally:
-            for task in (read_task, wake_task):
+            for task in (read_task, wake_task, dead_task):
                 if task is not None and not task.done():
                     task.cancel()
                     with suppress(asyncio.CancelledError):
@@ -283,6 +271,10 @@ class MinitelApp:
                 session.close()
             except Exception as exc:
                 self.log(peer, f"session close error: {exc!r}")
+            try:
+                await pacer.close()
+            except Exception as exc:
+                self.log(peer, f"writer close error: {exc!r}")
             try:
                 writer.close()
                 await writer.wait_closed()

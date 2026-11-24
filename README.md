@@ -540,9 +540,10 @@ recoverable: any later input wakes the session with a full repaint.
 The pause is not required to keep the connection or the UART alive. The ESP32's
 `writeByte()` does block when its TX FIFO is full, but the server paces below
 the serial rate, and the ESP32 drains at the configured baud even when the
-Minitel is off. The pause is mainly hygiene: it stops a long page paint from
-delaying the power-on bytes, and it stops carousels and the screensaver from
-advancing while nobody is looking. If you only want the rewake, use:
+Minitel is off. The pause is mainly hygiene: it stops carousels and the screensaver from
+advancing while nobody is looking, and it avoids draining a stale paint into
+a terminal that is off. Reads stay live; power-on queues a full repaint that
+supersedes any stale paint. If you only want the rewake, use:
 
 ```sh
 uv run python run_server.py --no-power-pause # ignore off; keep wake repaint

@@ -1,3 +1,4 @@
+import asyncio
 import unittest
 
 import pages
@@ -44,12 +45,15 @@ class PacedWriterTests(unittest.IsolatedAsyncioTestCase):
         )
 
         await pacer.write(b"ABCD")
+        await pacer.flush()
         self.assertEqual(writer.writes, [b"ABCD"])
         self.assertEqual(clock.sleeps, [])
 
         await pacer.write(b"E")
+        await pacer.flush()
         self.assertAlmostEqual(clock.sleeps[0], 0.1)
         self.assertEqual(writer.writes, [b"ABCD", b"E"])
+        await pacer.close()
 
     async def test_partial_budget_only_waits_for_the_missing_tokens(self):
         clock = FakeClock()
@@ -60,9 +64,11 @@ class PacedWriterTests(unittest.IsolatedAsyncioTestCase):
 
         await pacer.write(b"ABC")
         await pacer.write(b"DEFG")
+        await pacer.flush()
 
         self.assertAlmostEqual(clock.sleeps[0], 0.3)
         self.assertEqual(writer.writes, [b"ABC", b"DEFG"])
+        await pacer.close()
 
     async def test_page_after_echo_does_not_stall(self):
         clock = FakeClock()
@@ -73,9 +79,11 @@ class PacedWriterTests(unittest.IsolatedAsyncioTestCase):
 
         await pacer.write(b"ABCDE")
         await pacer.write(b"X" * 32)
+        await pacer.flush()
 
         self.assertAlmostEqual(clock.sleeps[0], 0.05)
         self.assertEqual(writer.writes[-1], b"X" * 32)
+        await pacer.close()
 
     async def test_idle_time_refills_but_is_capped(self):
         clock = FakeClock()
@@ -86,10 +94,13 @@ class PacedWriterTests(unittest.IsolatedAsyncioTestCase):
 
         clock.advance(100.0)
         await pacer.write(b"ABCD")
+        await pacer.flush()
         self.assertEqual(clock.sleeps, [])
 
         await pacer.write(b"EFGH")
+        await pacer.flush()
         self.assertAlmostEqual(clock.sleeps[0], 0.4)
+        await pacer.close()
 
     async def test_large_write_is_chunked_and_paced(self):
         clock = FakeClock()
@@ -99,8 +110,10 @@ class PacedWriterTests(unittest.IsolatedAsyncioTestCase):
         )
 
         await pacer.write(b"X" * 64)
+        await pacer.flush()
         self.assertEqual(writer.writes, [b"X" * 32, b"X" * 32])
         self.assertAlmostEqual(clock.sleeps[0], 0.5)
+        await pacer.close()
 
     async def test_zero_cps_is_immediate(self):
         clock = FakeClock()
@@ -110,8 +123,10 @@ class PacedWriterTests(unittest.IsolatedAsyncioTestCase):
         )
 
         await pacer.write(b"X" * 100)
+        await pacer.flush()
         self.assertEqual(writer.writes, [b"X" * 100])
         self.assertEqual(clock.sleeps, [])
+        await pacer.close()
 
     async def test_empty_write_is_a_noop(self):
         clock = FakeClock()
@@ -121,13 +136,92 @@ class PacedWriterTests(unittest.IsolatedAsyncioTestCase):
         )
 
         await pacer.write(b"")
+        await pacer.flush()
         self.assertEqual(writer.writes, [])
         self.assertEqual(clock.sleeps, [])
+        await pacer.close()
+
+
+class PacedWriterQueueTests(unittest.IsolatedAsyncioTestCase):
+    async def test_supersedes_keeps_control_frames_and_drops_echo(self):
+        clock = FakeClock()
+        writer = FakeWriter()
+        pacer = PacedWriter(
+            writer, cps=0, clock=clock, sleep=clock.sleep
+        )
+
+        await pacer.write(b"CTRL", preserve=True)
+        await pacer.write(b"F1", supersedes=True)
+        await pacer.write(b"ECHO")
+        await pacer.write(b"F2", supersedes=True)
+        await pacer.flush()
+
+        self.assertEqual(writer.writes, [b"CTRL", b"F2"])
+        await pacer.close()
+
+    async def test_supersedes_abandons_a_full_paint_between_chunks(self):
+        clock = FakeClock()
+        writer = GatedWriter()
+        pacer = PacedWriter(
+            writer, cps=64, burst=32, clock=clock, sleep=clock.sleep
+        )
+
+        await pacer.write(b"A" * 64, supersedes=True)
+        await asyncio.wait_for(writer.started.wait(), timeout=1)
+        await pacer.write(b"B" * 32, supersedes=True)
+        writer.gate.set()
+        await pacer.flush()
+
+        self.assertEqual(writer.writes, [b"A" * 32, b"B" * 32])
+        await pacer.close()
+
+    async def test_drain_error_surfaces_to_flush(self):
+        class FailWriter:
+            def write(self, data):
+                pass
+
+            async def drain(self):
+                raise BrokenPipeError("gone")
+
+        pacer = PacedWriter(FailWriter(), cps=0)
+        await pacer.write(b"X")
+
+        with self.assertRaises(BrokenPipeError):
+            await pacer.flush()
+
+        await pacer.close()
+
+    async def test_close_rejects_later_writes(self):
+        clock = FakeClock()
+        writer = FakeWriter()
+        pacer = PacedWriter(
+            writer, cps=0, clock=clock, sleep=clock.sleep
+        )
+        await pacer.write(b"X")
+        await pacer.close()
+
+        with self.assertRaises(RuntimeError):
+            await pacer.write(b"Y")
+
+
+class GatedWriter:
+    def __init__(self):
+        self.writes = []
+        self.gate = asyncio.Event()
+        self.started = asyncio.Event()
+
+    def write(self, data):
+        self.writes.append(bytes(data))
+
+    async def drain(self):
+        self.started.set()
+        await self.gate.wait()
 
 
 class AppPacingTests(unittest.IsolatedAsyncioTestCase):
     async def test_consecutive_raw_actions_are_coalesced(self):
         writes = []
+        ready = asyncio.Event()
 
         class Reader:
             def __init__(self):
@@ -135,7 +229,10 @@ class AppPacingTests(unittest.IsolatedAsyncioTestCase):
 
             async def read(self, size):
                 self.reads += 1
-                return b"x" if self.reads == 1 else b""
+                if self.reads == 1:
+                    return b"x"
+                await ready.wait()
+                return b""
 
         class Writer:
             def get_extra_info(self, name):
@@ -143,6 +240,8 @@ class AppPacingTests(unittest.IsolatedAsyncioTestCase):
 
             def write(self, data):
                 writes.append(bytes(data))
+                if b"ABC" in data:
+                    ready.set()
 
             async def drain(self):
                 pass
