@@ -4,16 +4,29 @@ import asyncio
 import time
 from collections import deque
 from contextlib import suppress
+from dataclasses import dataclass
 
 CHUNK = 32
+
+
+@dataclass
+class _Frame:
+    data: bytes | None = None
+    generation: int = 0
+    label: str | None = None
+    full: bool = False
+    preserve: bool = False
+    render: object | None = None
 
 
 class PacedWriter:
     """Write frames from a per-connection queue at a cps budget.
 
     The token bucket is connection-scoped: consecutive small writes share the
-    budget instead of each starting with a fresh burst. A full paint may
-    supersede queued frames and abandon the frame currently on the wire.
+    budget instead of each starting with a fresh burst. A full paint supersedes
+    queued frames and abandons the frame currently on the wire. A lazy frame
+    renders the current session state only when the drain reaches it, so rapid
+    same-page updates collapse into one diff.
     """
 
     def __init__(self, writer, cps, *, burst=CHUNK, clock=None, sleep=None,
@@ -48,20 +61,24 @@ class PacedWriter:
             raise RuntimeError("writer is closed")
         if supersedes:
             self._generation += 1
-            kept = deque(
-                item for item in self._queue if item[4]
-            )
-            self._pending -= len(self._queue) - len(kept)
-            self._queue = kept
-        self._queue.append(
-            (bytes(data), self._generation, label, supersedes, preserve)
-        )
-        self._pending += 1
-        self._idle.clear()
-        self._has_items.set()
-        if self._task is None or self._task.done():
-            self._raise_if_dead()
-            self._task = asyncio.create_task(self._drain())
+            self._keep_preserved()
+        self._enqueue(_Frame(
+            data=bytes(data),
+            generation=self._generation,
+            label=label,
+            full=supersedes,
+            preserve=preserve,
+        ))
+
+    async def write_lazy(self, render):
+        self._raise_if_dead()
+        if self._closing:
+            raise RuntimeError("writer is closed")
+        self._drop_lazy()
+        self._enqueue(_Frame(
+            generation=self._generation,
+            render=render,
+        ))
 
     async def flush(self):
         while self._pending:
@@ -90,25 +107,38 @@ class PacedWriter:
         if self._error is not None:
             raise self._error
 
+    def _enqueue(self, frame):
+        self._queue.append(frame)
+        self._pending += 1
+        self._idle.clear()
+        self._has_items.set()
+        if self._task is None or self._task.done():
+            self._raise_if_dead()
+            self._task = asyncio.create_task(self._drain())
+
+    def _keep_preserved(self):
+        kept = deque(frame for frame in self._queue if frame.preserve)
+        self._pending -= len(self._queue) - len(kept)
+        self._queue = kept
+
+    def _drop_lazy(self):
+        kept = deque(
+            frame for frame in self._queue if frame.render is None
+        )
+        self._pending -= len(self._queue) - len(kept)
+        self._queue = kept
+
     async def _drain(self):
         try:
             while True:
-                item = await self._next_item()
-                if item is None:
+                frame = await self._next_item()
+                if frame is None:
                     return
-                data, generation, label, full, preserve = item
                 self._in_flight = True
                 try:
-                    await self._write_frame(
-                        data, generation, full, preserve
-                    )
+                    await self._write(frame)
                 finally:
                     self._in_flight = False
-                if (
-                    (preserve or not full or generation == self._generation)
-                    and label
-                ):
-                    self._log_message(label)
                 self._finish_frame()
         except asyncio.CancelledError:
             raise
@@ -134,22 +164,47 @@ class PacedWriter:
         if self._pending == 0:
             self._idle.set()
 
-    async def _write_frame(self, data, generation, full, preserve):
+    async def _write(self, frame):
+        lazy = frame.render is not None
+        if lazy:
+            if self._stale(frame):
+                return
+            data, full = frame.render()
+            if not data:
+                return
+            frame.data = bytes(data)
+            if full:
+                self._generation += 1
+                frame.generation = self._generation
+                frame.full = True
+                frame.preserve = False
+                self._keep_preserved()
+        await self._write_frame(frame)
+
+    async def _write_frame(self, frame):
+        data = frame.data or b""
         if self.cps <= 0:
-            if not preserve and generation != self._generation:
+            if self._stale(frame):
                 return
             self.writer.write(data)
             await self.writer.drain()
-            return
-        for start in range(0, len(data), self._chunk):
-            if not preserve and generation != self._generation:
-                return
-            chunk = data[start:start + self._chunk]
-            await self._spend(len(chunk))
-            if not preserve and generation != self._generation:
-                return
-            self.writer.write(chunk)
-            await self.writer.drain()
+        else:
+            for start in range(0, len(data), self._chunk):
+                if self._stale(frame):
+                    return
+                chunk = data[start:start + self._chunk]
+                await self._spend(len(chunk))
+                if self._stale(frame):
+                    return
+                self.writer.write(chunk)
+                await self.writer.drain()
+        if frame.label is not None:
+            self._log_message(frame.label)
+
+    def _stale(self, frame):
+        if frame.preserve:
+            return False
+        return frame.generation != self._generation
 
     async def _spend(self, amount):
         while True:

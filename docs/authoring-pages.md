@@ -1552,8 +1552,10 @@ sent.
 Writes are queued per connection. A keypress during a paint is read and
 parsed immediately: typing echo stays ordered, and a key that navigates
 abandons the stale full paint between chunks and full-paints the new page.
-Later ticks and wake refreshes enqueue behind the drain instead of blocking
-input.
+Same-page cursor moves, ticks, and wake refreshes become lazy: the drain
+renders the current state once when it reaches the marker, so rapid
+`SUITE`/`RETOUR` moves collapse into one diff instead of replaying every
+intermediate highlight. Full paints still supersede, and echo stays eager.
 
 ## Live data and services
 

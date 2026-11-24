@@ -12,3 +12,5 @@ class Action:
     screen: Screen | None = None
     page: Page | None = None
     power: bool | None = None
+    lazy: bool = False
+    echo: bool = False

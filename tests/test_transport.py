@@ -191,6 +191,93 @@ class PacedWriterQueueTests(unittest.IsolatedAsyncioTestCase):
 
         await pacer.close()
 
+    async def test_lazy_markers_collapse_before_rendering(self):
+        clock = FakeClock()
+        writer = FakeWriter()
+        pacer = PacedWriter(
+            writer, cps=0, clock=clock, sleep=clock.sleep
+        )
+        calls = []
+
+        def render():
+            calls.append(True)
+            return b"LAZY", False
+
+        await pacer.write_lazy(render)
+        await pacer.write_lazy(render)
+        await pacer.write_lazy(render)
+        await pacer.flush()
+
+        self.assertEqual(calls, [True])
+        self.assertEqual(writer.writes, [b"LAZY"])
+        await pacer.close()
+
+    async def test_a_full_paint_drops_a_queued_lazy_marker(self):
+        clock = FakeClock()
+        writer = FakeWriter()
+        pacer = PacedWriter(
+            writer, cps=0, clock=clock, sleep=clock.sleep
+        )
+        calls = []
+
+        def render():
+            calls.append(True)
+            return b"LAZY", False
+
+        await pacer.write_lazy(render)
+        await pacer.write(b"FULL", supersedes=True)
+        await pacer.flush()
+
+        self.assertEqual(calls, [])
+        self.assertEqual(writer.writes, [b"FULL"])
+        await pacer.close()
+
+    async def test_ordered_echo_interleaves_with_a_lazy_marker(self):
+        clock = FakeClock()
+        writer = FakeWriter()
+        pacer = PacedWriter(
+            writer, cps=0, clock=clock, sleep=clock.sleep
+        )
+
+        def render():
+            return b"LAZY", False
+
+        await pacer.write(b"E1")
+        await pacer.write_lazy(render)
+        await pacer.write(b"E2")
+        await pacer.flush()
+
+        self.assertEqual(writer.writes, [b"E1", b"LAZY", b"E2"])
+        await pacer.close()
+
+    async def test_a_new_lazy_marker_waits_for_the_in_flight_diff(self):
+        clock = FakeClock()
+        writer = GatedWriter()
+        pacer = PacedWriter(
+            writer, cps=64, burst=32, clock=clock, sleep=clock.sleep
+        )
+        calls = []
+
+        def first():
+            calls.append("first")
+            return b"A" * 64, False
+
+        def second():
+            calls.append("second")
+            return b"B" * 32, False
+
+        await pacer.write_lazy(first)
+        await asyncio.wait_for(writer.started.wait(), timeout=1)
+        await pacer.write_lazy(second)
+        writer.gate.set()
+        await pacer.flush()
+
+        self.assertEqual(calls, ["first", "second"])
+        self.assertEqual(
+            writer.writes, [b"A" * 32, b"A" * 32, b"B" * 32]
+        )
+        await pacer.close()
+
     async def test_close_rejects_later_writes(self):
         clock = FakeClock()
         writer = FakeWriter()

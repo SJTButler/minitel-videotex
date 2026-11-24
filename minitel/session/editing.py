@@ -80,26 +80,38 @@ class EditingMixin:
             raw += codec.inverse(cell.inverse)
         return bytes(raw)
 
+    def _shadow_targets(self):
+        targets = []
+        for target in (self.screen, self._wire_screen):
+            if target is not None and all(
+                target is not seen for seen in targets
+            ):
+                targets.append(target)
+        return targets
+
     def _shadow_put(self, field, index, char):
-        if not field.visible or self.screen is None:
-            return
         row = field.row
         col = field.col + index
+        if not field.visible:
+            return
         if not (0 <= row < codec.ROWS and 0 <= col < codec.COLS):
             return
-        base = self.screen.rows[row][field.col]
-        self.screen.rows[row][col] = replace(base, ch=char)
+        for target in self._shadow_targets():
+            base = target.rows[row][field.col]
+            target.rows[row][col] = replace(base, ch=char)
 
     def _sync_shadow_cursor(self):
         field = self.active_field
-        if field is None or self.screen is None:
+        if field is None:
             return
         if not field.visible:
-            self.screen.set_cursor(codec.ROWS - 1, 0, False)
+            for target in self._shadow_targets():
+                target.set_cursor(codec.ROWS - 1, 0, False)
             return
         value = self.values.get(field.name, "")
         col = field.col + min(len(value), field.width)
-        self.screen.set_cursor(field.row, col, self._cursor_visible())
+        for target in self._shadow_targets():
+            target.set_cursor(field.row, col, self._cursor_visible())
 
     def _choice_command(self, char):
         region = self.regions.get(self.focused_region)
@@ -143,7 +155,7 @@ class EditingMixin:
         if field.live or not field.visible:
             self.values[field.name] = value + event.char
             if field.live:
-                return self.refresh()
+                return self.refresh(defer=False)
             return Action()
         prefix = b""
         if field.cursor == "auto" and not value:
@@ -157,7 +169,7 @@ class EditingMixin:
         self._shadow_put(field, len(value), event.char)
         self.values[field.name] = value + event.char
         self._sync_shadow_cursor()
-        return Action(raw=prefix + echo)
+        return Action(raw=prefix + echo, echo=True)
 
     def correction(self):
         field = self.active_field
@@ -167,14 +179,14 @@ class EditingMixin:
             self.values[field.name] = value
             if field.live or not field.visible:
                 if field.live:
-                    return self.refresh()
+                    return self.refresh(defer=False)
                 return Action()
             self._shadow_put(field, len(value), " ")
             self._sync_shadow_cursor()
             raw = bytes([codec.BS, 0x20, codec.BS])
             if field.cursor == "auto" and not value:
                 raw += codec.cursor(False)
-            return Action(raw=raw)
+            return Action(raw=raw, echo=True)
         return Action()
 
     def annulation(self):

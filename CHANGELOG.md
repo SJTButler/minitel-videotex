@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Coalesced same-page repaints behind the writer drain: rapid choice or
+  pager moves, ticks, and wake refreshes render once against the last frame
+  on the wire, so intermediate highlights are not replayed. Echo stays
+  eager, and full paints still supersede queued work.
+
 - Added a per-connection writer queue: input is read and parsed while a paced
   paint drains, typed echo stays in order, and a full paint supersedes queued
   full paints and abandons an in-flight one between chunks. A broken writer

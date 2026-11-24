@@ -99,7 +99,30 @@ class MinitelApp:
             label=f"SENT page ({len(data)} bytes)",
         )
 
-    async def _apply_action(self, pacer, action, log, scroll=None):
+    def _lazy_frame(self, session, log):
+        action = session.render_lazy()
+        if action.screen is not None:
+            data = render_screen(
+                action.screen,
+                scroll=getattr(session, "scroll_mode", None),
+            )
+            log(f"SENT page ({len(data)} bytes)")
+            return data, True
+        if action.raw:
+            if len(action.raw) > 4:
+                log(f"RAW {len(action.raw)} bytes")
+            return action.raw, False
+        return b"", False
+
+    async def _apply_action(self, pacer, action, log, scroll=None,
+                            session=None):
+        if session is not None and hasattr(session, "note_produced"):
+            session.note_produced(action)
+        if action.lazy:
+            await pacer.write_lazy(
+                lambda: self._lazy_frame(session, log)
+            )
+            return
         if action.power is not None:
             log("POWER off" if not action.power else "POWER on")
         if action.raw:
@@ -144,7 +167,8 @@ class MinitelApp:
             return None
         return session.refresh()
 
-    async def _apply_actions(self, pacer, actions, log, scroll=None):
+    async def _apply_actions(self, pacer, actions, log, scroll=None,
+                             session=None):
         pending = bytearray()
         for action in actions:
             if (
@@ -153,6 +177,10 @@ class MinitelApp:
                 and action.page is None
                 and action.power is None
             ):
+                if session is not None and hasattr(
+                    session, "note_produced"
+                ):
+                    session.note_produced(action)
                 pending.extend(action.raw)
                 continue
             if pending:
@@ -163,7 +191,9 @@ class MinitelApp:
                 )
                 await pacer.write(bytes(pending), label=label)
                 pending.clear()
-            await self._apply_action(pacer, action, log, scroll)
+            await self._apply_action(
+                pacer, action, log, scroll, session=session
+            )
         if pending:
             label = (
                 f"RAW {len(pending)} bytes"
@@ -203,6 +233,7 @@ class MinitelApp:
                 log,
                 getattr(session, "scroll_mode", None),
             )
+            session.defer_repaints = True
             read_task = asyncio.create_task(reader.read(64))
             dead_task = asyncio.create_task(pacer.dead.wait())
             if wake is not None:
@@ -224,6 +255,7 @@ class MinitelApp:
                         session.on_timeout(),
                         log,
                         getattr(session, "scroll_mode", None),
+                        session=session,
                     )
                     continue
                 if dead_task in done:
@@ -240,6 +272,7 @@ class MinitelApp:
                         session.feed(data),
                         log,
                         getattr(session, "scroll_mode", None),
+                        session=session,
                     )
                 if wake_task is not None and wake_task in done:
                     changed = set(wake.keys)
@@ -253,6 +286,7 @@ class MinitelApp:
                             action,
                             log,
                             getattr(session, "scroll_mode", None),
+                            session=session,
                         )
         except (ConnectionResetError, BrokenPipeError):
             pass

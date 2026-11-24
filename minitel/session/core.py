@@ -87,11 +87,14 @@ class Session(
         self._pager_carousel_next = None
         self._pager_carousel_key = None
         self.screen = None
+        self._wire_screen = None
         self.scroll_mode = False
         self.screen_scroll_mode = False
+        self._wire_scroll_mode = False
         self.screen_paint = "row"
         self.screen_header_paint = "row"
         self._shadow_exact = True
+        self.defer_repaints = False
         self.clock = clock
         self.wall_clock = wall_clock
         self.status_text = None
@@ -852,36 +855,105 @@ class Session(
         self._touch()
         self._shadow_exact = True
         self._init_page_regions()
-        return self.render()
+        screen = self.render()
+        self._wire_screen = screen
+        self._wire_scroll_mode = self.screen_scroll_mode
+        return screen
 
-    def refresh(self):
+    def refresh(self, *, defer=None):
         if self.paused:
             return Action()
+        if defer is None:
+            defer = self.defer_repaints
         old = self.screen
         old_scroll = self.screen_scroll_mode
         new = self.render()
         if (
             old is None
             or old_scroll != self.screen_scroll_mode
+            or (
+                self.defer_repaints
+                and self._wire_scroll_mode != self.screen_scroll_mode
+            )
             or getattr(new, "force_full", False)
             or self.screen_paint == "full"
         ):
             self._shadow_exact = True
+            self._wire_screen = new
+            self._wire_scroll_mode = self.screen_scroll_mode
             return Action(screen=new)
+        if defer:
+            return Action(lazy=True)
+        base = (
+            self._wire_screen
+            if self.defer_repaints and self._wire_screen is not None
+            else old
+        )
         paint = self.screen_paint
         header_paint = self.screen_header_paint
         if not self._shadow_exact:
             paint = "row"
             header_paint = "row"
-        return Action(
-            raw=render_diff(
-                old,
-                new,
-                scroll=self.scroll_mode,
-                paint=paint,
-                header_paint=header_paint,
-            )
+        diff = render_diff(
+            base,
+            new,
+            scroll=self.scroll_mode,
+            paint=paint,
+            header_paint=header_paint,
         )
+        self._wire_screen = new
+        self._wire_scroll_mode = self.screen_scroll_mode
+        return Action(raw=diff)
+
+    def note_produced(self, action):
+        if action.lazy:
+            return
+        if action.screen is not None:
+            self._wire_screen = action.screen
+            self._wire_scroll_mode = self.screen_scroll_mode
+            self._shadow_exact = True
+            return
+        if action.raw and not action.echo:
+            if self._shadow_exact:
+                self._wire_screen = self.screen
+                self._wire_scroll_mode = self.screen_scroll_mode
+            else:
+                self._wire_screen = None
+
+    def render_lazy(self):
+        if self.paused:
+            return Action()
+        if self.page_error is not None:
+            screen = self._render_error()
+            self._wire_screen = screen
+            self._wire_scroll_mode = self.screen_scroll_mode
+            return Action(screen=screen)
+        new = self.screen
+        if new is None:
+            return Action()
+        if (
+            self._wire_screen is None
+            or self._wire_scroll_mode != self.screen_scroll_mode
+            or getattr(new, "force_full", False)
+            or self.screen_paint == "full"
+            or not self._shadow_exact
+        ):
+            self._shadow_exact = True
+            self._wire_screen = new
+            self._wire_scroll_mode = self.screen_scroll_mode
+            return Action(screen=new)
+        paint = self.screen_paint
+        header_paint = self.screen_header_paint
+        diff = render_diff(
+            self._wire_screen,
+            new,
+            scroll=self.scroll_mode,
+            paint=paint,
+            header_paint=header_paint,
+        )
+        self._wire_screen = new
+        self._wire_scroll_mode = self.screen_scroll_mode
+        return Action(raw=diff)
 
     def render(self):
         if self.page_error is not None:
@@ -1064,6 +1136,7 @@ class Session(
             frame = bytes(frame)
             if frame:
                 self._shadow_exact = False
+                self._wire_screen = None
                 frame = reset() + frame
             if not self.screensaver_active and frame and self.active_field is not None:
                 frame += self._focus_frame()
@@ -1102,21 +1175,32 @@ class Session(
                 self.screen = frame
                 self.screen_scroll_mode = self.scroll_mode
                 self._shadow_exact = True
+                self._wire_screen = frame
+                self._wire_scroll_mode = self.scroll_mode
                 return Action(screen=frame)
             paint = self.screen_paint
             header_paint = self.screen_header_paint
             if not self._shadow_exact:
                 paint = "row"
                 header_paint = "row"
+            self.screen = frame
+            self.screen_scroll_mode = self.scroll_mode
+            if self.defer_repaints:
+                return Action(lazy=True)
+            base = (
+                self._wire_screen
+                if self.defer_repaints and self._wire_screen is not None
+                else old
+            )
             diff = render_diff(
-                old,
+                base,
                 frame,
                 scroll=self.scroll_mode,
                 paint=paint,
                 header_paint=header_paint,
             )
-            self.screen = frame
-            self.screen_scroll_mode = self.scroll_mode
+            self._wire_screen = frame
+            self._wire_scroll_mode = self.scroll_mode
             return Action(raw=diff)
         raise TypeError(
             f"page {page.number!r} tick returned {type(frame)!r}; "
